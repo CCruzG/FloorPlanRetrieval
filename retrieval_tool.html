@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Floor Plan Retrieval</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0f1117;
+  --surface:  #181c27;
+  --surface2: #1e2436;
+  --border:   #2a2f3f;
+  --border2:  #3a4155;
+  --text:     #e2e8f0;
+  --muted:    #b6babe;
+  --accent:   #3b82f6;
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --amber:    #f59e0b;
+  --mono:     'JetBrains Mono','Fira Mono','Courier New',monospace;
+}
+body { background:var(--bg); color:var(--text); font-family:var(--mono); font-size:12px; height:100vh; display:flex; flex-direction:column; overflow:hidden; user-select:none; }
+
+#header { height:40px; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 16px; gap:20px; flex-shrink:0; }
+#header h1 { font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
+#hdr-status { font-size:11px; color:var(--muted); margin-left:auto; }
+#hdr-status.ok   { color:var(--green); }
+#hdr-status.warn { color:var(--amber); }
+#hdr-status.err  { color:var(--red); }
+
+#body { display:flex; flex:1; overflow:hidden; }
+
+#sidebar { width:196px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.ss { padding:10px 12px; border-bottom:1px solid var(--border); }
+.sl { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+
+.dz { border:1px dashed var(--border2); border-radius:4px; padding:6px 8px; cursor:pointer; color:var(--muted); font-size:10px; display:flex; align-items:center; gap:6px; margin-bottom:5px; transition:border-color .12s,background .12s; }
+.dz:hover,.dz.over { border-color:var(--accent); background:rgba(59,130,246,.07); color:var(--text); }
+.dz input { display:none; }
+.dz-tag { font-size:9px; font-weight:500; color:var(--muted); flex-shrink:0; width:28px; }
+.dz-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.field { display:flex; flex-direction:column; gap:3px; margin-bottom:8px; }
+.field label { font-size:10px; color:var(--muted); display:flex; justify-content:space-between; }
+.field label span { color:var(--text); font-weight:500; }
+input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+
+.run-btn { width:100%; padding:7px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-family:var(--mono); font-size:11px; font-weight:500; cursor:pointer; letter-spacing:0.05em; transition:opacity .15s; margin-top:2px; }
+.run-btn:hover { opacity:0.85; }
+.run-btn:disabled { opacity:0.3; cursor:default; }
+
+.clear-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; margin-top:6px; transition:all .12s; }
+.clear-btn:hover { border-color:var(--red); color:var(--red); }
+
+.stat { display:flex; justify-content:space-between; padding:2px 0; font-size:10px; border-bottom:1px solid var(--border); }
+.stat:last-child { border:none; }
+.stat-k { color:var(--muted); }
+.stat-v { color:var(--text); font-weight:500; }
+
+.hint { font-size:10px; color:var(--muted); line-height:1.7; }
+.hint kbd { background:var(--surface2); border:1px solid var(--border2); border-radius:3px; padding:0 3px; font-family:var(--mono); font-size:9px; color:var(--text); }
+
+#canvas-wrap { flex:1; display:flex; align-items:center; justify-content:center; background:var(--bg); position:relative; overflow:hidden; }
+#main-canvas { display:block; cursor:crosshair; border-radius:4px; }
+#canvas-hint { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); pointer-events:none; white-space:nowrap; }
+#coord-disp { position:absolute; top:10px; left:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
+#shift-ind { position:absolute; bottom:12px; right:12px; font-size:10px; color:var(--amber); pointer-events:none; display:none; }
+
+#right-panel { width:216px; flex-shrink:0; border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+#right-header { padding:10px 12px; border-bottom:1px solid var(--border); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; }
+#results-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+#results-empty { font-size:10px; color:var(--muted); text-align:center; padding:24px 8px; }
+
+.result-card { background:var(--surface); border:1px solid var(--border); border-radius:5px; overflow:hidden; cursor:pointer; transition:border-color .12s; flex-shrink:0; }
+.result-card:hover { border-color:var(--border2); }
+.result-card.selected { border:1.5px solid var(--accent); }
+.card-thumb { width:100%; aspect-ratio:1; display:block; }
+.card-meta { padding:6px 8px; }
+.card-title { font-size:10px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card-dist { font-size:9px; color:var(--muted); margin-top:2px; }
+.card-rooms { font-size:9px; color:var(--muted); margin-top:2px; line-height:1.5; }
+
+.legend-row { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:10px; color:var(--text); }
+.legend-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
+.legend-swatch.door { border-color:rgba(194,65,12,0.6); }
+.legend-swatch.window { border-color:rgba(6,182,212,0.6); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>floor plan retrieval</h1>
+  <span id="hdr-status">load index to begin</span>
+</div>
+
+<div id="body">
+
+  <div id="sidebar">
+    <div class="ss">
+      <div class="sl">index</div>
+      <div class="dz" id="dz-bin" onclick="document.getElementById('fi-bin').click()">
+        <input type="file" id="fi-bin" accept=".bin">
+        <span class="dz-tag">BIN</span><span class="dz-name" id="lbl-bin">index.bin</span>
+      </div>
+      <div class="dz" id="dz-nms" onclick="document.getElementById('fi-nms').click()">
+        <input type="file" id="fi-nms" accept=".json">
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-nms">index_names.json</span>
+      </div>
+      <div class="dz" id="dz-pls" onclick="document.getElementById('fi-pls').click()">
+        <input type="file" id="fi-pls" accept=".json" multiple>
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-pls">plan files (multi)</span>
+      </div>
+      <div id="idx-st" style="font-size:10px;color:var(--muted);padding:2px 0">—</div>
+    </div>
+
+    <div class="ss">
+      <div class="sl">draw</div>
+      <div class="hint">
+        <kbd>click</kbd> add vertex<br>
+        <kbd>shift</kbd> lock H / V axis<br>
+        <kbd>enter</kbd> or <kbd>dbl-click</kbd> close<br>
+        <kbd>esc</kbd> clear
+      </div>
+      <button class="clear-btn" onclick="clearBoundary()">clear boundary</button>
+      <button class="clear-btn" onclick="saveBoundary()" style="margin-top:4px">save boundary…</button>
+    </div>
+
+    <div class="ss" id="lib-section">
+      <div class="sl">boundary library</div>
+      <div id="lib-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
+      <button class="clear-btn" onclick="exportLibrary()" style="width:100%">export library JSON</button>
+      <label class="clear-btn" style="width:100%;text-align:center;cursor:pointer;margin-top:4px">
+        import library JSON<input type="file" accept=".json" style="display:none" onchange="importLibrary(this)">
+      </label>
+    </div>
+
+    <div class="ss">
+      <div class="sl">requirements</div>
+      <div class="field">
+        <label>bedrooms <span id="v-bed">2</span></label>
+        <input type="range" min="0" max="6" value="2" step="1"
+          oninput="document.getElementById('v-bed').textContent=this.value;req.bedrooms=+this.value">
+      </div>
+      <div class="field">
+        <label>bathrooms <span id="v-bath">1</span></label>
+        <input type="range" min="0" max="4" value="1" step="1"
+          oninput="document.getElementById('v-bath').textContent=this.value;req.bathrooms=+this.value">
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="sl">parameters</div>
+      <div class="field">
+        <label>results <span id="v-topn">5</span></label>
+        <input type="range" min="1" max="20" value="5" step="1"
+          oninput="document.getElementById('v-topn').textContent=this.value;params.topn=+this.value">
+      </div>
+      <div class="field">
+        <label>shape weight <span id="v-sw">1.0</span></label>
+        <input type="range" min="0" max="2" value="1.0" step="0.1"
+          oninput="document.getElementById('v-sw').textContent=(+this.value).toFixed(1);params.shape_w=+this.value">
+      </div>
+      <div class="field">
+        <label>semantic weight <span id="v-semw">0.5</span></label>
+        <input type="range" min="0" max="2" value="0.5" step="0.1"
+          oninput="document.getElementById('v-semw').textContent=(+this.value).toFixed(1);params.sem_w=+this.value">
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-graph" onchange="params.showGraph=this.checked;render()">
+        show room graph</label>
+      </div>
+      <button class="run-btn" id="run-btn" onclick="runRetrieval()" disabled>retrieve</button>
+    </div>
+
+    <div class="ss">
+      <div class="sl">stats</div>
+      <div class="stat"><span class="stat-k">index</span><span class="stat-v" id="s-idx">—</span></div>
+      <div class="stat"><span class="stat-k">plans loaded</span><span class="stat-v" id="s-pls">0</span></div>
+      <div class="stat"><span class="stat-k">boundary verts</span><span class="stat-v" id="s-bv">—</span></div>
+    </div>
+    <div class="ss" id="legend">
+      <div class="sl">legend</div>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+    <div id="coord-disp"></div>
+    <div id="canvas-hint">draw a boundary polygon to begin</div>
+    <div id="shift-ind">SHIFT LOCK</div>
+  </div>
+
+  <div id="right-panel">
+    <div id="right-header">
+      <span>alternatives</span>
+      <span id="result-count" style="color:var(--muted);font-size:9px"></span>
+    </div>
+    <div id="results-list">
+      <div id="results-empty">run retrieval to see results</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const N_SAMP=128,N_FREQS=48,SCALE=256,SNAP_PX=14,VR=5,PAD=0.08;
+
+const ROOM_GROUPS=[
+  {name:'bedroom', set:new Set([1,5,7]),max:5},
+  {name:'living',  set:new Set([0]),   max:2},
+  {name:'kitchen', set:new Set([2]),   max:2},
+  {name:'bathroom',set:new Set([3]),   max:4},
+  {name:'dining',  set:new Set([4]),   max:2},
+  {name:'study',   set:new Set([6]),   max:2},
+  {name:'guest',   set:new Set([8]),   max:2},
+  {name:'balcony', set:new Set([9]),   max:3},
+  {name:'entrance',set:new Set([10]),  max:2},
+  {name:'storage', set:new Set([11]),  max:3},
+];
+const ABBR={bedroom:'Bed',living:'Liv',kitchen:'Kit',bathroom:'Bath',
+  dining:'Din',study:'Stu',guest:'Gst',balcony:'Bal',entrance:'Ent',storage:'Sto'};
+const RCOLS=['#E6B8A2','#B8D4E8','#B8E8B8','#E8E8B8','#D4B8E8',
+  '#E8B8D4','#B8E8E8','#E8D4B8','#C8E8C8','#B8C8E8','#E8C8B8','#D8D8D8'];
+
+// state
+const db={names:null,descs:null,dim:0,_raw:null};
+const cache={};
+let req={bedrooms:2,bathrooms:1};
+let params={topn:5,shape_w:1.0,sem_w:0.5,showGraph:false};
+let boundary=[]; // [{x,y}] normalised
+let closed=false;
+let mouse={x:0,y:0};
+let shiftDown=false;
+let snapFirst=false;
+let results=[];
+let selected=null;
+let cW=0,cH=0;
+
+const canvas=document.getElementById('main-canvas');
+const ctx=canvas.getContext('2d');
+
+// ── resize ────────────────────────────────────────────────────────────────
+function resize(){
+  const wrap=document.getElementById('canvas-wrap');
+  const S=Math.min(wrap.clientWidth-32,wrap.clientHeight-32);
+  cW=S;cH=S;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=S*dpr;canvas.height=S*dpr;
+  canvas.style.width=S+'px';canvas.style.height=S+'px';
+  ctx.scale(dpr,dpr);
+  render();
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,0);
+
+// ── coord helpers ─────────────────────────────────────────────────────────
+function n2c(nx,ny){
+  const s=cW*(1-2*PAD);
+  return[PAD*cW+nx*s,PAD*cH+ny*s];
+}
+function c2n(cx,cy){
+  const s=cW*(1-2*PAD);
+  return[(cx-PAD*cW)/s,(cy-PAD*cH)/s];
+}
+function pdist(a,b){
+  const[ax,ay]=n2c(a.x,a.y),[bx,by]=n2c(b.x,b.y);
+  return Math.hypot(ax-bx,ay-by);
+}
+
+// ── projection-line snap ──────────────────────────────────────────────────
+// Returns {x, y} with one or both coords snapped to the nearest projection
+// line from existing vertices, if within SNAP_PX pixels. Shift-lock takes
+// priority and snapFirst (close) takes priority over both.
+function projSnap(nx, ny){
+  if(!boundary.length||closed)return{x:nx,y:ny};
+  const s=cW*(1-2*PAD);  // pixels per unit
+  const thresh=SNAP_PX/s;
+  let sx=nx,sy=ny,bestX=Infinity,bestY=Infinity;
+  boundary.forEach(({x,y})=>{
+    const dx=Math.abs(nx-x),dy=Math.abs(ny-y);
+    if(dx<thresh&&dx<bestX){bestX=dx;sx=x;}
+    if(dy<thresh&&dy<bestY){bestY=dy;sy=y;}
+  });
+  return{x:sx,y:sy};
+}
+
+// ── ghost ─────────────────────────────────────────────────────────────────
+function ghost(){
+  if(!boundary.length||closed)return null;
+  let{x,y}=mouse;
+  if(shiftDown){
+    const l=boundary[boundary.length-1];
+    const dx=Math.abs(x-l.x),dy=Math.abs(y-l.y);
+    if(dx>dy)y=l.y;else x=l.x;
+  } else {
+    const s=projSnap(x,y);x=s.x;y=s.y;
+  }
+  if(snapFirst){x=boundary[0].x;y=boundary[0].y;}
+  return{x,y};
+}
+
+// ── render ────────────────────────────────────────────────────────────────
+function render(){
+  ctx.clearRect(0,0,cW,cH);
+  ctx.fillStyle='#e8eaed';
+  ctx.fillRect(0,0,cW,cH);
+
+  // selected plan underneath
+  if(selected!==null&&results[selected]?.fp){
+    drawFP(ctx,results[selected].fp,cW,cH,PAD,false,results[selected].adapted);
+    drawDoorsWindows(ctx,results[selected].fp,cW,cH,PAD);
+    if(params.showGraph)drawGraph(ctx,results[selected].fp,cW,cH,PAD);
+    // query boundary overlay
+    drawBoundaryOverlay();
+    // redraw entrance on top of the boundary overlay
+    const ent=results[selected].fp?.entrance;
+    if(ent&&ent.length===4){
+      const[ex1,ey1]=n2c(ent[0],ent[1]);
+      const[ex2,ey2]=n2c(ent[2],ent[3]);
+      ctx.beginPath();ctx.rect(ex1,ey1,ex2-ex1,ey2-ey1);
+      ctx.fillStyle='#88888866';ctx.fill();
+      ctx.strokeStyle='#555';ctx.lineWidth=2;ctx.setLineDash([]);ctx.stroke();
+    }
+  } else {
+    // boundary fill when no plan selected
+    if(boundary.length>=3&&closed){
+      ctx.beginPath();
+      boundary.forEach(({x,y},i)=>{
+        const[cx,cy]=n2c(x,y);
+        i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
+      });
+      ctx.closePath();
+      ctx.fillStyle='rgba(59,130,246,0.04)';
+      ctx.fill();
+    }
+  }
+
+  // projection lines from existing vertices (only while drawing, not closed)
+  if(!closed&&boundary.length>=1){
+    const g=ghost();
+    const gx=g?g.x:mouse.x, gy=g?g.y:mouse.y;
+    ctx.save();
+    ctx.setLineDash([2,4]);
+    ctx.lineWidth=0.75;
+    boundary.forEach(({x,y})=>{
+      const[vx,vy]=n2c(x,y);
+      // horizontal projection — highlight if ghost is near this y
+      const nearH=g&&Math.abs(gy-y)<0.004;
+      ctx.strokeStyle=nearH?'rgba(251,146,60,0.85)':'rgba(100,116,139,0.35)';
+      ctx.beginPath();ctx.moveTo(0,vy);ctx.lineTo(cW,vy);ctx.stroke();
+      // vertical projection — highlight if ghost is near this x
+      const nearV=g&&Math.abs(gx-x)<0.004;
+      ctx.strokeStyle=nearV?'rgba(251,146,60,0.85)':'rgba(100,116,139,0.35)';
+      ctx.beginPath();ctx.moveTo(vx,0);ctx.lineTo(vx,cH);ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // ghost edge
+  const g=ghost();
+  if(g&&boundary.length>0&&!closed){
+    const l=boundary[boundary.length-1];
+    const[lx,ly]=n2c(l.x,l.y),[gx,gy]=n2c(g.x,g.y);
+    ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(gx,gy);
+    ctx.strokeStyle=snapFirst?'rgba(239,68,68,0.7)':'rgba(59,130,246,0.55)';
+    ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);
+    if(!snapFirst){
+      ctx.beginPath();ctx.arc(gx,gy,3,0,Math.PI*2);
+      ctx.fillStyle=shiftDown?'#f59e0b':'rgba(59,130,246,0.7)';ctx.fill();
+    }
+  }
+
+  // boundary edges
+  if(boundary.length>=2){
+    ctx.beginPath();
+    boundary.forEach(({x,y},i)=>{
+      const[cx,cy]=n2c(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
+    });
+    if(closed)ctx.closePath();
+    ctx.strokeStyle='#1e40af';ctx.lineWidth=2;ctx.setLineDash([]);ctx.stroke();
+  }
+
+  // vertices
+  boundary.forEach(({x,y},i)=>{
+    const[cx,cy]=n2c(x,y);
+    if(i===0&&snapFirst&&!closed){
+      ctx.beginPath();ctx.arc(cx,cy,VR+5,0,Math.PI*2);
+      ctx.strokeStyle='#ef4444';ctx.lineWidth=1.5;ctx.stroke();
+    }
+    ctx.beginPath();ctx.arc(cx,cy,VR,0,Math.PI*2);
+    ctx.fillStyle=i===0?'#ef4444':'#1e40af';
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+  });
+}
+
+function drawBoundaryOverlay(){
+  if(!boundary.length)return;
+  if(boundary.length>=3&&closed){
+    ctx.beginPath();
+    boundary.forEach(({x,y},i)=>{
+      const[cx,cy]=n2c(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
+    });
+    ctx.closePath();
+    ctx.fillStyle='rgba(0,0,0,0)';ctx.fill();
+  }
+  if(boundary.length>=2){
+    ctx.beginPath();
+    boundary.forEach(({x,y},i)=>{
+      const[cx,cy]=n2c(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
+    });
+    if(closed)ctx.closePath();
+    ctx.strokeStyle='#3b82f6';ctx.lineWidth=2;
+    ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+  boundary.forEach(({x,y},i)=>{
+    const[cx,cy]=n2c(x,y);
+    ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);
+    ctx.fillStyle=i===0?'rgba(239,68,68,0.8)':'rgba(59,130,246,0.8)';
+    ctx.fill();
+  });
+}
+
+function drawFP(c,fp,W,H,pad,dark,showClipped){
+  const rooms=fp.rooms||[],bdry=fp.boundary||[];
+  if(!bdry.length)return;
+  // use full [0,1] unit square as reference — matches PNG framing
+  const sc=W*(1-2*pad);
+  const ox=pad*W,oy=pad*H;
+  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+  rooms.forEach(r=>{
+    if(!r.polygon||r.polygon.length<3)return;
+    const col=RCOLS[r.source_type??r.type]??'#ddd';
+    c.beginPath();
+    r.polygon.forEach((pt,i)=>{const[cx,cy]=t(pt);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
+    c.closePath();
+    if(showClipped&&r.clipped){
+      c.fillStyle=col+'88';
+    }else{
+      c.fillStyle=col+(dark?'cc':'bb');
+    }
+    c.fill();
+    if(showClipped&&r.clipped){
+      c.strokeStyle='#f59e0b';c.lineWidth=1.5;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
+    }else{
+      c.strokeStyle='#00000020';c.lineWidth=0.5;c.stroke();
+    }
+  });
+  c.beginPath();
+  bdry.forEach((v,i)=>{const[cx,cy]=t([v[0],v[1]]);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
+  c.closePath();
+  c.strokeStyle='#111';c.lineWidth=dark?1.5:2;c.setLineDash([]);c.stroke();
+
+  // entrance door — draw as bbox rectangle
+  const ent=fp.entrance;
+  if(ent&&ent.length===4){
+    const[ex1,ey1]=t([ent[0],ent[1]]);
+    const[ex2,ey2]=t([ent[2],ent[3]]);
+    c.beginPath();c.rect(ex1,ey1,ex2-ex1,ey2-ey1);
+    c.fillStyle='#88888866';c.fill();
+    c.strokeStyle='#555';c.lineWidth=dark?1.5:2;c.setLineDash([]);c.stroke();
+  }
+}
+
+function drawDoorsWindows(c,fp,W,H,pad){
+  const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+  const tb=([x1,y1,x2,y2])=>{
+    const[ax,ay]=t([x1,y1]),[bx,by]=t([x2,y2]);
+    return[Math.min(ax,bx),Math.min(ay,by),Math.abs(bx-ax),Math.abs(by-ay)];
+  };
+
+  // windows — cyan/teal fill, thin stroke
+  (fp.windows||[]).forEach(w=>{
+    if(!w.bbox||w.bbox.length!==4)return;
+    const[rx,ry,rw,rh]=tb(w.bbox);
+    c.beginPath();c.rect(rx,ry,rw,rh);
+    c.fillStyle='rgba(103,232,249,0.85)';c.fill();
+    c.strokeStyle='rgba(6,182,212,0.9)';c.lineWidth=1;c.setLineDash([]);c.stroke();
+  });
+
+  // doors — warm orange fill, slightly thicker stroke
+  (fp.doors||[]).forEach(d=>{
+    if(!d.bbox||d.bbox.length!==4)return;
+    const[rx,ry,rw,rh]=tb(d.bbox);
+    c.beginPath();c.rect(rx,ry,rw,rh);
+    c.fillStyle='rgba(251,146,60,0.90)';c.fill();
+    c.strokeStyle='rgba(194,65,12,0.9)';c.lineWidth=1;c.setLineDash([]);c.stroke();
+  });
+}
+
+function drawGraph(c,fp,W,H,pad){
+  const rooms=fp.rooms||[],edges=fp.edges||[];
+  if(!rooms.length)return;
+  const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+
+  // centroid of each room polygon (vertex average)
+  const cen={};
+  rooms.forEach(r=>{
+    if(!r.polygon||r.polygon.length<3)return;
+    const mx=r.polygon.reduce((s,p)=>s+p[0],0)/r.polygon.length;
+    const my=r.polygon.reduce((s,p)=>s+p[1],0)/r.polygon.length;
+    cen[r.id]=t([mx,my]);
+  });
+
+  // scale dash gap with canvas size so it's visible at thumbnail scale too
+  const dashSeg=Math.max(4,W*0.025);
+
+  // edges
+  edges.forEach(e=>{
+    const a=cen[e.u],b=cen[e.v];
+    if(!a||!b)return;
+    c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);
+    if(e.connection===1){
+      // door — continuous solid line
+      c.strokeStyle='rgba(15,15,15,0.85)';c.lineWidth=2;c.setLineDash([]);
+    }else{
+      // wall adjacency — segmented (dashed) line
+      c.strokeStyle='rgba(15,15,15,0.40)';c.lineWidth=1.5;c.setLineDash([dashSeg,dashSeg]);
+    }
+    c.stroke();c.setLineDash([]);
+  });
+
+  // nodes
+  const nr=Math.max(3,W*0.016);
+  rooms.forEach(r=>{
+    const pos=cen[r.id];if(!pos)return;
+    const col=RCOLS[r.source_type??r.type]??'#ccc';
+    c.beginPath();c.arc(pos[0],pos[1],nr,0,Math.PI*2);
+    c.fillStyle=col;c.fill();
+    c.strokeStyle='#222';c.lineWidth=1;c.stroke();
+  });
+}
+
+// ── mouse ─────────────────────────────────────────────────────────────────
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  const[nx,ny]=c2n(cx,cy);
+  mouse={x:nx,y:ny};
+  shiftDown=e.shiftKey;
+  snapFirst=(!closed&&boundary.length>=3&&pdist(mouse,boundary[0])<SNAP_PX);
+  document.getElementById('shift-ind').style.display=shiftDown&&!closed?'block':'none';
+  document.getElementById('coord-disp').textContent=closed?'':`${nx.toFixed(3)}, ${ny.toFixed(3)}`;
+  render();
+});
+
+canvas.addEventListener('mouseleave',()=>{
+  document.getElementById('coord-disp').textContent='';
+  render();
+});
+
+canvas.addEventListener('click',e=>{
+  if(closed)return;
+  const r=canvas.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  let[nx,ny]=c2n(cx,cy);
+  if(e.shiftKey&&boundary.length>0){
+    const l=boundary[boundary.length-1];
+    const dx=Math.abs(nx-l.x),dy=Math.abs(ny-l.y);
+    if(dx>dy)ny=l.y;else nx=l.x;
+  } else {
+    const s=projSnap(nx,ny);nx=s.x;ny=s.y;
+  }
+  if(snapFirst&&boundary.length>=3){closeBoundary();return;}
+  boundary.push({x:nx,y:ny});
+  document.getElementById('s-bv').textContent=boundary.length;
+  document.getElementById('canvas-hint').textContent=
+    boundary.length>=3?'double-click or click first vertex to close · shift = lock H/V':
+    'click to add vertices · shift = lock H/V';
+  checkReady();render();
+});
+
+canvas.addEventListener('dblclick',e=>{
+  if(closed||boundary.length<3)return;
+  e.preventDefault();closeBoundary();
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')clearBoundary();
+  if(e.key==='Enter'&&boundary.length>=3&&!closed)closeBoundary();
+  if(e.key==='Shift')shiftDown=true;
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='Shift'){shiftDown=false;document.getElementById('shift-ind').style.display='none';render();}
+});
+
+function closeBoundary(){
+  closed=true;snapFirst=false;
+  document.getElementById('canvas-hint').textContent='boundary closed · press retrieve';
+  document.getElementById('s-bv').textContent=boundary.length;
+  checkReady();render();
+}
+
+function clearBoundary(){
+  boundary=[];closed=false;snapFirst=false;selected=null;results=[];
+  renderList();
+  document.getElementById('canvas-hint').textContent='draw a boundary polygon to begin';
+  document.getElementById('s-bv').textContent='—';
+  document.getElementById('result-count').textContent='';
+  checkReady();render();
+}
+
+// ── boundary library ──────────────────────────────────────────────────────
+const LIB_KEY='fp_boundary_library';
+
+function libLoad(){
+  try{return JSON.parse(localStorage.getItem(LIB_KEY)||'[]');}catch{return[];}
+}
+function libSave(lib){localStorage.setItem(LIB_KEY,JSON.stringify(lib));}
+
+function saveBoundary(){
+  if(!closed||boundary.length<3){alert('Close the boundary first.');return;}
+  const name=prompt('Name for this boundary:','boundary '+(libLoad().length+1));
+  if(!name)return;
+  const lib=libLoad();
+  lib.push({name,vertices:boundary.map(({x,y})=>({x,y})),saved:new Date().toISOString()});
+  libSave(lib);
+  renderLib();
+}
+
+function loadBoundary(idx){
+  const lib=libLoad();
+  const entry=lib[idx];
+  if(!entry)return;
+  boundary=entry.vertices.map(({x,y})=>({x,y}));
+  closed=true;snapFirst=false;selected=null;results=[];
+  renderList();
+  document.getElementById('canvas-hint').textContent='boundary loaded · press retrieve';
+  document.getElementById('s-bv').textContent=boundary.length;
+  document.getElementById('result-count').textContent='';
+  checkReady();render();
+}
+
+function deleteBoundary(idx){
+  const lib=libLoad();
+  lib.splice(idx,1);
+  libSave(lib);
+  renderLib();
+}
+
+function renameBoundary(idx){
+  const lib=libLoad();
+  const name=prompt('New name:',lib[idx].name);
+  if(!name)return;
+  lib[idx].name=name;
+  libSave(lib);
+  renderLib();
+}
+
+function renderLib(){
+  const lib=libLoad();
+  const el=document.getElementById('lib-list');
+  el.innerHTML='';
+  if(!lib.length){
+    el.innerHTML='<div style="font-size:10px;color:var(--muted)">no saved boundaries</div>';
+    return;
+  }
+  lib.forEach((entry,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:3px';
+
+    const lbl=document.createElement('span');
+    lbl.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;cursor:pointer;color:var(--text)';
+    lbl.title=entry.vertices.length+' verts · '+entry.saved.slice(0,10);
+    lbl.textContent=entry.name;
+    lbl.onclick=()=>loadBoundary(i);
+    lbl.onmouseover=()=>lbl.style.color='var(--accent)';
+    lbl.onmouseout=()=>lbl.style.color='var(--text)';
+
+    const mkBtn=(label,title,cb)=>{
+      const b=document.createElement('button');
+      b.textContent=label;b.title=title;
+      b.style.cssText='flex-shrink:0;padding:1px 4px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
+      b.onmouseover=()=>{b.style.borderColor='var(--red)';b.style.color='var(--red)';};
+      b.onmouseout=()=>{b.style.borderColor='var(--border2)';b.style.color='var(--muted)';};
+      b.onclick=cb;
+      return b;
+    };
+
+    row.appendChild(lbl);
+    row.appendChild(mkBtn('✎','rename',()=>renameBoundary(i)));
+    row.appendChild(mkBtn('✕','delete',()=>{if(confirm('Delete "'+entry.name+'"?'))deleteBoundary(i);}));
+    el.appendChild(row);
+  });
+}
+
+function exportLibrary(){
+  const lib=libLoad();
+  if(!lib.length){alert('Library is empty.');return;}
+  const blob=new Blob([JSON.stringify(lib,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='boundary_library.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importLibrary(inp){
+  const file=inp.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!Array.isArray(data))throw new Error();
+      const lib=libLoad();
+      data.forEach(entry=>{
+        if(entry.name&&Array.isArray(entry.vertices))lib.push(entry);
+      });
+      libSave(lib);renderLib();
+      alert('Imported '+data.length+' boundaries.');
+    }catch{alert('Invalid library JSON.');}
+    inp.value='';
+  };
+  reader.readAsText(file);
+}
+
+renderLib();
+
+// ── index loading ─────────────────────────────────────────────────────────
+function setupDrop(dzId,inpId,lblId,fn){
+  const dz=document.getElementById(dzId),inp=document.getElementById(inpId),lbl=document.getElementById(lblId);
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');fn(e.dataTransfer.files,lbl);});
+  inp.addEventListener('change',e=>fn(e.target.files,lbl));
+}
+
+setupDrop('dz-bin','fi-bin','lbl-bin',(files,lbl)=>{
+  const f=files[0];if(!f)return;lbl.textContent=f.name;
+  f.arrayBuffer().then(buf=>{db._raw=new Float32Array(buf);tryFinalise();});
+});
+setupDrop('dz-nms','fi-nms','lbl-nms',(files,lbl)=>{
+  const f=files[0];if(!f)return;lbl.textContent=f.name;
+  f.text().then(txt=>{db.names=JSON.parse(txt);tryFinalise();});
+});
+setupDrop('dz-pls','fi-pls','lbl-pls',(files,lbl)=>{
+  lbl.textContent=files.length+' files';
+  let n=0;
+  Array.from(files).forEach(f=>{
+    f.text().then(txt=>{
+      try{
+        const d=JSON.parse(txt);
+        const stem=f.name.replace(/\.json$/i,'');
+        cache[stem]=d;if(d.id)cache[d.id]=d;
+        document.getElementById('s-pls').textContent=++n;
+      }catch(e){}
+    });
+  });
+});
+
+function tryFinalise(){
+  if(!db._raw||!db.names)return;
+  const N=db.names.length;
+  db.dim=db._raw.length/N;
+  if(!Number.isInteger(db.dim)){setStatus('index size mismatch','err');return;}
+  db.descs=db._raw;
+  document.getElementById('s-idx').textContent=N.toLocaleString()+' · dim '+db.dim;
+  document.getElementById('idx-st').textContent=N.toLocaleString()+' plans indexed';
+  document.getElementById('idx-st').style.color='var(--green)';
+  setStatus('index ready','ok');checkReady();
+}
+
+function checkReady(){
+  document.getElementById('run-btn').disabled=!(db.descs&&db.names&&closed&&boundary.length>=3);
+}
+function setStatus(msg,cls=''){
+  const el=document.getElementById('hdr-status');el.textContent=msg;el.className=cls;
+}
+
+// ── descriptors ───────────────────────────────────────────────────────────
+function samplePerimeter(verts,n){
+  const pts=[...verts,verts[0]];
+  const lens=[];
+  for(let i=0;i<pts.length-1;i++){
+    const dx=pts[i+1][0]-pts[i][0],dy=pts[i+1][1]-pts[i][1];
+    lens.push(Math.hypot(dx,dy));
+  }
+  const cum=[0];lens.forEach(l=>cum.push(cum[cum.length-1]+l));
+  const tot=cum[cum.length-1];
+  if(tot<1e-9)return Array(n).fill([0,0]);
+  const res=[];
+  for(let i=0;i<n;i++){
+    const pos=(i/n)*tot;
+    let idx=cum.findIndex(c=>c>pos)-1;
+    idx=Math.max(0,Math.min(idx,lens.length-1));
+    const t=(pos-cum[idx])/(lens[idx]+1e-12);
+    res.push([pts[idx][0]+t*(pts[idx+1][0]-pts[idx][0]),
+              pts[idx][1]+t*(pts[idx+1][1]-pts[idx][1])]);
+  }
+  return res;
+}
+
+function shapeDesc(bdry,sw){
+  const v=bdry.map(v=>[v[0]*SCALE,v[1]*SCALE]);
+  if(v.length<3)return new Float32Array(N_FREQS);
+  const pts=samplePerimeter(v,N_SAMP);
+  const cx=pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const cy=pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  const d=pts.map(p=>Math.hypot(p[0]-cx,p[1]-cy));
+  const mn=d.reduce((a,b)=>a+b,0)/d.length;
+  if(mn<1e-9)return new Float32Array(N_FREQS);
+  const nd=d.map(x=>x/mn);
+  const mag=new Float32Array(N_FREQS);
+  for(let k=0;k<N_FREQS;k++){
+    let re=0,im=0;
+    for(let t=0;t<N_SAMP;t++){const a=2*Math.PI*(k+1)*t/N_SAMP;re+=nd[t]*Math.cos(a);im-=nd[t]*Math.sin(a);}
+    mag[k]=Math.sqrt(re*re+im*im);
+  }
+  let l2=0;for(let i=0;i<N_FREQS;i++)l2+=mag[i]*mag[i];l2=Math.sqrt(l2);
+  if(l2>1e-9)for(let i=0;i<N_FREQS;i++)mag[i]=mag[i]/l2*sw;
+  return mag;
+}
+
+function polyArea(segs){
+  let a=0;
+  for(let i=0;i<segs.length;i++){const j=(i+1)%segs.length;a+=segs[i][0]*segs[j][1]-segs[j][0]*segs[i][1];}
+  return Math.abs(a)/2;
+}
+
+function semDesc(fp,smw){
+  const rooms=fp.rooms||[],bdry=fp.boundary||[];
+  const gc={},ga={};ROOM_GROUPS.forEach(g=>{gc[g.name]=0;ga[g.name]=0;});
+  rooms.forEach(r=>{
+    const st=r.source_type??r.type;
+    const poly=(r.polygon||[]).map(([x,y])=>[x*SCALE,y*SCALE]);
+    ROOM_GROUPS.forEach(g=>{if(g.set.has(st)){gc[g.name]++;ga[g.name]+=polyArea(poly);}});
+  });
+  const feat=[];
+  ROOM_GROUPS.forEach(g=>{feat.push(Math.min(gc[g.name]/g.max,1));feat.push(Math.min(ga[g.name]/(SCALE*SCALE),1));});
+  const bv=bdry.map(v=>[v[0]*SCALE,v[1]*SCALE]);
+  feat.push(Math.min(rooms.length/15,1));
+  feat.push(Math.min(bv.length>=3?polyArea(bv):0,SCALE*SCALE)/(SCALE*SCALE));
+  return new Float32Array(feat.map(v=>v*smw));
+}
+
+function combinedDesc(fp,sw,smw){
+  const sd=shapeDesc(fp.boundary||[],sw),semd=semDesc(fp,smw);
+  const out=new Float32Array(sd.length+semd.length);
+  out.set(sd);out.set(semd,sd.length);return out;
+}
+
+function l2dist(a,b,off,dim){
+  let s=0;for(let i=0;i<dim;i++){const d=a[i]-b[off+i];s+=d*d;}return Math.sqrt(s);
+}
+
+// ── retrieval ─────────────────────────────────────────────────────────────
+function runRetrievalLocal(){
+  if(!db.descs||!closed||boundary.length<3)return;
+  setStatus('retrieving…','warn');
+  const rawBdry=boundary.map(({x,y})=>[x,y,0,0]);
+  const qfp={id:'__q__',boundary:rawBdry,rooms:[],edges:[]};
+  setTimeout(()=>{
+    try{
+      const qd=combinedDesc(qfp,params.shape_w,params.sem_w);
+      const N=db.names.length,dim=db.dim;
+      const dists=new Float32Array(N);
+      for(let i=0;i<N;i++)dists[i]=l2dist(qd,db.descs,i*dim,dim);
+      const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
+      results=idx.map(i=>{
+        const name=db.names[i];
+        const stem=name.replace(/\.(png|json)$/i,'');
+        return{name,dist:dists[i],fp:cache[stem]||cache[name]||null,adapted:false};
+      });
+      selected=null;
+      renderList();
+      setStatus(`top ${params.topn} retrieved (local)`,'ok');
+      document.getElementById('result-count').textContent=results.length+' results';
+      render();
+    }catch(e){setStatus('error: '+e.message,'err');console.error(e);}
+  },10);
+}
+
+async function runRetrieval(){
+  if(!closed||boundary.length<3)return;
+  setStatus('retrieving and adapting…','warn');
+  document.getElementById('run-btn').disabled=true;
+  const body={
+    boundary:boundary.map(({x,y})=>[x,y,0,0]),
+    entrance:null,
+    requirements:req,
+    topn:params.topn,
+    shape_w:params.shape_w,
+    sem_w:params.sem_w,
+  };
+  try{
+    const resp=await fetch('/retrieve',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body),
+    });
+    if(!resp.ok)throw new Error('server returned '+resp.status);
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error);
+    renderAdaptedResults(data.plans);
+    setStatus(`top ${data.count} retrieved + adapted`,'ok');
+    document.getElementById('result-count').textContent=data.count+' results';
+    render();
+  }catch(e){
+    console.warn('Server retrieval failed, falling back to local:',e);
+    setStatus('server unavailable — using local retrieval','warn');
+    runRetrievalLocal();
+  }finally{
+    document.getElementById('run-btn').disabled=!(db.descs&&db.names&&closed&&boundary.length>=3);
+  }
+}
+
+// ── adapted results panel ────────────────────────────────────────────────
+function renderAdaptedResults(plans){
+  results=plans.map(plan=>{
+    const ret=plan.retrieval||{};
+    return{name:plan.id,dist:ret.dist??0,fp:plan,adapted:true,retrieval:ret};
+  });
+  selected=null;
+  const list=document.getElementById('results-list');
+  list.innerHTML='';
+  if(!results.length){list.innerHTML='<div id="results-empty">no adapted results</div>';return;}
+  results.forEach((r,i)=>{
+    const card=document.createElement('div');
+    card.className='result-card';
+    card.onclick=()=>selectResult(i);
+    const tc=document.createElement('canvas');
+    tc.className='card-thumb';tc.width=200;tc.height=200;
+    const tctx=tc.getContext('2d');
+    tctx.fillStyle='#f1f5f9';tctx.fillRect(0,0,200,200);
+    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true,true);
+    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06);
+    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06);
+    else{tctx.fillStyle='#94a3b8';tctx.font='10px monospace';tctx.textAlign='center';tctx.fillText('no plan data',100,100);}
+    card.appendChild(tc);
+    const ret=r.retrieval||{};
+    const iou=(ret.iou_score??0).toFixed(3);
+    const rot=ret.orientation??0;
+    const scale=(ret.scale_factor??1).toFixed(2);
+    const dist=(r.dist??0).toFixed(4);
+    const meta=document.createElement('div');
+    meta.className='card-meta';
+    const srcId=ret.source_id??r.name;
+    meta.innerHTML=`<div class="card-title">#${i+1} ${srcId}</div>`+
+      `<div class="card-dist">dist: ${dist}&nbsp;&nbsp;iou: ${iou}&nbsp;&nbsp;rot: ${rot}°&nbsp;&nbsp;scale: ${scale}</div>`+
+      `<div class="card-rooms">${r.fp?roomSummary(r.fp):'—'}</div>`;
+    card.appendChild(meta);
+    list.appendChild(card);
+  });
+}
+
+// ── results panel ─────────────────────────────────────────────────────────
+function roomSummary(fp){
+  const rooms=fp?.rooms||[];
+  const cnt={};ROOM_GROUPS.forEach(g=>cnt[g.name]=0);
+  rooms.forEach(r=>{const st=r.source_type??r.type;ROOM_GROUPS.forEach(g=>{if(g.set.has(st))cnt[g.name]++;});});
+  return ROOM_GROUPS.filter(g=>cnt[g.name]>0).map(g=>`${ABBR[g.name]}:${cnt[g.name]}`).join('  ')||'—';
+}
+
+function renderList(){
+  const list=document.getElementById('results-list');
+  list.innerHTML='';
+  if(!results.length){list.innerHTML='<div id="results-empty">run retrieval to see results</div>';return;}
+  results.forEach((r,i)=>{
+    const card=document.createElement('div');
+    card.className='result-card'+(i===selected?' selected':'');
+    card.onclick=()=>selectResult(i);
+    const tc=document.createElement('canvas');
+    tc.className='card-thumb';tc.width=200;tc.height=200;
+    const tctx=tc.getContext('2d');
+    tctx.fillStyle='#f1f5f9';tctx.fillRect(0,0,200,200);
+    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true);
+    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06);
+    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06);
+    else{
+      tctx.fillStyle='#94a3b8';tctx.font='10px monospace';tctx.textAlign='center';
+      tctx.fillText('no plan data',100,100);
+    }
+    card.appendChild(tc);
+    const meta=document.createElement('div');
+    meta.className='card-meta';
+    meta.innerHTML=`<div class="card-title">#${i+1} ${r.name}</div><div class="card-dist">dist: ${r.dist.toFixed(4)}</div><div class="card-rooms">${r.fp?roomSummary(r.fp):'—'}</div>`;
+    card.appendChild(meta);
+    list.appendChild(card);
+  });
+}
+
+function selectResult(i){
+  selected=selected===i?null:i;
+  document.querySelectorAll('.result-card').forEach((c,j)=>c.classList.toggle('selected',j===selected));
+  render();
+}
+
+// ── auto-load on startup (requires local server) ───────────────────────────
+async function autoLoad(){
+  setStatus('auto-loading…','warn');
+
+  try{
+    const r=await fetch('index.bin');
+    if(!r.ok)throw new Error();
+    db._raw=new Float32Array(await r.arrayBuffer());
+    document.getElementById('lbl-bin').textContent='index.bin ✓';
+  }catch(e){setStatus('index.bin not found — load manually','err');return;}
+
+  try{
+    const r=await fetch('index_names.json');
+    if(!r.ok)throw new Error();
+    db.names=await r.json();
+    document.getElementById('lbl-nms').textContent='index_names.json ✓';
+  }catch(e){setStatus('index_names.json not found — load manually','err');return;}
+
+  tryFinalise();
+
+  try{
+    const mr=await fetch('manifest.json');
+    if(!mr.ok)throw new Error('no manifest');
+    const names=await mr.json();
+    document.getElementById('lbl-pls').textContent='loading '+names.length+' plans…';
+    let loaded=0;
+    const BATCH=50;
+    for(let i=0;i<names.length;i+=BATCH){
+      const batch=names.slice(i,i+BATCH);
+      await Promise.all(batch.map(async name=>{
+        try{
+          const pr=await fetch('test_data/'+name);
+          if(!pr.ok)return;
+          const data=await pr.json();
+          const stem=name.replace(/\.json$/i,'');
+          cache[stem]=data;if(data.id)cache[data.id]=data;
+          document.getElementById('s-pls').textContent=++loaded;
+        }catch(e){}
+      }));
+      document.getElementById('lbl-pls').textContent='loading… '+loaded+'/'+names.length;
+    }
+    document.getElementById('lbl-pls').textContent=loaded+' plans loaded ✓';
+  }catch(e){
+    document.getElementById('lbl-pls').textContent='drop plan files to render';
+  }
+}
+
+if(location.protocol!=='file:'){
+  window.addEventListener('DOMContentLoaded',autoLoad);
+}
+
+// ── legend ────────────────────────────────────────────────────────────────
+(function buildLegend(){
+  // source_type → label (matches Python SEMANTICS dict, filtered to renderable types)
+  const LABELS={
+    0:'Living',1:'Master Bed',2:'Kitchen',3:'Bathroom',4:'Dining',
+    5:'Bedroom',6:'Study',7:'Bedroom',8:'Guest',9:'Balcony',
+    10:'Entrance',11:'Storage',
+  };
+  const el=document.getElementById('legend');
+  if(!el)return;
+  // room types
+  Object.entries(LABELS).forEach(([st,name])=>{
+    const col=RCOLS[+st]??'#ddd';
+    const row=document.createElement('div');
+    row.className='legend-row';
+    row.innerHTML=`<span class="legend-swatch" style="background:${col}"></span>${name}`;
+    el.appendChild(row);
+  });
+  // separator
+  const sep=document.createElement('div');
+  sep.style.cssText='border-top:1px solid var(--border);margin:5px 0';
+  el.appendChild(sep);
+  // doors & windows
+  [
+    ['rgba(251,146,60,0.90)','Door','door'],
+    ['rgba(103,232,249,0.85)','Window','window'],
+  ].forEach(([col,name,cls])=>{
+    const row=document.createElement('div');
+    row.className='legend-row';
+    row.innerHTML=`<span class="legend-swatch ${cls}" style="background:${col}"></span>${name}`;
+    el.appendChild(row);
+  });
+})();
+
+</script>
+</body>
+</html>

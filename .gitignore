@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Index (large binary — rebuild locally with export_index.py)
+browser_files/index.pkl
+my_index.bin
+
+# Adapted results cache
+adapted/
+
+# macOS
+.DS_Store
+._*
+
+# Test outputs
+test_result.png
+test_result_aug.png
+
+# Prompt/scratch files
+*_prompt.md
