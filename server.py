@@ -22,11 +22,21 @@ from pathlib import Path
 import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 
-from sem_geo_retrieval import combined_desc, boundary_v2_to_segs
+from geo_ent_num_retrieval import (
+    shape_desc, entrance_desc_from_point, room_count_desc,
+    retrieve as geo_retrieve,
+    N_FREQS, ENT_DIM, ROOM_DIM,
+)
+
+SHAPE_DIM = N_FREQS                              # 48
+TOTAL_DIM = SHAPE_DIM + ENT_DIM + ROOM_DIM      # 63
 
 # ── globals (populated at startup) ───────────────────────────────────────────
 BASE_DIR    = Path(__file__).parent.resolve()
-db_descs    = None   # (N, dim) float32 numpy array
+db_descs    = None   # (N, TOTAL_DIM) float32 — kept for legacy / dim detection
+db_shapes   = None   # (N, SHAPE_DIM) float32
+db_ents     = None   # (N, ENT_DIM)   float32
+db_rooms    = None   # (N, ROOM_DIM)  float32
 db_names    = None   # list[str]  e.g. ["0.png", "1.png", …]
 plan_cache  = {}     # stem → v2.1.0 dict
 
@@ -76,55 +86,66 @@ def retrieve():
     except Exception:
         return jsonify({"error": "invalid JSON body"}), 400
 
-    boundary    = body.get("boundary")
-    entrance    = body.get("entrance")
-    requirements = body.get("requirements")
-    topn        = int(body.get("topn",   5))
-    shape_w     = float(body.get("shape_w", 1.0))
-    sem_w       = float(body.get("sem_w",   0.5))
+    boundary        = body.get("boundary")
+    entrance_point  = body.get("entrance_point")   # [x, y] or None
+    requirements    = body.get("requirements")
+    topn            = int(body.get("topn",    5))
+    shape_w         = float(body.get("shape_w",  1.0))
+    ent_w           = float(body.get("ent_w",    2.0))
+    room_w          = float(body.get("room_w",   1.0))
     # ── validate boundary ─────────────────────────────────────────────────────
     if not boundary or len(boundary) < 3:
         return jsonify({"error": "boundary must have at least 3 vertices"}), 400
 
-    # ── Step 1: build query_fp (v2.1.0 format) ────────────────────────────────
-    query_fp = {
-        "schema_version": "2.1.0",
-        "id":             "query",
-        "source":         "user",
-        "boundary":       boundary,
-        "entrance":       entrance,
-        "rooms":          [],
-        "edges":          [],
-        "walls":          None,
-        "requirements":   requirements,
-        "retrieval":      None,
-    }
+    # boundary from browser: [[x, y, dir, is_door], …] — first two values are coords
+    bdry_segs = [[v[0], v[1]] for v in boundary]
 
-    # ── Step 2: build legacy format for descriptor computation ────────────────
-    # boundary_v2_to_segs expects [[x,y,dir,is_door],…] and returns [[x*256,y*256],…]
-    legacy_bdry = boundary_v2_to_segs(boundary)
-    query_legacy = {
-        "name":     "query",
-        "boundary": legacy_bdry,
-        "coord":    [],
-        "labels":   [],
-    }
-    # ── Step 3: compute query descriptor ─────────────────────────────────────
+    # normalise to CW winding so descriptors are consistent regardless of draw order
+    signed_area = sum(
+        bdry_segs[i][0] * bdry_segs[(i+1) % len(bdry_segs)][1] -
+        bdry_segs[(i+1) % len(bdry_segs)][0] * bdry_segs[i][1]
+        for i in range(len(bdry_segs))
+    )
+    if signed_area > 0:   # CCW → reverse to CW
+        bdry_segs = bdry_segs[::-1]
+
+    # ── Step 1: compute query descriptors ────────────────────────────────────
     try:
-        q_desc = combined_desc(query_legacy, shape_w, sem_w)
+        q_shape = shape_desc(bdry_segs)
+
+        if entrance_point:
+            q_ent = entrance_desc_from_point(entrance_point, bdry_segs)
+        else:
+            q_ent = np.zeros(ENT_DIM, dtype=np.float32)
+            ent_w = 0.0   # ignore entrance component when none provided
+
+        q_room = _req_to_room_desc(requirements)
     except Exception as exc:
         logger.exception("Descriptor computation failed")
         return jsonify({"error": f"descriptor error: {exc}"}), 500
 
-    # ── Step 4: retrieve top-N ────────────────────────────────────────────────
+    # ── Step 2: retrieve top-N ────────────────────────────────────────────────
     try:
-        dists = np.linalg.norm(db_descs - q_desc[np.newaxis], axis=1)
-        idx   = np.argsort(dists)[:topn]
+        if db_shapes is not None:
+            # New 63-dim index: rotation-aware entrance retrieval
+            idx, dists, _, _, _, best_angles, best_mirror = geo_retrieve(
+                q_shape, q_ent, q_room,
+                db_shapes, db_ents, db_rooms,
+                shape_w, ent_w, room_w, topn,
+            )
+        else:
+            # Legacy flat index fallback
+            q_desc = np.concatenate([q_shape, q_ent, q_room]).astype(np.float32)
+            flat_dists = np.linalg.norm(db_descs - q_desc[np.newaxis], axis=1)
+            idx   = np.argsort(flat_dists)[:topn]
+            dists = flat_dists[idx]
+            best_angles = np.zeros(len(idx))
+            best_mirror = np.zeros(len(idx), dtype=bool)
     except Exception as exc:
         logger.exception("Distance computation failed")
         return jsonify({"error": f"retrieval error: {exc}"}), 500
 
-    # ── Step 5: collect candidate plans ───────────────────────────────────────
+    # ── Step 3: collect candidate plans ───────────────────────────────────────
     candidates = []
     cand_idx   = []   # parallel — which db index each candidate came from
     for i in idx:
@@ -145,19 +166,23 @@ def retrieve():
             "plans":    [],
         })
 
-    # ── Step 6: attach retrieval distances and sort ───────────────────────────
+    # ── Step 4: attach retrieval distances and sort ───────────────────────────
     result_list = []
-    for plan, db_i in zip(candidates, cand_idx):
-        import copy
+    for rank, (plan, db_i) in enumerate(zip(candidates, cand_idx)):
         p = copy.deepcopy(plan)
-        p.setdefault("retrieval", {})["dist"] = float(dists[db_i])
+        if not isinstance(p.get("retrieval"), dict):
+            p["retrieval"] = {}
+        p["retrieval"]["dist"] = float(dists[rank])
+        p["retrieval"]["source_id"] = db_names[db_i]
+        p["retrieval"]["rot"]    = float(best_angles[rank])
+        p["retrieval"]["mirror"] = bool(best_mirror[rank])
         result_list.append(p)
 
     result_list.sort(
         key=lambda p: (p.get("retrieval") or {}).get("dist", float("inf"))
     )
 
-    # ── Step 7: return response ───────────────────────────────────────────────
+    # ── Step 5: return response ───────────────────────────────────────────────
     return jsonify({
         "status":   "ok",
         "query_id": "query",
@@ -166,10 +191,54 @@ def retrieve():
     })
 
 
+# ── query helpers ─────────────────────────────────────────────────────────────
+
+def _req_to_room_desc(requirements):
+    """
+    Synthesise an 11-dim room-count descriptor from user requirements dict.
+
+    Uses the same ROOM_TYPES order as geo_ent_num_retrieval:
+      [0]Living [1]Master [2]Kitchen [3]Bathroom [4]Dining
+      [5]Child  [6]Study  [7]Second  [8]Balcony  [9]Storage [10]total
+    Maximums: 2, 1, 1, 3, 1, 2, 1, 2, 2, 2, 15
+    """
+    if not requirements:
+        requirements = {}
+
+    bedrooms  = int(requirements.get('bedrooms',  2))
+    bathrooms = int(requirements.get('bathrooms', 1))
+
+    living   = 1
+    master   = 1 if bedrooms > 0 else 0
+    kitchen  = 1
+    dining   = 1
+    child    = max(0, bedrooms - 1)   # rooms beyond master
+    total    = living + master + kitchen + dining + child + bathrooms
+
+    feat = np.array([
+        min(living  / 2,  1.0),   # 0 Living
+        min(master  / 1,  1.0),   # 1 Master
+        min(kitchen / 1,  1.0),   # 2 Kitchen
+        min(bathrooms/3,  1.0),   # 3 Bathroom
+        min(dining  / 1,  1.0),   # 4 Dining
+        min(child   / 2,  1.0),   # 5 Child
+        0.0,                      # 6 Study
+        0.0,                      # 7 Second
+        0.0,                      # 8 Balcony
+        0.0,                      # 9 Storage
+        min(total   / 15, 1.0),   # 10 total
+    ], dtype=np.float32)
+    return feat
+
+
 # ── startup helpers ───────────────────────────────────────────────────────────
 
 def load_index(bin_path, names_path):
-    """Load descriptor matrix and names list. Returns (descs, names) or raises."""
+    """
+    Load descriptor matrix and names list.
+    Returns (descs, names, dim, shapes, ents, rooms).
+    shapes/ents/rooms are None when the index is not the new 63-dim format.
+    """
     with open(names_path) as fh:
         names = json.load(fh)
     n = len(names)
@@ -181,7 +250,16 @@ def load_index(bin_path, names_path):
         )
     dim = raw.size // n
     descs = raw.reshape(n, dim)
-    return descs, names, dim
+
+    # Split into components only when the new 63-dim format is detected
+    if dim == TOTAL_DIM:
+        shapes = descs[:, :SHAPE_DIM]
+        ents   = descs[:, SHAPE_DIM:SHAPE_DIM + ENT_DIM]
+        rooms  = descs[:, SHAPE_DIM + ENT_DIM:]
+    else:
+        shapes = ents = rooms = None
+
+    return descs, names, dim, shapes, ents, rooms
 
 
 def load_plans(data_dir):
@@ -245,9 +323,14 @@ if __name__ == "__main__":
 
     # ── load index ────────────────────────────────────────────────────────────
     try:
-        db_descs, db_names, dim = load_index(args.index_bin, args.index_names)
+        db_descs, db_names, dim, db_shapes, db_ents, db_rooms = load_index(
+            args.index_bin, args.index_names)
         n = len(db_names)
-        print(f"  index:  {n} plans, dim {dim}")
+        if db_shapes is not None:
+            print(f"  index:  {n} plans, dim {dim}  "
+                  f"[entrance-aware: shape:{SHAPE_DIM} + ent:{ENT_DIM} + rooms:{ROOM_DIM}]")
+        else:
+            print(f"  index:  {n} plans, dim {dim}  [legacy format — entrance ignored]")
     except FileNotFoundError as exc:
         print(f"  ERROR loading index: {exc}", file=sys.stderr)
         print("  Hint: use --index_bin and --index_names to specify paths.",

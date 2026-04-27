@@ -324,11 +324,69 @@ def sem_desc(data):
 
 # ── combined descriptor ───────────────────────────────────────────────────────
 
-def combined_desc(data, shape_w=1.0, sem_w=0.5):
-    """Concatenate weighted shape and semantic parts."""
+def requirements_sem_hint(requirements, boundary_area=0.0):
+    """
+    Build a partial 22-dim semantic vector from a requirements dict
+    {bedrooms, bathrooms, living, kitchen, …}.  Unknown groups stay 0.
+    Used to make boundary-only queries semantically meaningful.
+
+    requirements keys recognised (all optional, integers):
+        bedrooms, bathrooms, living, kitchen, dining, study,
+        guest, balcony, entrance, storage
+    """
+    req = requirements or {}
+    # map friendly names → group names used in ROOM_GROUPS
+    name_map = {
+        'bedrooms':  'bedroom',
+        'bathrooms': 'bathroom',
+        'living':    'living',
+        'kitchen':   'kitchen',
+        'dining':    'dining',
+        'study':     'study',
+        'guest':     'guest',
+        'balcony':   'balcony',
+        'entrance':  'entrance',
+        'storage':   'storage',
+    }
+    group_count = {g: 0 for g, _, _ in ROOM_GROUPS}
+    for req_key, gname in name_map.items():
+        v = req.get(req_key)
+        if v is not None:
+            group_count[gname] = int(v)
+
+    # estimate area per room as a typical fraction of boundary area
+    # (use median area fractions observed across dataset: ~0.12 per room)
+    AREA_PER_ROOM = 0.12 * boundary_area
+
+    feat = []
+    total_rooms = 0
+    for gname, _, max_cnt in ROOM_GROUPS:
+        cnt = group_count[gname]
+        total_rooms += cnt
+        feat.append(min(cnt / max_cnt, 1.0))
+        feat.append(min(cnt * AREA_PER_ROOM / (SCALE ** 2), 1.0))
+
+    feat.append(min(total_rooms / 15.0, 1.0))
+    feat.append(min(boundary_area / (SCALE ** 2), 1.0))
+    return np.array(feat, dtype=np.float32)   # (22,)
+
+
+def combined_desc(data, shape_w=1.0, sem_w=0.5, requirements=None):
+    """Concatenate weighted shape and semantic parts.
+
+    If requirements is provided (and data has no rooms), the semantic
+    part is built from requirements instead of from empty room lists.
+    """
     bdry = data.get('boundary', [])
     sd   = shape_desc(bdry) * shape_w if bdry else np.zeros(N_FREQS, np.float32)
-    semd = sem_desc(data)   * sem_w
+
+    has_rooms = bool(data.get('coord') or data.get('labels'))
+    if not has_rooms and requirements:
+        bdry_area = polygon_area_segs(bdry) if bdry else 0.0
+        semd = requirements_sem_hint(requirements, bdry_area) * sem_w
+    else:
+        semd = sem_desc(data) * sem_w
+
     return np.concatenate([sd, semd])
 
 

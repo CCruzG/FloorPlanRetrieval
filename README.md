@@ -1,6 +1,8 @@
 # Floor Plan Retrieval Tool
 
-A browser-based tool for retrieving similar floor plans by drawing a boundary polygon and specifying room requirements. Results are returned from a pre-built index of 2000 plans and rendered with room colours, door/window markers, and an optional room adjacency graph.
+A browser-based tool for retrieving similar floor plans by drawing a boundary polygon, optionally specifying an entrance, and setting room composition requirements. Results are ranked from a pre-built index of 2000 plans and rendered with room colours, door/window markers, and an optional room adjacency graph.
+
+Retrieval is **rotation- and reflection-aware**: each candidate plan is evaluated in all 8 orientations (4 rotations × 2 mirror states) and displayed at the orientation that best matches the query entrance direction.
 
 ---
 
@@ -15,8 +17,8 @@ A browser-based tool for retrieving similar floor plans by drawing a boundary po
 
 ```bash
 # 1. Clone the repo
-git clone <repo-url>
-cd 02_Retrieval_v02
+git clone https://github.com/CCruzG/FloorPlanRetrieval.git
+cd FloorPlanRetrieval
 
 # 2. Create a virtual environment and install dependencies
 python3 -m venv .venv
@@ -41,7 +43,7 @@ To expose the server on the local network (e.g. for a colleague on the same Wi-F
 python server.py --host 0.0.0.0
 ```
 
-Then open **http://<your-machine-ip>:5000** from another device.
+Then open **http://&lt;your-machine-ip&gt;:5000** from another device.
 
 ### Server options
 
@@ -66,16 +68,28 @@ Then open **http://<your-machine-ip>:5000** from another device.
 4. **Double-click**, press **Enter**, or click the first vertex (shown in red) to close the boundary.
 5. Press **Esc** to clear and start over.
 
+### Placing the entrance
+
+After closing the boundary, click **Set Entrance** to enter entrance-placement mode. The cursor snaps to the nearest boundary edge; a yellow arrow indicates the outward direction (approach side). Click to confirm the entrance position.
+
+The entrance is shown as a grey notch on the boundary. Click **Clear Entrance** to remove it.
+
+### Scale and orientation
+
+- A **5 m scale bar** and **3 m grid** are shown at the bottom of the canvas. The canvas assumes 1 normalised unit = 18 m.
+- Dimension labels show the boundary extents in metres.
+
 ### Requirements & parameters
 
 - **Bedrooms / bathrooms** — set the desired room counts using the sliders.
 - **Results** — number of alternatives to retrieve (1–20).
-- **Shape weight** — how much the boundary shape influences retrieval (0 = semantic only).
-- **Semantic weight** — how much room composition influences retrieval (0 = shape only).
+- **Shape weight** — how much the boundary shape influences retrieval (0 = entrance/semantic only).
+- **Entrance weight** — how much the entrance position and approach direction influence retrieval.
+- **Semantic weight** — how much room composition influences retrieval (0 = shape/entrance only).
 
 ### Retrieving
 
-Click **retrieve** once the boundary is closed. Results appear in the right panel as thumbnails. Click a thumbnail to display the full plan on the canvas alongside your drawn boundary.
+Click **retrieve** once the boundary is closed. Results appear in the right panel as thumbnails. Each thumbnail is rendered at the best-matching orientation (rotation + optional mirror). Click a thumbnail to display the full plan on the canvas, aligned to the query boundary by centroid and entrance direction.
 
 ### Room graph
 
@@ -83,11 +97,17 @@ Check **show room graph** to overlay a graph of room adjacencies on the displaye
 
 ---
 
+## Plan caching
+
+Retrieved plans are cached in the browser using the **Cache API** (`fp-plans-v1`). Plans load once per session and are served from cache on subsequent queries, making repeated retrievals fast. Click **Clear plan cache** in the controls panel to force a fresh fetch from the server.
+
+---
+
 ## Boundary library
 
 Boundaries can be saved, reused, and shared for batch studies.
 
-- **Save boundary…** — saves the current closed boundary with a name into browser `localStorage`.
+- **Save boundary…** — saves the current closed boundary (vertices + entrance if set) with a name into browser `localStorage`.
 - Click a name in the library list to **load** it back onto the canvas.
 - **✎** to rename, **✕** to delete.
 - **Export library JSON** — downloads all saved boundaries as `boundary_library.json`.
@@ -108,40 +128,41 @@ The exported format is:
 
 ## Rebuilding the index
 
-If you have a different dataset, rebuild the index with:
+The pre-built index uses a **63-dimensional descriptor**:
+
+| Dimensions | Description |
+|---|---|
+| 0–47 | Shape: 48-bin angle histogram of boundary edges |
+| 48–51 | Entrance: `[rel_x, rel_y, cos_θ, sin_θ]` in normalised boundary frame |
+| 52–62 | Rooms: 11-bin histogram of room type counts |
+
+To rebuild the index from a different dataset:
 
 ```bash
 source .venv/bin/activate
-
-# Build index from a directory of JSON floor plans
-python sem_geo_retrieval.py \
-  --query test_data/0.json \
-  --data_dir test_data \
-  --build_index browser_files/index.pkl
-
-# Export to browser-readable format
-python export_index.py \
-  --index browser_files/index.pkl \
-  --out_dir browser_files
+python build_index_ent.py --data_dir test_data --out_dir browser_files
 ```
+
+This writes `browser_files/index.bin` (float32 binary, plans × 63) and `browser_files/index_names.json`.
 
 ### Retrieval weights
 
 | Flag | Default | Description |
 |---|---|---|
 | `--shape_w` | `1.0` | Weight for boundary shape descriptor |
-| `--sem_w` | `0.5` | Weight for room semantic descriptor |
-| `--augment` | off | Store 8 rotation/mirror variants per plan |
+| `--ent_w` | `1.0` | Weight for entrance descriptor |
+| `--room_w` | `0.5` | Weight for room composition descriptor |
 | `--topn` | `5` | Number of results to return |
 
 ---
 
 ## Floor plan JSON schema
 
-Plans use schema version **2.1.0** with normalised `[0, 1]` coordinates:
+Plans use schema version **2.1.0** with normalised `[0, 1]` coordinates (1 unit = 18 m):
 
 ```
 boundary   — list of [x, y, direction, is_door_vertex]
+entrance   — [x1, y1, x2, y2] bounding box of the front door
 rooms      — list of {polygon, type (0–8), source_type (0–17), ...}
 edges      — list of {room_indices, connection: 0=wall | 1=door}
 doors      — list of {id, bbox: [x1,y1,x2,y2], orientation, room_refs}
@@ -153,11 +174,16 @@ windows    — list of {id, bbox: [x1,y1,x2,y2], orientation, room_refs}
 ## Project structure
 
 ```
-retrieval_tool.html    Browser UI (single file, no build step)
-server.py              Flask server — serves the UI and runs retrieval
-sem_geo_retrieval.py   Descriptor computation and index building
-export_index.py        Converts .pkl index to browser-readable .bin + .json
-adapt.py               Geometric adaptation (not used in current retrieval flow)
-browser_files/         Pre-built index (index.bin, index_names.json)
-test_data/             Sample floor plan JSON files
+retrieval_tool.html      Browser UI (single file, no build step)
+server.py                Flask server — serves the UI and runs retrieval
+geo_ent_num_retrieval.py Rotation/reflection-aware retrieval with 63-dim descriptors
+build_index_ent.py       Builds browser_files/index.bin from a data directory
+sem_geo_retrieval.py     Legacy shape+semantic descriptor and index building
+export_index.py          Converts legacy .pkl index to browser-readable .bin + .json
+explore_index.py         CLI tool for inspecting index contents
+adapt.py                 Geometric adaptation (not used in current retrieval flow)
+browser_files/           Pre-built index (index.bin, index_names.json)
+test_data/               Sample floor plan JSON files (schema v2.1.0)
+adapted/                 Example adapted plans
 ```
+

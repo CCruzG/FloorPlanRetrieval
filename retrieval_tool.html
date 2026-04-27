@@ -84,6 +84,11 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 .legend-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
 .legend-swatch.door { border-color:rgba(194,65,12,0.6); }
 .legend-swatch.window { border-color:rgba(6,182,212,0.6); }
+
+/* entrance mode toggle */
+.mode-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; margin-top:4px; transition:all .12s; }
+.mode-btn:hover { border-color:var(--amber); color:var(--amber); }
+.mode-btn.active { background:rgba(245,158,11,0.15); border-color:var(--amber); color:var(--amber); }
 </style>
 </head>
 <body>
@@ -111,6 +116,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-pls">plan files (multi)</span>
       </div>
       <div id="idx-st" style="font-size:10px;color:var(--muted);padding:2px 0">—</div>
+      <button class="clear-btn" style="margin-top:4px" onclick="clearPlanCache()">clear plan cache</button>
     </div>
 
     <div class="ss">
@@ -123,6 +129,16 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
       </div>
       <button class="clear-btn" onclick="clearBoundary()">clear boundary</button>
       <button class="clear-btn" onclick="saveBoundary()" style="margin-top:4px">save boundary…</button>
+      <div id="entrance-controls" style="display:none;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <div class="sl" style="margin-bottom:4px">entrance</div>
+        <button class="mode-btn" id="btn-entrance-mode" onclick="toggleEntranceMode()">
+          &#x1F6AA; place entrance
+        </button>
+        <button class="clear-btn" id="btn-clear-entrance" onclick="clearEntrance()" style="margin-top:3px;display:none">
+          clear entrance
+        </button>
+        <div id="entrance-info" style="font-size:9px;color:var(--muted);margin-top:3px;display:none"></div>
+      </div>
     </div>
 
     <div class="ss" id="lib-section">
@@ -161,9 +177,14 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           oninput="document.getElementById('v-sw').textContent=(+this.value).toFixed(1);params.shape_w=+this.value">
       </div>
       <div class="field">
-        <label>semantic weight <span id="v-semw">0.5</span></label>
-        <input type="range" min="0" max="2" value="0.5" step="0.1"
-          oninput="document.getElementById('v-semw').textContent=(+this.value).toFixed(1);params.sem_w=+this.value">
+        <label>entrance weight <span id="v-entw">2.0</span></label>
+        <input type="range" min="0" max="4" value="2.0" step="0.1"
+          oninput="document.getElementById('v-entw').textContent=(+this.value).toFixed(1);params.ent_w=+this.value">
+      </div>
+      <div class="field">
+        <label>room weight <span id="v-rmw">1.0</span></label>
+        <input type="range" min="0" max="2" value="1.0" step="0.1"
+          oninput="document.getElementById('v-rmw').textContent=(+this.value).toFixed(1);params.room_w=+this.value">
       </div>
       <div class="field">
         <label><input type="checkbox" id="chk-graph" onchange="params.showGraph=this.checked;render()">
@@ -177,6 +198,8 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
       <div class="stat"><span class="stat-k">index</span><span class="stat-v" id="s-idx">—</span></div>
       <div class="stat"><span class="stat-k">plans loaded</span><span class="stat-v" id="s-pls">0</span></div>
       <div class="stat"><span class="stat-k">boundary verts</span><span class="stat-v" id="s-bv">—</span></div>
+      <div class="stat"><span class="stat-k">entrance</span><span class="stat-v" id="s-ent">—</span></div>
+      <div class="stat"><span class="stat-k">scale</span><span class="stat-v">1 unit = 18 m</span></div>
     </div>
     <div class="ss" id="legend">
       <div class="sl">legend</div>
@@ -204,6 +227,10 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 
 <script>
 const N_SAMP=128,N_FREQS=48,SCALE=256,SNAP_PX=14,VR=5,PAD=0.08;
+// Index descriptor layout (new entrance-aware format)
+const SHAPE_DIM=48,ENT_DIM=4,ROOM_DIM=11,TOTAL_DIM=63;
+// Scale: 1.0 normalised unit = 18 metres
+const METRES_PER_UNIT=18;
 
 const ROOM_GROUPS=[
   {name:'bedroom', set:new Set([1,5,7]),max:5},
@@ -222,13 +249,33 @@ const ABBR={bedroom:'Bed',living:'Liv',kitchen:'Kit',bathroom:'Bath',
 const RCOLS=['#E6B8A2','#B8D4E8','#B8E8B8','#E8E8B8','#D4B8E8',
   '#E8B8D4','#B8E8E8','#E8D4B8','#C8E8C8','#B8C8E8','#E8C8B8','#D8D8D8'];
 
+// ── plan cache (Cache API) ───────────────────────────────────────────────
+const PLAN_CACHE='fp-plans-v1';
+async function fetchWithCache(url){
+  if(!('caches' in window))return fetch(url);
+  const store=await caches.open(PLAN_CACHE);
+  const hit=await store.match(url);
+  if(hit)return hit;
+  const resp=await fetch(url);
+  if(resp.ok)store.put(url,resp.clone());
+  return resp;
+}
+async function clearPlanCache(){
+  if('caches' in window)await caches.delete(PLAN_CACHE);
+  document.getElementById('lbl-pls').textContent='cache cleared — reload to re-fetch';
+  setStatus('plan cache cleared','warn');
+}
+
 // state
 const db={names:null,descs:null,dim:0,_raw:null};
 const cache={};
 let req={bedrooms:2,bathrooms:1};
-let params={topn:5,shape_w:1.0,sem_w:0.5,showGraph:false};
+let params={topn:5,shape_w:1.0,ent_w:2.0,room_w:1.0,showGraph:false};
 let boundary=[]; // [{x,y}] normalised
 let closed=false;
+let entrance=null;        // {x,y} normalised, or null — placed entrance point
+let entranceMode=false;   // true while user is clicking to place entrance
+let entranceSnap=null;    // {px,py,nx,ny} snap preview while hovering in entrance mode
 let mouse={x:0,y:0};
 let shiftDown=false;
 let snapFirst=false;
@@ -284,6 +331,146 @@ function projSnap(nx, ny){
   return{x:sx,y:sy};
 }
 
+// ── entrance helpers ──────────────────────────────────────────────────────
+/**
+ * Find the closest point on the closed boundary polygon to (nx, ny).
+ * Returns {px, py, nx: outward_normal_x, ny: outward_normal_y, edge, dist}
+ * or null if boundary is not closed.
+ */
+function snapToEdge(nx, ny, normVerts){
+  if(!boundary.length||!closed)return null;
+  const verts=normVerts||boundary.map(v=>[v.x,v.y]);
+  const n=verts.length;
+  // centroid for normal orientation check
+  const cen=bdryCenter(verts);
+  let best=Infinity,result=null;
+  for(let i=0;i<n;i++){
+    const[ax,ay]=verts[i],[bx,by]=verts[(i+1)%n];
+    const ex=bx-ax,ey=by-ay;
+    const segL=Math.hypot(ex,ey);
+    if(segL<1e-9)continue;
+    const t=Math.max(0,Math.min(1,((nx-ax)*ex+(ny-ay)*ey)/(segL*segL)));
+    const px=ax+t*ex,py=ay+t*ey;
+    const d=Math.hypot(nx-px,ny-py);
+    if(d<best){
+      best=d;
+      // outward normal: ensure it points away from centroid
+      let normX=ey/segL,normY=-ex/segL;
+      if(normX*(px-cen[0])+normY*(py-cen[1])<0){normX=-normX;normY=-normY;}
+      result={px,py,normX,normY,edge:i,dist:d};
+    }
+  }
+  return result;
+}
+
+/**
+ * Compute the 4-dim entrance descriptor [rel_x, rel_y, cos_θ, sin_θ] from
+ * a placed entrance point, matching Python's entrance_desc_from_point().
+ */
+function entranceDescJS(bdry, ent){
+  if(!ent||!bdry.length)return new Float32Array(4);
+  // normalise winding to CW (negative signed area in screen/Y-down coords)
+  let sigArea=0;
+  for(let i=0;i<bdry.length;i++){
+    const v0=bdry[i],v1=bdry[(i+1)%bdry.length];
+    sigArea+=v0.x*v1.y-v1.x*v0.y;
+  }
+  const rawVerts=bdry.map(v=>[v.x,v.y]);
+  const verts=sigArea>0?[...rawVerts].reverse():rawVerts;
+  const ENT_NSAMP=256;
+  const pts=samplePerimeter(verts,ENT_NSAMP);
+  const cx=pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const cy=pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  const mean_r=pts.reduce((s,p)=>s+Math.hypot(p[0]-cx,p[1]-cy),0)/pts.length;
+  if(mean_r<1e-9)return new Float32Array(4);
+  const snap=snapToEdge(ent.x,ent.y,verts);
+  if(!snap)return new Float32Array(4);
+  const rel_x=(snap.px-cx)/mean_r;
+  const rel_y=(snap.py-cy)/mean_r;
+  return new Float32Array([rel_x,rel_y,snap.normX,snap.normY]);
+}
+
+/**
+ * Rotation-aware entrance distances: min_α ||q - R(α)·db||
+ * Mirrors Python ent_dist_min_rotation().
+ * qEnt: Float32Array(4)
+ * dbDescs: flat Float32Array (N × TOTAL_DIM)
+ * N: number of plans
+ * Returns Float32Array(N) of distances (unscaled).
+ */
+function entDistMinRotation(qEnt,dbDescs,N){
+  const[q_rx,q_ry,q_cx,q_cy]=qEnt;
+  const qSq=q_rx*q_rx+q_ry*q_ry+q_cx*q_cx+q_cy*q_cy;
+  const dists=new Float32Array(N);
+  for(let i=0;i<N;i++){
+    const off=i*TOTAL_DIM+SHAPE_DIM;
+    const d_rx=dbDescs[off],d_ry=dbDescs[off+1],d_cx=dbDescs[off+2],d_cy=dbDescs[off+3];
+    const A=q_rx*d_rx+q_ry*d_ry+q_cx*d_cx+q_cy*d_cy;
+    const B=q_ry*d_rx-q_rx*d_ry+q_cy*d_cx-q_cx*d_cy;
+    const dSq=d_rx*d_rx+d_ry*d_ry+d_cx*d_cx+d_cy*d_cy;
+    dists[i]=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(A*A+B*B)));
+  }
+  return dists;
+}
+
+/**
+ * Synthesise an 11-dim room-count descriptor from user requirements.
+ * Mirrors Python _req_to_room_desc() in server.py.
+ */
+function roomCountDescFromReqs(req){
+  const bedrooms=req.bedrooms||0,bathrooms=req.bathrooms||0;
+  const living=1,master=bedrooms>0?1:0,kitchen=1,dining=1;
+  const child=Math.max(0,bedrooms-1);
+  const total=living+master+kitchen+dining+child+bathrooms;
+  return new Float32Array([
+    Math.min(living/2,1),     // 0 Living
+    Math.min(master/1,1),     // 1 Master
+    Math.min(kitchen/1,1),    // 2 Kitchen
+    Math.min(bathrooms/3,1),  // 3 Bathroom
+    Math.min(dining/1,1),     // 4 Dining
+    Math.min(child/2,1),      // 5 Child
+    0,0,0,0,                  // 6-9 Study/Second/Balcony/Storage
+    Math.min(total/15,1),     // 10 total
+  ]);
+}
+
+// ── entrance UI ───────────────────────────────────────────────────────────
+function toggleEntranceMode(){
+  if(!closed){return;}
+  entranceMode=!entranceMode;
+  document.getElementById('btn-entrance-mode').classList.toggle('active',entranceMode);
+  if(entranceMode){
+    document.getElementById('canvas-hint').textContent='click on a boundary edge to place entrance';
+  } else {
+    document.getElementById('canvas-hint').textContent='boundary closed';
+    entranceSnap=null;
+  }
+  render();
+}
+
+function clearEntrance(){
+  entrance=null;
+  entranceSnap=null;
+  entranceMode=false;
+  document.getElementById('btn-entrance-mode').classList.remove('active');
+  document.getElementById('btn-clear-entrance').style.display='none';
+  document.getElementById('entrance-info').style.display='none';
+  document.getElementById('s-ent').textContent='—';
+  document.getElementById('canvas-hint').textContent='boundary closed · press retrieve';
+  render();
+}
+
+function updateEntranceInfo(){
+  if(!entrance)return;
+  const xm=(entrance.x*METRES_PER_UNIT).toFixed(1);
+  const ym=(entrance.y*METRES_PER_UNIT).toFixed(1);
+  const txt=`x ${xm} m, y ${ym} m`;
+  document.getElementById('entrance-info').textContent=txt;
+  document.getElementById('entrance-info').style.display='block';
+  document.getElementById('btn-clear-entrance').style.display='block';
+  document.getElementById('s-ent').textContent=txt;
+}
+
 // ── ghost ─────────────────────────────────────────────────────────────────
 function ghost(){
   if(!boundary.length||closed)return null;
@@ -305,19 +492,35 @@ function render(){
   ctx.fillStyle='#e8eaed';
   ctx.fillRect(0,0,cW,cH);
 
+  // draw background grid (scale reference)
+  drawScaleGrid(ctx,cW,cH,PAD);
+
   // selected plan underneath
   if(selected!==null&&results[selected]?.fp){
-    drawFP(ctx,results[selected].fp,cW,cH,PAD,false,results[selected].adapted);
-    drawDoorsWindows(ctx,results[selected].fp,cW,cH,PAD);
-    if(params.showGraph)drawGraph(ctx,results[selected].fp,cW,cH,PAD);
+    const selRot=results[selected].rot||0;
+    const selMirror=results[selected].mirror||false;
+    const fp=results[selected].fp;
+    // align plan centroid to query boundary centroid
+    const qc=bdryCenter(boundary.map(({x,y})=>[x,y]));
+    const pc=bdryCenter(fp.boundary||[]);
+    const selOff=[qc[0]-pc[0],qc[1]-pc[1]];
+    drawFP(ctx,fp,cW,cH,PAD,false,results[selected].adapted,selRot,selOff,selMirror);
+    drawDoorsWindows(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror);
+    if(params.showGraph)drawGraph(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror);
     // query boundary overlay
     drawBoundaryOverlay();
-    // redraw entrance on top of the boundary overlay
-    const ent=results[selected].fp?.entrance;
+    // redraw entrance on top of the boundary overlay (mirrored + rotated + offset)
+    const ent=fp.entrance;
     if(ent&&ent.length===4){
-      const[ex1,ey1]=n2c(ent[0],ent[1]);
-      const[ex2,ey2]=n2c(ent[2],ent[3]);
-      ctx.beginPath();ctx.rect(ex1,ey1,ex2-ex1,ey2-ey1);
+      const cen=bdryCenter(fp.boundary||[]);
+      let[ex1,ey1]=[ent[0],ent[1]];
+      let[ex2,ey2]=[ent[2],ent[3]];
+      if(selMirror){ex1=2*cen[0]-ex1;ex2=2*cen[0]-ex2;}
+      [ex1,ey1]=rotatePtAround([ex1,ey1],selRot,cen);
+      [ex2,ey2]=rotatePtAround([ex2,ey2],selRot,cen);
+      ex1+=selOff[0];ey1+=selOff[1];ex2+=selOff[0];ey2+=selOff[1];
+      const[px1,py1]=n2c(ex1,ey1),[px2,py2]=n2c(ex2,ey2);
+      ctx.beginPath();ctx.rect(px1,py1,px2-px1,py2-py1);
       ctx.fillStyle='#88888866';ctx.fill();
       ctx.strokeStyle='#555';ctx.lineWidth=2;ctx.setLineDash([]);ctx.stroke();
     }
@@ -356,7 +559,7 @@ function render(){
     ctx.restore();
   }
 
-  // ghost edge
+  // ghost edge + dimension label
   const g=ghost();
   if(g&&boundary.length>0&&!closed){
     const l=boundary[boundary.length-1];
@@ -368,9 +571,16 @@ function render(){
       ctx.beginPath();ctx.arc(gx,gy,3,0,Math.PI*2);
       ctx.fillStyle=shiftDown?'#f59e0b':'rgba(59,130,246,0.7)';ctx.fill();
     }
+    // dimension label on ghost edge
+    const lenM=Math.hypot(g.x-l.x,g.y-l.y)*METRES_PER_UNIT;
+    if(lenM>0.05){
+      const mx=(lx+gx)/2,my=(ly+gy)/2-8;
+      ctx.save();ctx.font='10px monospace';ctx.fillStyle='#1e40af';
+      ctx.textAlign='center';ctx.fillText(lenM.toFixed(1)+' m',mx,my);ctx.restore();
+    }
   }
 
-  // boundary edges
+  // boundary edges + dimension labels
   if(boundary.length>=2){
     ctx.beginPath();
     boundary.forEach(({x,y},i)=>{
@@ -378,6 +588,24 @@ function render(){
     });
     if(closed)ctx.closePath();
     ctx.strokeStyle='#1e40af';ctx.lineWidth=2;ctx.setLineDash([]);ctx.stroke();
+
+    // draw length label on each committed edge (only when closed)
+    if(closed){
+      ctx.save();ctx.font='9px monospace';ctx.fillStyle='rgba(30,64,175,0.75)';ctx.textAlign='center';
+      const n=boundary.length;
+      for(let i=0;i<n;i++){
+        const a=boundary[i],b=boundary[(i+1)%n];
+        const lenM=Math.hypot(b.x-a.x,b.y-a.y)*METRES_PER_UNIT;
+        if(lenM<0.1)continue;
+        const[ax,ay]=n2c(a.x,a.y),[bx,by]=n2c(b.x,b.y);
+        const mx=(ax+bx)/2,my=(ay+by)/2;
+        // offset label slightly perpendicular to edge
+        const ex=bx-ax,ey=by-ay,eL=Math.hypot(ex,ey);
+        const ox=-ey/eL*10,oy=ex/eL*10;
+        ctx.fillText(lenM.toFixed(1)+' m',mx+ox,my+oy);
+      }
+      ctx.restore();
+    }
   }
 
   // vertices
@@ -391,10 +619,93 @@ function render(){
     ctx.fillStyle=i===0?'#ef4444':'#1e40af';
     ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
   });
+
+  // entrance marker (placed or snap preview)
+  const drawEnt=entrance||(entranceMode&&entranceSnap?{x:entranceSnap.px,y:entranceSnap.py}:null);
+  if(drawEnt){
+    const snap=entranceMode&&entranceSnap&&!entrance?entranceSnap:snapToEdge(drawEnt.x,drawEnt.y);
+    if(snap){
+      const[ex,ey]=n2c(snap.px,snap.py);
+      const isPreview=!entrance;
+      const alpha=isPreview?0.55:1.0;
+      // outward arrow
+      const arrowLen=22,nx=snap.normX,ny=snap.normY;
+      const[ax,ay]=[ex+nx*arrowLen,ey+ny*arrowLen];
+      ctx.save();ctx.globalAlpha=alpha;
+      ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ax,ay);
+      ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.stroke();
+      // arrowhead
+      const ang=Math.atan2(ny,nx);
+      const hs=7;
+      ctx.beginPath();
+      ctx.moveTo(ax,ay);
+      ctx.lineTo(ax-hs*Math.cos(ang-0.45),ay-hs*Math.sin(ang-0.45));
+      ctx.lineTo(ax-hs*Math.cos(ang+0.45),ay-hs*Math.sin(ang+0.45));
+      ctx.closePath();ctx.fillStyle='#f59e0b';ctx.fill();
+      // dot at snap
+      ctx.beginPath();ctx.arc(ex,ey,5,0,Math.PI*2);
+      ctx.fillStyle='#f59e0b';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // scale bar
+  drawScaleBar(ctx,cW,cH,PAD);
 }
 
-function drawBoundaryOverlay(){
-  if(!boundary.length)return;
+// ── scale helpers ─────────────────────────────────────────────────────────
+/**
+ * Draw a faint metric grid. Grid spacing is chosen as the largest value in
+ * [1, 2, 3, 5, 6, 9, 18] m that produces at least 3 lines across the canvas.
+ */
+function drawScaleGrid(c,W,H,pad){
+  const sc=W*(1-2*pad);  // pixels per normalised unit (= pixels per 18 m)
+  const STEPS=[1,2,3,5,6,9,18];
+  let gridM=1;
+  for(const s of STEPS){
+    if(sc/METRES_PER_UNIT*s>=sc/6)break;
+    gridM=s;
+  }
+  // fallback: always use 3 m grid
+  gridM=3;
+  const step=gridM/METRES_PER_UNIT;  // normalised units
+  c.save();c.strokeStyle='rgba(0,0,0,0.07)';c.lineWidth=1;c.setLineDash([]);
+  for(let x=0;x<=1+step;x+=step){
+    const[px]=n2c(x,0);
+    c.beginPath();c.moveTo(px,0);c.lineTo(px,H);c.stroke();
+  }
+  for(let y=0;y<=1+step;y+=step){
+    const[,py]=n2c(0,y);
+    c.beginPath();c.moveTo(0,py);c.lineTo(W,py);c.stroke();
+  }
+  c.restore();
+}
+
+/**
+ * Draw a scale bar showing 5 m in the bottom-left corner of the canvas.
+ * 1 normalised unit = 18 m  →  5 m = 5/18 of the drawable width.
+ */
+function drawScaleBar(c,W,H,pad){
+  const sc=W*(1-2*pad);         // pixels per normalised unit
+  const barM=5;                 // metres to represent
+  const barPx=sc*barM/METRES_PER_UNIT;
+  const ox=pad*W+4,oy=H-pad*H-6;
+  const tickH=5;
+  c.save();
+  c.strokeStyle='rgba(0,0,0,0.55)';c.lineWidth=1.5;c.setLineDash([]);
+  // horizontal bar
+  c.beginPath();c.moveTo(ox,oy);c.lineTo(ox+barPx,oy);c.stroke();
+  // end ticks
+  c.beginPath();c.moveTo(ox,oy-tickH);c.lineTo(ox,oy+tickH);c.stroke();
+  c.beginPath();c.moveTo(ox+barPx,oy-tickH);c.lineTo(ox+barPx,oy+tickH);c.stroke();
+  // label
+  c.fillStyle='rgba(0,0,0,0.6)';c.font=`${Math.round(W*0.016)}px monospace`;
+  c.textAlign='center';
+  c.fillText(`${barM} m`,ox+barPx/2,oy-tickH-2);
+  c.restore();
+}
+
+function drawBoundaryOverlay(){  if(!boundary.length)return;
   if(boundary.length>=3&&closed){
     ctx.beginPath();
     boundary.forEach(({x,y},i)=>{
@@ -420,13 +731,53 @@ function drawBoundaryOverlay(){
   });
 }
 
-function drawFP(c,fp,W,H,pad,dark,showClipped){
+/**
+ * Rotate point [x,y] by `angle` radians around [cx,cy].
+ */
+function rotatePtAround([x,y],angle,[cx,cy]){
+  const cos=Math.cos(angle),sin=Math.sin(angle);
+  const dx=x-cx,dy=y-cy;
+  return[cx+dx*cos-dy*sin,cy+dx*sin+dy*cos];
+}
+
+/**
+ * Compute area-weighted centroid of a polygon (v2 boundary [[x,y,...], ...]).
+ * Falls back to vertex average for degenerate cases.
+ */
+function bdryCenter(bdry){
+  if(!bdry.length)return[0.5,0.5];
+  // shoelace / area-weighted centroid
+  let area=0,cx=0,cy=0;
+  const n=bdry.length;
+  for(let i=0;i<n;i++){
+    const[x0,y0]=bdry[i];
+    const[x1,y1]=bdry[(i+1)%n];
+    const cross=x0*y1-x1*y0;
+    area+=cross;
+    cx+=(x0+x1)*cross;
+    cy+=(y0+y1)*cross;
+  }
+  area/=2;
+  if(Math.abs(area)<1e-10){
+    // degenerate: fall back to vertex average
+    let sx=0,sy=0;
+    bdry.forEach(v=>{sx+=v[0];sy+=v[1];});
+    return[sx/n,sy/n];
+  }
+  return[cx/(6*area),cy/(6*area)];
+}
+
+function drawFP(c,fp,W,H,pad,dark,showClipped,rot=0,offset=[0,0],mirror=false){
   const rooms=fp.rooms||[],bdry=fp.boundary||[];
   if(!bdry.length)return;
-  // use full [0,1] unit square as reference — matches PNG framing
   const sc=W*(1-2*pad);
   const ox=pad*W,oy=pad*H;
-  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+  const cen=(rot||mirror)?bdryCenter(bdry):null;
+  const t=([x,y])=>{
+    if(mirror)x=2*cen[0]-x;
+    if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
+    return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
+  };
   rooms.forEach(r=>{
     if(!r.polygon||r.polygon.length<3)return;
     const col=RCOLS[r.source_type??r.type]??'#ddd';
@@ -461,12 +812,18 @@ function drawFP(c,fp,W,H,pad,dark,showClipped){
   }
 }
 
-function drawDoorsWindows(c,fp,W,H,pad){
+function drawDoorsWindows(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
   const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
-  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+  const cen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
+  const t=([x,y])=>{
+    if(mirror)x=2*cen[0]-x;
+    if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
+    return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
+  };
   const tb=([x1,y1,x2,y2])=>{
-    const[ax,ay]=t([x1,y1]),[bx,by]=t([x2,y2]);
-    return[Math.min(ax,bx),Math.min(ay,by),Math.abs(bx-ax),Math.abs(by-ay)];
+    const corners=[[x1,y1],[x2,y1],[x2,y2],[x1,y2]].map(t);
+    const xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]);
+    return[Math.min(...xs),Math.min(...ys),Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys)];
   };
 
   // windows — cyan/teal fill, thin stroke
@@ -488,19 +845,24 @@ function drawDoorsWindows(c,fp,W,H,pad){
   });
 }
 
-function drawGraph(c,fp,W,H,pad){
+function drawGraph(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
   const rooms=fp.rooms||[],edges=fp.edges||[];
   if(!rooms.length)return;
   const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
-  const t=([x,y])=>[x*sc+ox,y*sc+oy];
+  const rotCen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
+  const t=([x,y])=>{
+    if(mirror)x=2*rotCen[0]-x;
+    if(rot)[x,y]=rotatePtAround([x,y],rot,rotCen);
+    return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
+  };
 
   // centroid of each room polygon (vertex average)
-  const cen={};
+  const roomCen={};
   rooms.forEach(r=>{
     if(!r.polygon||r.polygon.length<3)return;
     const mx=r.polygon.reduce((s,p)=>s+p[0],0)/r.polygon.length;
     const my=r.polygon.reduce((s,p)=>s+p[1],0)/r.polygon.length;
-    cen[r.id]=t([mx,my]);
+    roomCen[r.id]=t([mx,my]);
   });
 
   // scale dash gap with canvas size so it's visible at thumbnail scale too
@@ -508,7 +870,7 @@ function drawGraph(c,fp,W,H,pad){
 
   // edges
   edges.forEach(e=>{
-    const a=cen[e.u],b=cen[e.v];
+    const a=roomCen[e.u],b=roomCen[e.v];
     if(!a||!b)return;
     c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);
     if(e.connection===1){
@@ -524,7 +886,7 @@ function drawGraph(c,fp,W,H,pad){
   // nodes
   const nr=Math.max(3,W*0.016);
   rooms.forEach(r=>{
-    const pos=cen[r.id];if(!pos)return;
+    const pos=roomCen[r.id];if(!pos)return;
     const col=RCOLS[r.source_type??r.type]??'#ccc';
     c.beginPath();c.arc(pos[0],pos[1],nr,0,Math.PI*2);
     c.fillStyle=col;c.fill();
@@ -541,20 +903,46 @@ canvas.addEventListener('mousemove',e=>{
   shiftDown=e.shiftKey;
   snapFirst=(!closed&&boundary.length>=3&&pdist(mouse,boundary[0])<SNAP_PX);
   document.getElementById('shift-ind').style.display=shiftDown&&!closed?'block':'none';
-  document.getElementById('coord-disp').textContent=closed?'':`${nx.toFixed(3)}, ${ny.toFixed(3)}`;
+
+  if(entranceMode&&closed){
+    entranceSnap=snapToEdge(nx,ny);
+    const coordText=entranceSnap
+      ? `${(entranceSnap.px*METRES_PER_UNIT).toFixed(1)} m, ${(entranceSnap.py*METRES_PER_UNIT).toFixed(1)} m`
+      : '';
+    document.getElementById('coord-disp').textContent=coordText;
+  } else {
+    document.getElementById('coord-disp').textContent=closed?'':`${(nx*METRES_PER_UNIT).toFixed(1)} m, ${(ny*METRES_PER_UNIT).toFixed(1)} m`;
+  }
   render();
 });
 
 canvas.addEventListener('mouseleave',()=>{
   document.getElementById('coord-disp').textContent='';
+  entranceSnap=null;
   render();
 });
 
 canvas.addEventListener('click',e=>{
-  if(closed)return;
   const r=canvas.getBoundingClientRect();
   const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
   let[nx,ny]=c2n(cx,cy);
+
+  // entrance placement mode
+  if(entranceMode&&closed){
+    const snap=snapToEdge(nx,ny);
+    if(snap){
+      entrance={x:snap.px,y:snap.py};
+      entranceMode=false;
+      entranceSnap=null;
+      document.getElementById('btn-entrance-mode').classList.remove('active');
+      document.getElementById('canvas-hint').textContent='entrance placed · press retrieve';
+      updateEntranceInfo();
+      checkReady();render();
+    }
+    return;
+  }
+
+  if(closed)return;
   if(e.shiftKey&&boundary.length>0){
     const l=boundary[boundary.length-1];
     const dx=Math.abs(nx-l.x),dy=Math.abs(ny-l.y);
@@ -589,11 +977,18 @@ function closeBoundary(){
   closed=true;snapFirst=false;
   document.getElementById('canvas-hint').textContent='boundary closed · press retrieve';
   document.getElementById('s-bv').textContent=boundary.length;
+  document.getElementById('entrance-controls').style.display='block';
   checkReady();render();
 }
 
 function clearBoundary(){
   boundary=[];closed=false;snapFirst=false;selected=null;results=[];
+  entrance=null;entranceMode=false;entranceSnap=null;
+  document.getElementById('entrance-controls').style.display='none';
+  document.getElementById('btn-entrance-mode').classList.remove('active');
+  document.getElementById('btn-clear-entrance').style.display='none';
+  document.getElementById('entrance-info').style.display='none';
+  document.getElementById('s-ent').textContent='—';
   renderList();
   document.getElementById('canvas-hint').textContent='draw a boundary polygon to begin';
   document.getElementById('s-bv').textContent='—';
@@ -611,12 +1006,36 @@ function libSave(lib){localStorage.setItem(LIB_KEY,JSON.stringify(lib));}
 
 function saveBoundary(){
   if(!closed||boundary.length<3){alert('Close the boundary first.');return;}
-  const name=prompt('Name for this boundary:','boundary '+(libLoad().length+1));
-  if(!name)return;
-  const lib=libLoad();
-  lib.push({name,vertices:boundary.map(({x,y})=>({x,y})),saved:new Date().toISOString()});
-  libSave(lib);
-  renderLib();
+  const defaultName='boundary '+(libLoad().length+1);
+  // use an inline name input in the sidebar instead of prompt()
+  const el=document.getElementById('lib-list');
+  const saveRow=document.createElement('div');
+  saveRow.style.cssText='display:flex;align-items:center;gap:3px;margin-bottom:2px';
+  const inp=document.createElement('input');
+  inp.type='text';inp.value=defaultName;inp.placeholder='name…';
+  inp.style.cssText='flex:1;min-width:0;font-size:10px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--accent);border-radius:3px;color:var(--text);padding:1px 3px';
+  const ok=document.createElement('button');
+  ok.textContent='Save';
+  ok.style.cssText='flex-shrink:0;padding:1px 6px;font-size:9px;font-family:var(--mono);background:var(--accent);border:none;border-radius:3px;color:#fff;cursor:pointer;line-height:1.5';
+  const cancel=document.createElement('button');
+  cancel.textContent='✕';
+  cancel.style.cssText='flex-shrink:0;padding:1px 5px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
+  const commit=()=>{
+    const name=inp.value.trim()||defaultName;
+    const lib=libLoad();
+    lib.push({name,vertices:boundary.map(({x,y})=>({x,y})),
+              entrance: entrance ? {x:entrance.x,y:entrance.y} : null,
+              saved:new Date().toISOString(),
+              requirements:{bedrooms:req.bedrooms,bathrooms:req.bathrooms}});
+    libSave(lib);
+    renderLib();
+  };
+  ok.onclick=commit;
+  cancel.onclick=()=>renderLib();
+  inp.onkeydown=(e)=>{if(e.key==='Enter')commit();if(e.key==='Escape')renderLib();};
+  saveRow.appendChild(inp);saveRow.appendChild(ok);saveRow.appendChild(cancel);
+  el.insertBefore(saveRow,el.firstChild);
+  inp.focus();inp.select();
 }
 
 function loadBoundary(idx){
@@ -624,8 +1043,16 @@ function loadBoundary(idx){
   const entry=lib[idx];
   if(!entry)return;
   boundary=entry.vertices.map(({x,y})=>({x,y}));
+  entrance=entry.entrance?{x:entry.entrance.x,y:entry.entrance.y}:null;
   closed=true;snapFirst=false;selected=null;results=[];
   renderList();
+  document.getElementById('entrance-controls').style.display='block';
+  document.getElementById('btn-entrance-mode').classList.remove('active');
+  if(entrance){updateEntranceInfo();}
+  else{
+    document.getElementById('btn-clear-entrance').style.display='none';
+    document.getElementById('entrance-info').style.display='none';
+  }
   document.getElementById('canvas-hint').textContent='boundary loaded · press retrieve';
   document.getElementById('s-bv').textContent=boundary.length;
   document.getElementById('result-count').textContent='';
@@ -640,12 +1067,27 @@ function deleteBoundary(idx){
 }
 
 function renameBoundary(idx){
+  // inline rename: replace label with an input field
+  const el=document.getElementById('lib-list');
+  const row=el.children[idx];
+  if(!row)return;
   const lib=libLoad();
-  const name=prompt('New name:',lib[idx].name);
-  if(!name)return;
-  lib[idx].name=name;
-  libSave(lib);
-  renderLib();
+  row.innerHTML='';
+  const inp=document.createElement('input');
+  inp.type='text';inp.value=lib[idx].name;
+  inp.style.cssText='flex:1;min-width:0;font-size:10px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--accent);border-radius:3px;color:var(--text);padding:1px 3px';
+  const ok=document.createElement('button');
+  ok.textContent='✓';
+  ok.style.cssText='flex-shrink:0;padding:1px 5px;font-size:9px;font-family:var(--mono);background:var(--accent);border:none;border-radius:3px;color:#fff;cursor:pointer;line-height:1.5';
+  const cancel=document.createElement('button');
+  cancel.textContent='✕';
+  cancel.style.cssText='flex-shrink:0;padding:1px 5px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
+  const commit=()=>{const n=inp.value.trim();if(n){lib[idx].name=n;libSave(lib);}renderLib();};
+  ok.onclick=commit;
+  cancel.onclick=()=>renderLib();
+  inp.onkeydown=(e)=>{if(e.key==='Enter')commit();if(e.key==='Escape')renderLib();};
+  row.appendChild(inp);row.appendChild(ok);row.appendChild(cancel);
+  inp.focus();inp.select();
 }
 
 function renderLib(){
@@ -680,7 +1122,30 @@ function renderLib(){
 
     row.appendChild(lbl);
     row.appendChild(mkBtn('✎','rename',()=>renameBoundary(i)));
-    row.appendChild(mkBtn('✕','delete',()=>{if(confirm('Delete "'+entry.name+'"?'))deleteBoundary(i);}));
+
+    // inline delete confirmation — no popup needed
+    const delBtn=document.createElement('button');
+    delBtn.textContent='✕';delBtn.title='delete';
+    delBtn.style.cssText='flex-shrink:0;padding:1px 4px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
+    delBtn.onmouseover=()=>{delBtn.style.borderColor='var(--red)';delBtn.style.color='var(--red)';};
+    delBtn.onmouseout=()=>{delBtn.style.borderColor='var(--border2)';delBtn.style.color='var(--muted)';};
+    delBtn.onclick=()=>{
+      // replace this row with a confirm row
+      row.innerHTML='';
+      const msg=document.createElement('span');
+      msg.style.cssText='flex:1;font-size:9px;color:var(--red);white-space:nowrap';
+      msg.textContent='Delete "'+entry.name+'"?';
+      const yes=document.createElement('button');
+      yes.textContent='Yes';
+      yes.style.cssText='flex-shrink:0;padding:1px 5px;font-size:9px;font-family:var(--mono);background:var(--red);border:none;border-radius:3px;color:#fff;cursor:pointer;line-height:1.5';
+      yes.onclick=()=>deleteBoundary(i);
+      const no=document.createElement('button');
+      no.textContent='No';
+      no.style.cssText='flex-shrink:0;padding:1px 5px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
+      no.onclick=()=>renderLib();
+      row.appendChild(msg);row.appendChild(yes);row.appendChild(no);
+    };
+    row.appendChild(delBtn);
     el.appendChild(row);
   });
 }
@@ -808,7 +1273,7 @@ function shapeDesc(bdry,sw){
     mag[k]=Math.sqrt(re*re+im*im);
   }
   let l2=0;for(let i=0;i<N_FREQS;i++)l2+=mag[i]*mag[i];l2=Math.sqrt(l2);
-  if(l2>1e-9)for(let i=0;i<N_FREQS;i++)mag[i]=mag[i]/l2*sw;
+  if(l2>1e-9)for(let i=0;i<N_FREQS;i++)mag[i]/=l2;
   return mag;
 }
 
@@ -845,43 +1310,129 @@ function l2dist(a,b,off,dim){
 }
 
 // ── retrieval ─────────────────────────────────────────────────────────────
-function runRetrievalLocal(){
+async function runRetrievalLocal(){
   if(!db.descs||!closed||boundary.length<3)return;
   setStatus('retrieving…','warn');
-  const rawBdry=boundary.map(({x,y})=>[x,y,0,0]);
-  const qfp={id:'__q__',boundary:rawBdry,rooms:[],edges:[]};
-  setTimeout(()=>{
-    try{
-      const qd=combinedDesc(qfp,params.shape_w,params.sem_w);
-      const N=db.names.length,dim=db.dim;
-      const dists=new Float32Array(N);
-      for(let i=0;i<N;i++)dists[i]=l2dist(qd,db.descs,i*dim,dim);
-      const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
-      results=idx.map(i=>{
-        const name=db.names[i];
-        const stem=name.replace(/\.(png|json)$/i,'');
-        return{name,dist:dists[i],fp:cache[stem]||cache[name]||null,adapted:false};
-      });
+  await new Promise(r=>setTimeout(r,10));
+  try{
+      // normalise to CW (negative signed area in screen / Y-down coords)
+      // so descriptor computation is always consistent regardless of draw order
+      const rawVerts=boundary.map(({x,y})=>[x,y]);
+      let sigArea=0;
+      for(let i=0;i<rawVerts.length;i++){
+        const[x0,y0]=rawVerts[i],[x1,y1]=rawVerts[(i+1)%rawVerts.length];
+        sigArea+=x0*y1-x1*y0;
+      }
+      // sigArea > 0 means CCW in screen (Y-down) coords — reverse to normalise to CW
+      const bdryArr=sigArea>0?[...rawVerts].reverse():rawVerts;
+      const N=db.names.length;
+
+      if(db.dim===TOTAL_DIM){
+        // ── new 63-dim entrance-aware index ──────────────────────────────────
+        const qShape=shapeDesc(bdryArr,1);
+        const qEnt=entrance?entranceDescJS(boundary,entrance):null;
+        const qRoom=roomCountDescFromReqs(req);
+
+        const dists=new Float32Array(N);
+        const bestAngles=new Float32Array(N);
+        const bestMirror=new Uint8Array(N);   // 1 = mirror plan about its centroid x-axis
+        for(let i=0;i<N;i++){
+          const off=i*TOTAL_DIM;
+          // shape distance (rotation/mirror invariant)
+          let sd=0;
+          for(let j=0;j<SHAPE_DIM;j++){const d=qShape[j]-db.descs[off+j];sd+=d*d;}
+          sd=Math.sqrt(sd)*params.shape_w;
+          // entrance distance — try both normal and mirrored orientation
+          let ed=0;
+          if(qEnt&&params.ent_w>0){
+            const eo=off+SHAPE_DIM;
+            const d_rx=db.descs[eo],d_ry=db.descs[eo+1];
+            const d_cx=db.descs[eo+2],d_cy=db.descs[eo+3];
+            const qSq=qEnt[0]**2+qEnt[1]**2+qEnt[2]**2+qEnt[3]**2;
+            const dSq=d_rx**2+d_ry**2+d_cx**2+d_cy**2;
+            // normal orientation
+            const A =qEnt[0]*d_rx+qEnt[1]*d_ry+qEnt[2]*d_cx+qEnt[3]*d_cy;
+            const B =qEnt[1]*d_rx-qEnt[0]*d_ry+qEnt[3]*d_cx-qEnt[2]*d_cy;
+            const ed_n=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(A*A+B*B)));
+            // mirrored orientation: flip x components → [-d_rx, d_ry, -d_cx, d_cy]
+            const Am=-qEnt[0]*d_rx+qEnt[1]*d_ry-qEnt[2]*d_cx+qEnt[3]*d_cy;
+            const Bm=-qEnt[1]*d_rx-qEnt[0]*d_ry-qEnt[3]*d_cx-qEnt[2]*d_cy;
+            const ed_m=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(Am*Am+Bm*Bm)));
+            if(ed_m<ed_n){
+              ed=ed_m*params.ent_w;
+              bestMirror[i]=1;
+              bestAngles[i]=Math.round(Math.atan2(Bm,Am)/(Math.PI/2))*(Math.PI/2);
+            }else{
+              ed=ed_n*params.ent_w;
+              bestMirror[i]=0;
+              bestAngles[i]=Math.round(Math.atan2(B,A)/(Math.PI/2))*(Math.PI/2);
+            }
+          }
+          // room distance
+          let rd=0;
+          for(let j=0;j<ROOM_DIM;j++){const d=qRoom[j]-db.descs[off+SHAPE_DIM+ENT_DIM+j];rd+=d*d;}
+          rd=Math.sqrt(rd)*params.room_w;
+          dists[i]=sd+ed+rd;
+        }
+        const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
+        const planData=await Promise.all(idx.map(async i=>{
+          const name=db.names[i];
+          const stem=name.replace(/\.(png|json)$/i,'');
+          if(cache[stem])return cache[stem];
+          if(cache[name])return cache[name];
+          try{
+            const pr=await fetchWithCache('test_data/'+name);
+            if(!pr.ok)return null;
+            const data=await pr.json();
+            cache[stem]=data;if(data.id)cache[data.id]=data;
+            return data;
+          }catch(e){return null;}
+        }));
+        results=idx.map((dbIdx,rank)=>({name:db.names[dbIdx],dist:dists[dbIdx],fp:planData[rank],adapted:false,rot:bestAngles[dbIdx],mirror:!!bestMirror[dbIdx]}));
+      } else {
+        // ── legacy index fallback (shape + semantic) ──────────────────────────
+        const rawBdry=boundary.map(({x,y})=>[x,y,0,0]);
+        const qfp={id:'__q__',boundary:rawBdry,rooms:[],edges:[]};
+        const qd=combinedDesc(qfp,params.shape_w,params.room_w);
+        const dim=db.dim;
+        const dists=new Float32Array(N);
+        for(let i=0;i<N;i++)dists[i]=l2dist(qd,db.descs,i*dim,dim);
+        const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
+        const planData=await Promise.all(idx.map(async i=>{
+          const name=db.names[i];
+          const stem=name.replace(/\.(png|json)$/i,'');
+          if(cache[stem])return cache[stem];
+          try{
+            const pr=await fetchWithCache('test_data/'+name);
+            if(!pr.ok)return null;
+            const data=await pr.json();
+            cache[stem]=data;if(data.id)cache[data.id]=data;
+            return data;
+          }catch(e){return null;}
+        }));
+        results=idx.map((dbIdx,rank)=>({name:db.names[dbIdx],dist:dists[dbIdx],fp:planData[rank],adapted:false,rot:0}));
+      }
+
       selected=null;
       renderList();
       setStatus(`top ${params.topn} retrieved (local)`,'ok');
       document.getElementById('result-count').textContent=results.length+' results';
       render();
-    }catch(e){setStatus('error: '+e.message,'err');console.error(e);}
-  },10);
+  }catch(e){setStatus('error: '+e.message,'err');console.error(e);}
 }
 
 async function runRetrieval(){
   if(!closed||boundary.length<3)return;
-  setStatus('retrieving and adapting…','warn');
+  setStatus('retrieving…','warn');
   document.getElementById('run-btn').disabled=true;
   const body={
     boundary:boundary.map(({x,y})=>[x,y,0,0]),
-    entrance:null,
+    entrance_point:entrance?[entrance.x,entrance.y]:null,
     requirements:req,
     topn:params.topn,
     shape_w:params.shape_w,
-    sem_w:params.sem_w,
+    ent_w:params.ent_w,
+    room_w:params.room_w,
   };
   try{
     const resp=await fetch('/retrieve',{
@@ -893,7 +1444,7 @@ async function runRetrieval(){
     const data=await resp.json();
     if(data.error)throw new Error(data.error);
     renderAdaptedResults(data.plans);
-    setStatus(`top ${data.count} retrieved + adapted`,'ok');
+    setStatus(`top ${data.count} retrieved`,'ok');
     document.getElementById('result-count').textContent=data.count+' results';
     render();
   }catch(e){
@@ -909,7 +1460,7 @@ async function runRetrieval(){
 function renderAdaptedResults(plans){
   results=plans.map(plan=>{
     const ret=plan.retrieval||{};
-    return{name:plan.id,dist:ret.dist??0,fp:plan,adapted:true,retrieval:ret};
+    return{name:plan.id,dist:ret.dist??0,fp:plan,adapted:true,retrieval:ret,rot:ret.rot??0,mirror:ret.mirror??false};
   });
   selected=null;
   const list=document.getElementById('results-list');
@@ -923,9 +1474,9 @@ function renderAdaptedResults(plans){
     tc.className='card-thumb';tc.width=200;tc.height=200;
     const tctx=tc.getContext('2d');
     tctx.fillStyle='#f1f5f9';tctx.fillRect(0,0,200,200);
-    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true,true);
-    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06);
-    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06);
+    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true,true,r.rot||0,[0,0],r.mirror||false);
+    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06,r.rot||0,[0,0],r.mirror||false);
+    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06,r.rot||0,[0,0],r.mirror||false);
     else{tctx.fillStyle='#94a3b8';tctx.font='10px monospace';tctx.textAlign='center';tctx.fillText('no plan data',100,100);}
     card.appendChild(tc);
     const ret=r.retrieval||{};
@@ -964,9 +1515,9 @@ function renderList(){
     tc.className='card-thumb';tc.width=200;tc.height=200;
     const tctx=tc.getContext('2d');
     tctx.fillStyle='#f1f5f9';tctx.fillRect(0,0,200,200);
-    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true);
-    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06);
-    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06);
+    if(r.fp)drawFP(tctx,r.fp,200,200,0.06,true,false,r.rot||0,[0,0],r.mirror||false);
+    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,0.06,r.rot||0,[0,0],r.mirror||false);
+    if(r.fp)drawGraph(tctx,r.fp,200,200,0.06,r.rot||0,[0,0],r.mirror||false);
     else{
       tctx.fillStyle='#94a3b8';tctx.font='10px monospace';tctx.textAlign='center';
       tctx.fillText('no plan data',100,100);
@@ -1006,31 +1557,8 @@ async function autoLoad(){
 
   tryFinalise();
 
-  try{
-    const mr=await fetch('manifest.json');
-    if(!mr.ok)throw new Error('no manifest');
-    const names=await mr.json();
-    document.getElementById('lbl-pls').textContent='loading '+names.length+' plans…';
-    let loaded=0;
-    const BATCH=50;
-    for(let i=0;i<names.length;i+=BATCH){
-      const batch=names.slice(i,i+BATCH);
-      await Promise.all(batch.map(async name=>{
-        try{
-          const pr=await fetch('test_data/'+name);
-          if(!pr.ok)return;
-          const data=await pr.json();
-          const stem=name.replace(/\.json$/i,'');
-          cache[stem]=data;if(data.id)cache[data.id]=data;
-          document.getElementById('s-pls').textContent=++loaded;
-        }catch(e){}
-      }));
-      document.getElementById('lbl-pls').textContent='loading… '+loaded+'/'+names.length;
-    }
-    document.getElementById('lbl-pls').textContent=loaded+' plans loaded ✓';
-  }catch(e){
-    document.getElementById('lbl-pls').textContent='drop plan files to render';
-  }
+  // plans are loaded on demand after retrieval (cached by the browser Cache API)
+  document.getElementById('lbl-pls').textContent='plans load on demand ✓';
 }
 
 if(location.protocol!=='file:'){
