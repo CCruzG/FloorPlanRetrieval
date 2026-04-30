@@ -158,16 +158,90 @@ This writes `browser_files/index.bin` (float32 binary, plans × 63) and `browser
 
 ## Floor plan JSON schema
 
-Plans use schema version **2.1.0** with normalised `[0, 1]` coordinates (1 unit = 18 m):
+Plans use schema version **2.1.0** with normalised `[0, 1]` coordinates (1 unit = 18 m).
 
-```
-boundary   — list of [x, y, direction, is_door_vertex]
-entrance   — [x1, y1, x2, y2] bounding box of the front door
-rooms      — list of {polygon, type (0–8), source_type (0–17), ...}
-edges      — list of {room_indices, connection: 0=wall | 1=door}
-doors      — list of {id, bbox: [x1,y1,x2,y2], orientation, room_refs}
-windows    — list of {id, bbox: [x1,y1,x2,y2], orientation, room_refs}
-```
+> **Query boundary vs. stored plans** — The browser sends the user-drawn boundary to the server in the same `[x, y, direction, is_door_vertex]` vertex format, but `direction` and `is_door_vertex` are always `0` (the server strips them immediately and uses only the `[x, y]` pairs). The query entrance is sent as a single point `[x, y]` rather than a bounding box. Neither the query boundary nor the entrance are persisted as a JSON file; only retrieved/adapted plans use the full schema below.
+
+### Top-level fields
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | string | Always `"2.1.0"` |
+| `id` | string | Plan identifier |
+| `name` | string | Human-readable name |
+| `source` | string | Dataset origin (e.g. `"rplan"`) |
+| `units` | string | Always `"normalised"` |
+| `normalisation_multiplier` | number | Scale factor applied (typically `1.0`) |
+| `boundary` | array | Outer footprint vertices (see below) |
+| `entrance` | array | Front-door bounding box `[x1, y1, x2, y2]` |
+| `rooms` | array | Room objects (see below) |
+| `edges` | array | Room adjacency graph edges |
+| `doors` | array | Interior door objects |
+| `windows` | array | Window objects |
+| `walls` | null | Reserved, not currently used |
+| `requirements` | null | Reserved, not currently used |
+| `retrieval` | null / object | Populated by the server after retrieval |
+
+### `boundary`
+
+Each vertex is `[x, y, direction, is_door_vertex]`:
+
+| Field | Description |
+|---|---|
+| `x`, `y` | Normalised `[0, 1]` coordinates |
+| `direction` | Outward-facing cardinal direction of the following edge: `0`=left, `1`=right, `2`=down, `3`=up |
+| `is_door_vertex` | `1` if this vertex is part of the main entrance opening, `0` otherwise |
+
+### `rooms`
+
+Each room object has:
+
+| Field | Description |
+|---|---|
+| `id` | Unique string identifier (e.g. `"r_0"`) |
+| `type` | Integer room-type label (raw dataset value) |
+| `source_type` | Normalised room type used by the retrieval pipeline (see table below) |
+| `label` | Human-readable label string |
+| `polygon` | List of `[x, y]` vertices defining the room footprint (normalised coords) |
+| `bbox` | Axis-aligned bounding box `[x_min, y_min, x_max, y_max]` |
+| `bbox_interior` | Slightly inset bounding box (excludes shared walls) |
+
+**`source_type` values:**
+
+| Value | Room type |
+|---|---|
+| 0 | Living room |
+| 1 | Master bedroom |
+| 2 | Kitchen |
+| 3 | Bathroom |
+| 4 | Dining room |
+| 5 | Child bedroom |
+| 6 | Study |
+| 7 | Second bedroom |
+| 8 | Guest room |
+| 9 | Balcony |
+| 10 | Entrance / hall |
+| 11 | Storage |
+
+### `edges`
+
+Each edge object has:
+
+| Field | Description |
+|---|---|
+| `u`, `v` | Room IDs of the two connected rooms |
+| `relation` | Spatial relation code (dataset-specific integer) |
+| `connection` | `0` = shared wall, `1` = door connection |
+
+### `doors` and `windows`
+
+| Field | Description |
+|---|---|
+| `id` | Unique string identifier |
+| `type` | `"door"` or `"window"` |
+| `bbox` | Bounding box `[x1, y1, x2, y2]` in normalised coords |
+| `orientation` | `"horizontal"` or `"vertical"` |
+| `room_refs` | List of room IDs the opening belongs to |
 
 ---
 

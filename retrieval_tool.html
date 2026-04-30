@@ -65,6 +65,9 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 #canvas-hint { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); pointer-events:none; white-space:nowrap; }
 #coord-disp { position:absolute; top:10px; left:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
 #shift-ind { position:absolute; bottom:12px; right:12px; font-size:10px; color:var(--amber); pointer-events:none; display:none; }
+#canvas-palette { position:absolute; bottom:36px; left:50%; transform:translateX(-50%); display:flex; gap:12px; background:rgba(20,23,28,0.88); border:1px solid var(--border2); border-radius:6px; padding:5px 12px; pointer-events:all; z-index:10; backdrop-filter:blur(4px); }
+#canvas-palette label { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text); cursor:pointer; user-select:none; white-space:nowrap; }
+#canvas-palette input[type=checkbox] { cursor:pointer; accent-color:var(--accent); margin:0; }
 
 #right-panel { width:216px; flex-shrink:0; border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
 #right-header { padding:10px 12px; border-bottom:1px solid var(--border); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; }
@@ -190,6 +193,10 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <label><input type="checkbox" id="chk-graph" onchange="params.showGraph=this.checked;render()">
         show room graph</label>
       </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-fit" onchange="toggleFitMode(this.checked)">
+        fit rooms into boundary</label>
+      </div>
       <button class="run-btn" id="run-btn" onclick="runRetrieval()" disabled>retrieve</button>
     </div>
 
@@ -211,6 +218,12 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
     <div id="coord-disp"></div>
     <div id="canvas-hint">draw a boundary polygon to begin</div>
     <div id="shift-ind">SHIFT LOCK</div>
+    <div id="canvas-palette">
+      <label><input type="checkbox" id="chk-show-bdry" checked onchange="showPlanBdry=this.checked;render()"> plan boundary</label>
+      <label><input type="checkbox" id="chk-show-win" checked onchange="showWindows=this.checked;render()"> windows</label>
+      <label><input type="checkbox" id="chk-show-idoors" checked onchange="showDoors=this.checked;render()"> int. doors</label>
+      <label><input type="checkbox" id="chk-show-common" checked onchange="showCommonArea=this.checked;render()"> common area</label>
+    </div>
   </div>
 
   <div id="right-panel">
@@ -281,6 +294,17 @@ let shiftDown=false;
 let snapFirst=false;
 let results=[];
 let selected=null;
+let fitMode=false;
+let fittedCache={};   // index → {fp, stats} or null
+// visibility toggles (active plan)
+let showPlanBdry=true,showWindows=true,showDoors=true,showCommonArea=true;
+// room editing state
+const COMMON_AREA_TYPES=new Set([0,4]);
+let selectedRoom=null;  // room index in active fp.rooms, or null
+let hoveredRoom=null;   // {roomIdx, mode:'body'|'edge', edgeAxis:'h'|'v', coordValue} or null
+let hoveredEntrance=false;
+let dragState=null;     // {roomIdx?, mode, origPoly?, origEntrance?, startPlanXY, edgeAxis?, coordValue?} or null
+let displacementArrows=[];  // [{from:[x,y], to:[x,y]}] in plan space, cleared on new retrieval/selection
 let cW=0,cH=0;
 
 const canvas=document.getElementById('main-canvas');
@@ -312,6 +336,104 @@ function c2n(cx,cy){
 function pdist(a,b){
   const[ax,ay]=n2c(a.x,a.y),[bx,by]=n2c(b.x,b.y);
   return Math.hypot(ax-bx,ay-by);
+}
+
+// ── plan ↔ canvas coordinate transforms ──────────────────────────────────
+function planToCanvas(px,py,fpBdry,rot,offset,mirror){
+  const sc=cW*(1-2*PAD),ox=PAD*cW,oy=PAD*cH;
+  const cen=(rot||mirror)?bdryCenter(fpBdry):null;
+  let x=px,y=py;
+  if(mirror)x=2*cen[0]-x;
+  if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
+  return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
+}
+function canvasToPlan(cx,cy,fpBdry,rot,offset,mirror){
+  const sc=cW*(1-2*PAD),ox=PAD*cW,oy=PAD*cH;
+  const cen=(rot||mirror)?bdryCenter(fpBdry):null;
+  let x=(cx-ox)/sc-offset[0];
+  let y=(cy-oy)/sc-offset[1];
+  if(rot)[x,y]=rotatePtAround([x,y],-rot,cen);
+  if(mirror)x=2*cen[0]-x;
+  return[x,y];
+}
+function ptInPoly([px,py],poly){
+  let inside=false;
+  const n=poly.length;
+  for(let i=0,j=n-1;i<n;j=i++){
+    const[xi,yi]=poly[i],[xj,yj]=poly[j];
+    if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)inside=!inside;
+  }
+  return inside;
+}
+function ptToSegDistSq([px,py],[ax,ay],[bx,by]){
+  const dx=bx-ax,dy=by-ay,lenSq=dx*dx+dy*dy;
+  if(lenSq===0)return(px-ax)**2+(py-ay)**2;
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/lenSq));
+  return(px-(ax+t*dx))**2+(py-(ay+t*dy))**2;
+}
+function getActiveFPState(){
+  if(selected===null||!results[selected])return null;
+  const rot=results[selected].rot||0;
+  const mirror=results[selected].mirror||false;
+  const fp=(fitMode&&fittedCache[selected]?.fp)||results[selected].fp;
+  if(!fp)return null;
+  const qc=bdryCenter(boundary.map(({x,y})=>[x,y]));
+  const pc=bdryCenter(fp.boundary||[]);
+  const offset=[qc[0]-pc[0],qc[1]-pc[1]];
+  return{fp,rot,mirror,offset,fpBdry:fp.boundary||[]};
+}
+function hitTestRooms(cx,cy){
+  const s=getActiveFPState();if(!s)return null;
+  const{fp,rot,mirror,offset,fpBdry}=s;
+  const rooms=fp.rooms||[];
+  const[planX,planY]=canvasToPlan(cx,cy,fpBdry,rot,offset,mirror);
+  const toPx=([px,py])=>planToCanvas(px,py,fpBdry,rot,offset,mirror);
+  const EDGE_DSQ=64; // 8px threshold
+  let bestEdge=null,bestEdgeDsq=Infinity,firstBody=null;
+  for(let ri=0;ri<rooms.length;ri++){
+    const r=rooms[ri];
+    const st=r.source_type??r.type;
+    if(COMMON_AREA_TYPES.has(st))continue;
+    if(!r.polygon||r.polygon.length<3)continue;
+    const poly=r.polygon,n=poly.length;
+    const cpoly=poly.map(toPx);
+    for(let i=0;i<n;i++){
+      const[px1,py1]=poly[i],[px2,py2]=poly[(i+1)%n];
+      const adx=Math.abs(px2-px1),ady=Math.abs(py2-py1);
+      if(adx>1e-4&&ady>1e-4)continue; // skip diagonal edges
+      const dsq=ptToSegDistSq([cx,cy],cpoly[i],cpoly[(i+1)%n]);
+      if(dsq<EDGE_DSQ&&dsq<bestEdgeDsq){
+        bestEdgeDsq=dsq;
+        const axis=adx<ady?'v':'h';
+        const coordValue=axis==='h'?(py1+py2)/2:(px1+px2)/2;
+        bestEdge={roomIdx:ri,mode:'edge',edgeAxis:axis,coordValue};
+      }
+    }
+    if(!firstBody&&ptInPoly([planX,planY],poly))firstBody={roomIdx:ri,mode:'body'};
+  }
+  return bestEdge||firstBody||null;
+}
+function hitTestEntrance(cx,cy){
+  const s=getActiveFPState();if(!s)return false;
+  const{fp,fpBdry,rot,offset,mirror}=s;
+  const ent=fp.entrance;if(!ent||ent.length!==4)return false;
+  const toPx=([px,py])=>planToCanvas(px,py,fpBdry,rot,offset,mirror);
+  const corners=[[ent[0],ent[1]],[ent[2],ent[1]],[ent[2],ent[3]],[ent[0],ent[3]]].map(toPx);
+  const xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]);
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  const PAD_HIT=6;
+  return cx>=minX-PAD_HIT&&cx<=maxX+PAD_HIT&&cy>=minY-PAD_HIT&&cy<=maxY+PAD_HIT;
+}
+function updateCursor(){
+  if(dragState){
+    canvas.style.cursor=dragState.mode==='entrance'||dragState.mode==='move'?'grabbing':(dragState.edgeAxis==='h'?'ns-resize':'ew-resize');
+  }else if(hoveredEntrance){
+    canvas.style.cursor='grab';
+  }else if(hoveredRoom){
+    canvas.style.cursor=hoveredRoom.mode==='body'?'grab':(hoveredRoom.edgeAxis==='h'?'ns-resize':'ew-resize');
+  }else{
+    canvas.style.cursor=selected!==null&&closed?'default':'crosshair';
+  }
 }
 
 // ── projection-line snap ──────────────────────────────────────────────────
@@ -499,14 +621,18 @@ function render(){
   if(selected!==null&&results[selected]?.fp){
     const selRot=results[selected].rot||0;
     const selMirror=results[selected].mirror||false;
-    const fp=results[selected].fp;
+    const _raw=results[selected].fp;
+    const fp=(fitMode&&fittedCache[selected]?.fp)||_raw;
     // align plan centroid to query boundary centroid
     const qc=bdryCenter(boundary.map(({x,y})=>[x,y]));
     const pc=bdryCenter(fp.boundary||[]);
     const selOff=[qc[0]-pc[0],qc[1]-pc[1]];
-    drawFP(ctx,fp,cW,cH,PAD,false,results[selected].adapted,selRot,selOff,selMirror);
-    drawDoorsWindows(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror);
+    drawFP(ctx,fp,cW,cH,PAD,false,results[selected].adapted,selRot,selOff,selMirror,
+      {showBdry:showPlanBdry,showCommon:showCommonArea,hiliteRoom:selectedRoom,hoverEdge:true});
+    drawDoorsWindows(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror,{showWin:showWindows,showIntDoors:showDoors});
     if(params.showGraph)drawGraph(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror);
+    if(fitMode&&fittedCache[selected]?.fp)drawFitHighlights(ctx,fp,cW,cH,PAD,selRot,selOff,selMirror);
+    if(displacementArrows.length)drawDisplacementArrows(ctx,displacementArrows,fp.boundary||[],selRot,selOff,selMirror);
     // query boundary overlay
     drawBoundaryOverlay();
     // redraw entrance on top of the boundary overlay (mirrored + rotated + offset)
@@ -767,20 +893,25 @@ function bdryCenter(bdry){
   return[cx/(6*area),cy/(6*area)];
 }
 
-function drawFP(c,fp,W,H,pad,dark,showClipped,rot=0,offset=[0,0],mirror=false){
+function drawFP(c,fp,W,H,pad,dark,showClipped,rot=0,offset=[0,0],mirror=false,opts={}){
   const rooms=fp.rooms||[],bdry=fp.boundary||[];
   if(!bdry.length)return;
   const sc=W*(1-2*pad);
   const ox=pad*W,oy=pad*H;
   const cen=(rot||mirror)?bdryCenter(bdry):null;
+  const _showBdry=opts.showBdry??true;
+  const _showCommon=opts.showCommon??true;
+  const _hiliteRoom=opts.hiliteRoom??null;
   const t=([x,y])=>{
     if(mirror)x=2*cen[0]-x;
     if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
     return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
   };
-  rooms.forEach(r=>{
+  rooms.forEach((r,ri)=>{
+    const st=r.source_type??r.type;
+    if(!_showCommon&&COMMON_AREA_TYPES.has(st))return;
     if(!r.polygon||r.polygon.length<3)return;
-    const col=RCOLS[r.source_type??r.type]??'#ddd';
+    const col=RCOLS[st]??'#ddd';
     c.beginPath();
     r.polygon.forEach((pt,i)=>{const[cx,cy]=t(pt);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
     c.closePath();
@@ -790,16 +921,37 @@ function drawFP(c,fp,W,H,pad,dark,showClipped,rot=0,offset=[0,0],mirror=false){
       c.fillStyle=col+(dark?'cc':'bb');
     }
     c.fill();
-    if(showClipped&&r.clipped){
+    if(ri===_hiliteRoom){
+      c.strokeStyle='#f59e0b';c.lineWidth=2.5;c.setLineDash([]);c.stroke();
+    }else if(showClipped&&r.clipped){
       c.strokeStyle='#f59e0b';c.lineWidth=1.5;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
     }else{
       c.strokeStyle='#00000020';c.lineWidth=0.5;c.stroke();
     }
   });
-  c.beginPath();
-  bdry.forEach((v,i)=>{const[cx,cy]=t([v[0],v[1]]);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
-  c.closePath();
-  c.strokeStyle='#111';c.lineWidth=dark?1.5:2;c.setLineDash([]);c.stroke();
+  // hover edge highlight
+  if(opts.hoverEdge&&hoveredRoom&&!dragState){
+    const hr=rooms[hoveredRoom.roomIdx];
+    if(hr&&hr.polygon){
+      const poly=hr.polygon,n=poly.length;
+      const axis=hoveredRoom.edgeAxis,cv=hoveredRoom.coordValue;
+      c.strokeStyle='rgba(245,158,11,0.9)';c.lineWidth=2.5;c.setLineDash([]);
+      for(let i=0;i<n;i++){
+        const[px1,py1]=poly[i],[px2,py2]=poly[(i+1)%n];
+        const match=axis==='h'?Math.abs((py1+py2)/2-cv)<1e-4:Math.abs((px1+px2)/2-cv)<1e-4;
+        if(match){
+          const[ax,ay]=t(poly[i]),[bx,by]=t(poly[(i+1)%n]);
+          c.beginPath();c.moveTo(ax,ay);c.lineTo(bx,by);c.stroke();
+        }
+      }
+    }
+  }
+  if(_showBdry){
+    c.beginPath();
+    bdry.forEach((v,i)=>{const[cx,cy]=t([v[0],v[1]]);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
+    c.closePath();
+    c.strokeStyle='#111';c.lineWidth=dark?1.5:2;c.setLineDash([]);c.stroke();
+  }
 
   // entrance door — draw as bbox rectangle
   const ent=fp.entrance;
@@ -812,7 +964,9 @@ function drawFP(c,fp,W,H,pad,dark,showClipped,rot=0,offset=[0,0],mirror=false){
   }
 }
 
-function drawDoorsWindows(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
+function drawDoorsWindows(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false,opts={}){
+  const _showWin=opts.showWin??true;
+  const _showIntDoors=opts.showIntDoors??true;
   const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
   const cen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
   const t=([x,y])=>{
@@ -827,7 +981,7 @@ function drawDoorsWindows(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
   };
 
   // windows — cyan/teal fill, thin stroke
-  (fp.windows||[]).forEach(w=>{
+  if(_showWin)(fp.windows||[]).forEach(w=>{
     if(!w.bbox||w.bbox.length!==4)return;
     const[rx,ry,rw,rh]=tb(w.bbox);
     c.beginPath();c.rect(rx,ry,rw,rh);
@@ -836,7 +990,7 @@ function drawDoorsWindows(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
   });
 
   // doors — warm orange fill, slightly thicker stroke
-  (fp.doors||[]).forEach(d=>{
+  if(_showIntDoors)(fp.doors||[]).forEach(d=>{
     if(!d.bbox||d.bbox.length!==4)return;
     const[rx,ry,rw,rh]=tb(d.bbox);
     c.beginPath();c.rect(rx,ry,rw,rh);
@@ -895,6 +1049,64 @@ function drawGraph(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
 }
 
 // ── mouse ─────────────────────────────────────────────────────────────────
+canvas.addEventListener('mousedown',e=>{
+  if(!closed||selected===null||entranceMode)return;
+  const r=canvas.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  const s=getActiveFPState();
+  // entrance drag takes priority
+  if(s&&hitTestEntrance(cx,cy)){
+    const[planX,planY]=canvasToPlan(cx,cy,s.fpBdry,s.rot,s.offset,s.mirror);
+    const ent=s.fp.entrance;
+    dragState={mode:'entrance',startPlanXY:[planX,planY],origEntrance:[...ent],
+      origCentroid:[(ent[0]+ent[2])/2,(ent[1]+ent[3])/2]};
+    e.preventDefault();updateCursor();render();return;
+  }
+  const hit=hitTestRooms(cx,cy);
+  if(hit){
+    selectedRoom=hit.roomIdx;
+    const[planX,planY]=canvasToPlan(cx,cy,s.fpBdry,s.rot,s.offset,s.mirror);
+    const poly=s.fp.rooms[hit.roomIdx].polygon;
+    const origCentroid=[poly.reduce((a,v)=>a+v[0],0)/poly.length,
+                        poly.reduce((a,v)=>a+v[1],0)/poly.length];
+    dragState={
+      ...hit,
+      mode: hit.mode==='body' ? 'move' : 'edge',
+      startPlanXY:[planX,planY],
+      origPoly:poly.map(v=>[...v]),
+      origCentroid,
+    };
+    e.preventDefault();
+    updateCursor();render();
+  }else{
+    selectedRoom=null;render();
+  }
+});
+
+document.addEventListener('mouseup',()=>{
+  if(dragState){
+    // record displacement arrow if the object actually moved
+    const s=getActiveFPState();
+    if(s&&dragState.origCentroid){
+      let toCentroid;
+      if(dragState.mode==='entrance'){
+        const ent=s.fp.entrance;
+        if(ent)toCentroid=[(ent[0]+ent[2])/2,(ent[1]+ent[3])/2];
+      }else if(dragState.mode==='move'&&dragState.roomIdx!=null){
+        const poly=s.fp.rooms[dragState.roomIdx]?.polygon;
+        if(poly)toCentroid=[poly.reduce((a,v)=>a+v[0],0)/poly.length,
+                            poly.reduce((a,v)=>a+v[1],0)/poly.length];
+      }
+      if(toCentroid){
+        const[fx,fy]=dragState.origCentroid,[tx,ty]=toCentroid;
+        const dsq=(tx-fx)**2+(ty-fy)**2;
+        if(dsq>1e-8)displacementArrows.push({from:[fx,fy],to:[tx,ty]});
+      }
+    }
+    dragState=null;updateCursor();render();
+  }
+});
+
 canvas.addEventListener('mousemove',e=>{
   const r=canvas.getBoundingClientRect();
   const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
@@ -903,6 +1115,45 @@ canvas.addEventListener('mousemove',e=>{
   shiftDown=e.shiftKey;
   snapFirst=(!closed&&boundary.length>=3&&pdist(mouse,boundary[0])<SNAP_PX);
   document.getElementById('shift-ind').style.display=shiftDown&&!closed?'block':'none';
+
+  // ── drag: move or resize room / entrance ─────────────────────────────
+  if(dragState){
+    const s=getActiveFPState();
+    if(s){
+      const[planX,planY]=canvasToPlan(cx,cy,s.fpBdry,s.rot,s.offset,s.mirror);
+      const[sx,sy]=dragState.startPlanXY;
+      const dx=planX-sx,dy=planY-sy;
+      if(dragState.mode==='entrance'){
+        const[x1,y1,x2,y2]=dragState.origEntrance;
+        s.fp.entrance=[x1+dx,y1+dy,x2+dx,y2+dy];
+      }else{
+        const room=s.fp.rooms[dragState.roomIdx];
+        const orig=dragState.origPoly;
+        if(dragState.mode==='move'){
+          room.polygon=orig.map(([x,y])=>[x+dx,y+dy]);
+        }else{
+          const axis=dragState.edgeAxis,cv=dragState.coordValue;
+          const EPS=1e-4;
+          if(axis==='h'){
+            room.polygon=orig.map(([x,y])=>Math.abs(y-cv)<EPS?[x,y+dy]:[x,y]);
+          }else{
+            room.polygon=orig.map(([x,y])=>Math.abs(x-cv)<EPS?[x+dx,y]:[x,y]);
+          }
+        }
+      }
+    }
+    render();return;
+  }
+
+  // ── hover detection for room / entrance editing ─────────────────────
+  if(selected!==null&&closed&&!entranceMode){
+    hoveredEntrance=hitTestEntrance(cx,cy);
+    hoveredRoom=hoveredEntrance?null:hitTestRooms(cx,cy);
+    updateCursor();
+  }else{
+    hoveredRoom=null;hoveredEntrance=false;
+    canvas.style.cursor=closed?'default':'crosshair';
+  }
 
   if(entranceMode&&closed){
     entranceSnap=snapToEdge(nx,ny);
@@ -919,6 +1170,7 @@ canvas.addEventListener('mousemove',e=>{
 canvas.addEventListener('mouseleave',()=>{
   document.getElementById('coord-disp').textContent='';
   entranceSnap=null;
+  if(!dragState){hoveredRoom=null;updateCursor();}
   render();
 });
 
@@ -983,6 +1235,8 @@ function closeBoundary(){
 
 function clearBoundary(){
   boundary=[];closed=false;snapFirst=false;selected=null;results=[];
+  selectedRoom=null;dragState=null;hoveredRoom=null;hoveredEntrance=false;
+  displacementArrows=[];
   entrance=null;entranceMode=false;entranceSnap=null;
   document.getElementById('entrance-controls').style.display='none';
   document.getElementById('btn-entrance-mode').classList.remove('active');
@@ -1389,6 +1643,7 @@ async function runRetrievalLocal(){
           }catch(e){return null;}
         }));
         results=idx.map((dbIdx,rank)=>({name:db.names[dbIdx],dist:dists[dbIdx],fp:planData[rank],adapted:false,rot:bestAngles[dbIdx],mirror:!!bestMirror[dbIdx]}));
+        fittedCache={};
       } else {
         // ── legacy index fallback (shape + semantic) ──────────────────────────
         const rawBdry=boundary.map(({x,y})=>[x,y,0,0]);
@@ -1411,6 +1666,7 @@ async function runRetrievalLocal(){
           }catch(e){return null;}
         }));
         results=idx.map((dbIdx,rank)=>({name:db.names[dbIdx],dist:dists[dbIdx],fp:planData[rank],adapted:false,rot:0}));
+        fittedCache={};
       }
 
       selected=null;
@@ -1462,7 +1718,9 @@ function renderAdaptedResults(plans){
     const ret=plan.retrieval||{};
     return{name:plan.id,dist:ret.dist??0,fp:plan,adapted:true,retrieval:ret,rot:ret.rot??0,mirror:ret.mirror??false};
   });
+  fittedCache={};  // clear fit cache on new retrieval
   selected=null;
+  displacementArrows=[];
   const list=document.getElementById('results-list');
   list.innerHTML='';
   if(!results.length){list.innerHTML='<div id="results-empty">no adapted results</div>';return;}
@@ -1533,8 +1791,227 @@ function renderList(){
 
 function selectResult(i){
   selected=selected===i?null:i;
+  selectedRoom=null;dragState=null;hoveredRoom=null;hoveredEntrance=false;
+  displacementArrows=[];
   document.querySelectorAll('.result-card').forEach((c,j)=>c.classList.toggle('selected',j===selected));
+  if(fitMode&&selected!==null&&!fittedCache[selected])fetchFitted(selected);
+  updateCursor();render();
+}
+
+// Transform query boundary into the retrieved plan's original coordinate space
+function boundaryInPlanSpace(r){
+  const rot=r.rot||0, mirror=r.mirror||false;
+  const qc=bdryCenter(boundary.map(({x,y})=>[x,y]));
+  const pc=bdryCenter(r.fp.boundary||[]);
+  const ox=qc[0]-pc[0], oy=qc[1]-pc[1];
+  return boundary.map(({x,y})=>{
+    let px=x-ox, py=y-oy;
+    [px,py]=rotatePtAround([px,py],-rot,pc);
+    if(mirror)px=2*pc[0]-px;
+    return[px,py];
+  });
+}
+
+function toggleFitMode(on){
+  fitMode=on;
+  if(!on){
+    // Clear cache so toggling back on will re-fit (allows retry after server starts)
+    fittedCache={};
+  } else if(selected!==null){
+    fetchFitted(selected);
+  }
   render();
+}
+
+async function fetchFitted(i){
+  const r=results[i];
+  if(!r||!r.fp)return;
+  if(fittedCache[i])return;  // already have a good result
+
+  const bdryInPlan=boundaryInPlanSpace(r);
+  setStatus('fitting…','warn');
+
+  // Try server first (exact Minkowski erosion via Shapely)
+  try{
+    const resp=await fetch('/fit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fp:r.fp,boundary:bdryInPlan}),
+    });
+    if(!resp.ok)throw new Error('server '+resp.status);
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error);
+    fittedCache[i]={fp:data.fp,stats:data.stats,method:'server'};
+    const s=data.stats||{};
+    setStatus(`fit (server): ${s.moved||0} moved, ${s.skipped||0} irregular, ${s.no_fit||0} too large`,'ok');
+  }catch(e){
+    // Fallback: local JS fitting
+    console.info('Server fit unavailable, using local fitting:',e.message);
+    const {fp:fittedFp,stats}=fitPlanLocal(r.fp,bdryInPlan);
+    fittedCache[i]={fp:fittedFp,stats,method:'local'};
+    const s=stats;
+    setStatus(`fit (local): ${s.moved||0} moved, ${s.skipped||0} irregular, ${s.no_fit||0} too large`,'ok');
+  }
+  render();
+}
+
+// ── local JS fitting: sequential edge-push ────────────────────────────────────
+
+// Process order: bedrooms first (anchor), then bathrooms, kitchen, others, living/dining last.
+// Each group inherits the translation of its nearest already-placed neighbour,
+// then edge-push fixes any remaining boundary violations.
+const FIT_ORDER=[
+  new Set([1,5,7]),       // bedrooms
+  new Set([3]),           // bathrooms
+  new Set([2]),           // kitchen
+  new Set([6,8,9,10,11]), // study, guest, balcony, entrance, storage
+  new Set([0,4]),         // living, dining — fill remaining space last
+];
+
+// Precompute boundary half-planes: [{nx,ny,c}] with inward normals
+function bdryHalfPlanes(boundaryVerts){
+  const bn=boundaryVerts.length;
+  const cenB=bdryCenter(boundaryVerts);
+  const hp=[];
+  for(let i=0;i<bn;i++){
+    const a=boundaryVerts[i],b=boundaryVerts[(i+1)%bn];
+    const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy);
+    if(len<1e-10)continue;
+    let nx=dy/len,ny=-dx/len;
+    if(nx*(cenB[0]-a[0])+ny*(cenB[1]-a[1])<0){nx=-nx;ny=-ny;}
+    hp.push({nx,ny,c:nx*a[0]+ny*a[1]});
+  }
+  return hp;
+}
+
+// Iteratively push poly (as [tx,ty] translation) until fully inside boundary.
+// Starts from (startTx, startTy).  Returns [tx, ty].
+function edgePush(origPoly,halfPlanes,startTx,startTy){
+  let tx=startTx,ty=startTy;
+  for(let iter=0;iter<40;iter++){
+    let worstViol=0,wnx=0,wny=0;
+    for(const{nx,ny,c}of halfPlanes){
+      for(const v of origPoly){
+        const viol=c-(nx*(v[0]+tx)+ny*(v[1]+ty));
+        if(viol>worstViol){worstViol=viol;wnx=nx;wny=ny;}
+      }
+    }
+    if(worstViol<1e-8)break;
+    // Translate along the boundary edge's inward normal by the full violation.
+    // This matches the "align the offending edge to the boundary edge" behaviour:
+    // for an axis-aligned room edge outside a parallel boundary edge, this
+    // produces exactly the perpendicular slide described.
+    tx+=wnx*worstViol; ty+=wny*worstViol;
+  }
+  return[tx,ty];
+}
+
+function polyCentroid2(poly){
+  return[poly.reduce((s,v)=>s+v[0],0)/poly.length,
+         poly.reduce((s,v)=>s+v[1],0)/poly.length];
+}
+function poly2Dist(a,b){
+  const[ax,ay]=polyCentroid2(a),[bx,by]=polyCentroid2(b);
+  return Math.hypot(ax-bx,ay-by);
+}
+
+function fitPlanLocal(fp,boundaryVerts){
+  const rooms=JSON.parse(JSON.stringify(fp.rooms||[]));
+  const stats={moved:0,skipped:0,no_fit:0};
+
+  // Keep original polygon array for adjacency distance computation
+  const origPolys=rooms.map(r=>r.polygon||[]);
+
+  // placed[i] = [tx,ty] once room i is processed, else null
+  const placed=new Array(rooms.length).fill(null);
+
+  const hp=bdryHalfPlanes(boundaryVerts);
+
+  for(const typeSet of FIT_ORDER){
+    const indices=[];
+    for(let i=0;i<rooms.length;i++){
+      const rt=rooms[i].source_type??rooms[i].type??-1;
+      if(typeSet.has(rt))indices.push(i);
+    }
+
+    for(const idx of indices){
+      const room=rooms[idx];
+      const origPoly=origPolys[idx];
+      if(!origPoly||origPoly.length<3){room.fitted=false;room.fit_reason='no_poly';continue;}
+
+      // Inherit translation from the nearest already-placed room (in original space).
+      // This keeps bathrooms adjacent to bedrooms, kitchen near dining, etc.
+      let startTx=0,startTy=0,bestDist=Infinity;
+      for(let j=0;j<rooms.length;j++){
+        if(!placed[j]||!origPolys[j])continue;
+        const d=poly2Dist(origPoly,origPolys[j]);
+        if(d<bestDist){bestDist=d;[startTx,startTy]=placed[j];}
+      }
+
+      // Edge-push: fix boundary violations starting from the inherited position
+      const[tx,ty]=edgePush(origPoly,hp,startTx,startTy);
+
+      if(Math.abs(tx)>1e-8||Math.abs(ty)>1e-8){
+        room.polygon=origPoly.map(v=>[v[0]+tx,v[1]+ty]);
+        room.fitted=true;
+        room.fit_offset=[tx,ty];
+        stats.moved++;
+      }else{
+        room.fitted=true;
+      }
+      placed[idx]=[tx,ty];
+    }
+  }
+
+  return{fp:{...fp,rooms},stats};
+}
+
+function drawDisplacementArrows(c,arrows,fpBdry,rot,offset,mirror){
+  if(!arrows.length)return;
+  c.save();
+  arrows.forEach(({from,to})=>{
+    const[fx,fy]=planToCanvas(from[0],from[1],fpBdry,rot,offset,mirror);
+    const[tx,ty]=planToCanvas(to[0],to[1],fpBdry,rot,offset,mirror);
+    const dx=tx-fx,dy=ty-fy,len=Math.hypot(dx,dy);
+    if(len<1)return;
+    const ux=dx/len,uy=dy/len;
+    const HEAD=10,WING=5;
+    // shaft
+    c.beginPath();c.moveTo(fx,fy);c.lineTo(tx,ty);
+    c.strokeStyle='rgba(239,68,68,0.85)';c.lineWidth=2;c.setLineDash([4,3]);c.stroke();c.setLineDash([]);
+    // arrowhead
+    c.beginPath();
+    c.moveTo(tx,ty);
+    c.lineTo(tx-HEAD*ux+WING*uy,ty-HEAD*uy-WING*ux);
+    c.lineTo(tx-HEAD*ux-WING*uy,ty-HEAD*uy+WING*ux);
+    c.closePath();
+    c.fillStyle='rgba(239,68,68,0.85)';c.fill();
+    // origin dot
+    c.beginPath();c.arc(fx,fy,3,0,Math.PI*2);
+    c.fillStyle='rgba(239,68,68,0.65)';c.fill();
+  });
+  c.restore();
+}
+
+function drawFitHighlights(c,fp,W,H,pad,rot=0,offset=[0,0],mirror=false){
+  // Draw a green dashed outline on rooms that were moved
+  const rooms=fp.rooms||[];
+  if(!rooms.some(r=>r.fit_offset))return;
+  const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+  const cen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
+  const t=([x,y])=>{
+    if(mirror)x=2*cen[0]-x;
+    if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
+    return[(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
+  };
+  rooms.forEach(r=>{
+    if(!r.fit_offset||!r.polygon||r.polygon.length<3)return;
+    c.beginPath();
+    r.polygon.forEach((pt,i)=>{const[cx,cy]=t(pt);i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);});
+    c.closePath();
+    c.strokeStyle='rgba(34,197,94,0.9)';  // green-500
+    c.lineWidth=2;c.setLineDash([4,2]);c.stroke();c.setLineDash([]);
+  });
 }
 
 // ── auto-load on startup (requires local server) ───────────────────────────

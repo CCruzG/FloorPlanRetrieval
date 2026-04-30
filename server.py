@@ -191,6 +191,48 @@ def retrieve():
     })
 
 
+# ── /fit endpoint ─────────────────────────────────────────────────────────────
+
+@app.route("/fit", methods=["POST"])
+def fit():
+    """
+    Move regular rooms of a floor plan to the nearest position fully inside
+    the query boundary.
+
+    Request body (JSON):
+        fp       : floor plan dict (v2.1.0)
+        boundary : [[x, y], ...] — query boundary in [0, 1] coords
+                   (v2.1.0 [x,y,dir,is_door] format also accepted)
+
+    Response (JSON):
+        {status, fp, stats: {moved, skipped, no_fit}}
+    """
+    from fit_rooms import fit_plan
+
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    fp       = body.get("fp")
+    boundary = body.get("boundary")
+
+    if not fp or not boundary or len(boundary) < 3:
+        return jsonify({"error": "missing or invalid fp/boundary"}), 400
+
+    # Accept [x,y,dir,is_door] format — only first two values matter
+    bdry_xy = [[v[0], v[1]] for v in boundary]
+
+    try:
+        fitted_fp = fit_plan(fp, bdry_xy)
+    except Exception as exc:
+        logger.exception("fit_plan failed")
+        return jsonify({"error": f"fit error: {exc}"}), 500
+
+    stats = fitted_fp.pop("_fit_stats", {})
+    return jsonify({"status": "ok", "fp": fitted_fp, "stats": stats})
+
+
 # ── query helpers ─────────────────────────────────────────────────────────────
 
 def _req_to_room_desc(requirements):
