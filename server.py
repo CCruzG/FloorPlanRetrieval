@@ -191,6 +191,45 @@ def retrieve():
     })
 
 
+# ── /adapt endpoint ───────────────────────────────────────────────────────────
+
+@app.route("/adapt", methods=["POST"])
+def adapt():
+    """
+    Fit a retrieved floor plan to a user-drawn target boundary using the
+    full geometric fitting algorithm in fit_plan.py.
+
+    Request body (JSON):
+        source_plan : floor plan dict (v2.1.0)
+        target      : {"boundary": [[x,y,dir,is_door],...], "entrance": [x, y]}
+
+    Response (JSON):
+        Fitted floor plan in schema v2.1.0 with a "fit_result" key.
+    """
+    from fit_plan import fit_plan as _fit_plan
+
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    source_plan = body.get("source_plan")
+    target      = body.get("target")
+
+    if not source_plan:
+        return jsonify({"error": "missing source_plan"}), 400
+    if not target or not target.get("boundary"):
+        return jsonify({"error": "missing target.boundary"}), 400
+
+    try:
+        result = _fit_plan(source_plan, target)
+    except Exception as exc:
+        logger.exception("fit_plan failed")
+        return jsonify({"error": f"fit error: {exc}"}), 500
+
+    return jsonify(result)
+
+
 # ── /fit endpoint ─────────────────────────────────────────────────────────────
 
 @app.route("/fit", methods=["POST"])
