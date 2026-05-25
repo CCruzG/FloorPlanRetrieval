@@ -12,12 +12,21 @@ POST /retrieve          Run retrieval + adaptation, return adapted plans as JSON
 """
 
 import argparse
+import base64
 import copy
+import gc
+import importlib
 import json
 import logging
 import os
 import sys
+import time
+import uuid
 from pathlib import Path
+from io import BytesIO
+from urllib import parse as urlparse
+from urllib import request as urlrequest
+from urllib import error as urlerror
 
 import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
@@ -39,6 +48,7 @@ db_ents     = None   # (N, ENT_DIM)   float32
 db_rooms    = None   # (N, ROOM_DIM)  float32
 db_names    = None   # list[str]  e.g. ["0.png", "1.png", …]
 plan_cache  = {}     # stem → v2.1.0 dict
+py_pipe_cache = {}   # (base_model, controlnet_model, dtype) -> (pipe, device)
 
 app = Flask(__name__, static_folder=None)
 logger = logging.getLogger(__name__)
@@ -270,6 +280,1065 @@ def fit():
 
     stats = fitted_fp.pop("_fit_stats", {})
     return jsonify({"status": "ok", "fp": fitted_fp, "stats": stats})
+
+
+# ── /render endpoint (Phase 6) ───────────────────────────────────────────────
+
+@app.route("/render", methods=["POST"])
+def render_image():
+    """
+    Generate an architectural render from depth map + prompt.
+
+            Request body:
+                backend          : "openai" (default)
+      prompt           : str
+      depth_data_url   : data:image/png;base64,...
+        building_mask_data_url : optional data:image/png;base64,...
+        depth_invert               : optional bool (reserved)
+            openai_api_key             : optional str (openai backend; falls back to OPENAI_API_KEY env)
+            openai_model               : optional str (openai backend; default gpt-image-1)
+            openai_quality             : optional str (openai backend; default medium)
+            openai_width               : optional int (openai backend target width)
+            openai_height              : optional int (openai backend target height)
+
+    Response body:
+      {status, backend, image_data_url, meta}
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    backend = str(body.get("backend", "openai")).strip().lower()
+    prompt = str(body.get("prompt", "")).strip()
+    depth_data_url = body.get("depth_data_url")
+    building_mask_data_url = body.get("building_mask_data_url")
+    depth_invert_raw = body.get("depth_invert", False)
+    if isinstance(depth_invert_raw, str):
+        depth_invert = depth_invert_raw.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        depth_invert = bool(depth_invert_raw)
+
+    if not prompt:
+        return jsonify({"error": "missing prompt"}), 400
+    if not depth_data_url or not isinstance(depth_data_url, str):
+        return jsonify({"error": "missing depth_data_url"}), 400
+
+    if backend != "openai":
+        return jsonify({"error": f"unsupported backend: {backend}. only 'openai' is enabled"}), 400
+
+    try:
+        image_data_url, meta = _render_with_openai(
+            prompt=prompt,
+            depth_data_url=depth_data_url,
+            openai_api_key=body.get("openai_api_key"),
+            model=str(body.get("openai_model") or "gpt-image-1"),
+            quality=str(body.get("openai_quality") or "medium"),
+            width=int(body.get("openai_width") or body.get("width") or 1024),
+            height=int(body.get("openai_height") or body.get("height") or 1024),
+        )
+    except Exception as exc:
+        logger.exception("OpenAI render failed")
+        return jsonify({"error": f"openai render failed: {exc}"}), 500
+
+    return jsonify({
+        "status": "ok",
+        "backend": "openai",
+        "image_data_url": image_data_url,
+        "meta": meta,
+    })
+
+
+@app.route("/comfy_health", methods=["POST"])
+def comfy_health():
+    """Check if ComfyUI is reachable and responding."""
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    comfy_url = str(body.get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")
+    try:
+        _, payload = _http_get_json(f"{comfy_url}/system_stats", timeout=10)
+    except Exception as exc:
+        return jsonify({"error": f"could not reach ComfyUI at {comfy_url}: {exc}"}), 502
+
+    devices = payload.get("devices") if isinstance(payload, dict) else None
+    n_devices = len(devices) if isinstance(devices, list) else 0
+    summary = f"ComfyUI reachable at {comfy_url} ({n_devices} device(s))"
+    return jsonify({"status": "ok", "summary": summary})
+
+
+def _decode_data_url_png(data_url):
+    prefix = "data:image/png;base64,"
+    if not data_url.startswith(prefix):
+        raise ValueError("depth_data_url must be a PNG data URL")
+    raw = data_url[len(prefix):]
+    return base64.b64decode(raw)
+
+
+def _build_cuda_candidate_ids(torch, requested_cuda_device=None):
+    if not torch.cuda.is_available():
+        return []
+
+    n = torch.cuda.device_count()
+    ids = list(range(n))
+
+    if requested_cuda_device is not None:
+        try:
+            rid = int(requested_cuda_device)
+            if 0 <= rid < n:
+                return [rid]
+        except Exception:
+            pass
+
+    # Auto mode: prefer device with most currently free VRAM.
+    scored = []
+    for idx in ids:
+        try:
+            free_b, _ = torch.cuda.mem_get_info(idx)
+        except Exception:
+            free_b = 0
+        scored.append((free_b, idx))
+    scored.sort(reverse=True)
+    return [idx for _, idx in scored]
+
+
+def _normalize_requested_cuda_device(requested_cuda_device):
+    if requested_cuda_device is None:
+        return None
+    if isinstance(requested_cuda_device, str):
+        s = requested_cuda_device.strip().lower()
+        if s in {"", "none", "null", "auto"}:
+            return None
+    try:
+        return int(requested_cuda_device)
+    except Exception:
+        return None
+
+
+def _build_balanced_max_memory_map(torch, reserve_gib=1.5):
+    max_memory = {}
+    try:
+        n = int(torch.cuda.device_count())
+    except Exception:
+        n = 0
+    for idx in range(n):
+        try:
+            free_b, _ = torch.cuda.mem_get_info(idx)
+            free_gib = max(1, int((free_b / float(1024 ** 3)) - float(reserve_gib)))
+        except Exception:
+            free_gib = 10
+        max_memory[idx] = f"{free_gib}GiB"
+    return max_memory
+
+
+def _detect_controlnet_architecture(base_model_id, controlnet_model_id):
+    joined = f"{base_model_id} {controlnet_model_id}".lower()
+    return "flux" if "flux" in joined else "sdxl"
+
+
+def _exception_chain_messages(exc):
+    msgs = []
+    seen = set()
+    cur = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        msgs.append(str(cur))
+        cur = cur.__cause__ or cur.__context__
+    return "\n".join(msgs).lower()
+
+
+def _is_cuda_oom_error(exc):
+    msg = _exception_chain_messages(exc)
+    return ("cuda" in msg) and ("out of memory" in msg or "oom" in msg)
+
+
+def _get_python_controlnet_pipeline(
+    base_model_id,
+    controlnet_model_id,
+    dtype_name="float16",
+    requested_cuda_device=None,
+):
+    requested_cuda_device = _normalize_requested_cuda_device(requested_cuda_device)
+    key = (base_model_id, controlnet_model_id, dtype_name, requested_cuda_device)
+    if key in py_pipe_cache:
+        return py_pipe_cache[key]
+
+    try:
+        torch = importlib.import_module("torch")
+        diffusers = importlib.import_module("diffusers")
+    except Exception as exc:
+        raise RuntimeError(
+            "missing python backend deps. install: pip install torch diffusers transformers accelerate safetensors pillow"
+        ) from exc
+
+    arch = _detect_controlnet_architecture(base_model_id, controlnet_model_id)
+
+    dtype_map = {
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "float32": torch.float32,
+    }
+    torch_dtype = dtype_map.get(dtype_name, torch.float16)
+
+    if arch == "flux":
+        FluxControlNetModel = getattr(diffusers, "FluxControlNetModel", None)
+        FluxControlNetPipeline = getattr(diffusers, "FluxControlNetPipeline", None)
+        if FluxControlNetModel is None or FluxControlNetPipeline is None:
+            raise RuntimeError(
+                "installed diffusers does not provide FluxControlNetPipeline; please upgrade diffusers"
+            )
+
+        # Be tolerant to stale or invalid FLUX ControlNet repo IDs.
+        fallback_ids = [
+            controlnet_model_id,
+            "Shakker-Labs/FLUX.1-dev-ControlNet-Depth",
+            "jasperai/Flux.1-dev-Controlnet-Depth",
+            "XLabs-AI/flux-controlnet-depth-diffusers",
+        ]
+        unique_ids = []
+        for mid in fallback_ids:
+            if mid and mid not in unique_ids:
+                unique_ids.append(mid)
+
+        controlnet = None
+        last_exc = None
+        resolved_controlnet_id = controlnet_model_id
+        for mid in unique_ids:
+            try:
+                controlnet = FluxControlNetModel.from_pretrained(mid, torch_dtype=torch_dtype)
+                resolved_controlnet_id = mid
+                break
+            except Exception as exc:
+                last_exc = exc
+
+        if controlnet is None:
+            raise RuntimeError(
+                "could not load FLUX depth ControlNet. Tried: " + ", ".join(unique_ids)
+            ) from last_exc
+
+        base_fallback_ids = [
+            base_model_id,
+            "black-forest-labs/FLUX.1-dev",
+            "black-forest-labs/FLUX.1-schnell",
+            "camenduru/FLUX.1-dev-diffusers",
+            "ChuckMcSneed/FLUX.1-dev",
+        ]
+        unique_base_ids = []
+        for mid in base_fallback_ids:
+            if mid and mid not in unique_base_ids:
+                unique_base_ids.append(mid)
+
+        pipe = None
+        last_base_exc = None
+        resolved_base_model_id = base_model_id
+        loaded_with_balanced_map = False
+        for mid in unique_base_ids:
+            try:
+                use_balanced_map = bool(
+                    torch.cuda.is_available()
+                    and requested_cuda_device is None
+                    and int(torch.cuda.device_count()) > 1
+                )
+                load_kwargs = {
+                    "controlnet": controlnet,
+                    "torch_dtype": torch_dtype,
+                }
+                if use_balanced_map:
+                    load_kwargs["device_map"] = "balanced"
+                    load_kwargs["max_memory"] = _build_balanced_max_memory_map(torch)
+                pipe = FluxControlNetPipeline.from_pretrained(
+                    mid,
+                    **load_kwargs,
+                )
+                resolved_base_model_id = mid
+                loaded_with_balanced_map = use_balanced_map
+                break
+            except Exception as exc:
+                last_base_exc = exc
+
+        if pipe is None:
+            raise RuntimeError(
+                "could not load FLUX base pipeline. Tried: "
+                + ", ".join(unique_base_ids)
+                + ". If you want BFL official models, run `hf auth login` and request access on Hugging Face."
+            ) from last_base_exc
+
+        base_model_id = resolved_base_model_id
+        controlnet_model_id = resolved_controlnet_id
+        if loaded_with_balanced_map:
+            logger.info("Loaded FLUX pipeline with balanced multi-GPU dispatch")
+    else:
+        ControlNetModel = getattr(diffusers, "ControlNetModel")
+        StableDiffusionXLControlNetPipeline = getattr(diffusers, "StableDiffusionXLControlNetPipeline")
+        controlnet = ControlNetModel.from_pretrained(controlnet_model_id, torch_dtype=torch_dtype)
+        pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+            base_model_id,
+            controlnet=controlnet,
+            torch_dtype=torch_dtype,
+            use_safetensors=True,
+        )
+
+    if torch.cuda.is_available():
+        cuda_candidates = _build_cuda_candidate_ids(torch, requested_cuda_device=requested_cuda_device)
+        device = None
+        last_cuda_exc = None
+
+        # If already dispatched by Accelerate device_map, don't move modules again.
+        hf_map = getattr(pipe, "hf_device_map", None)
+        if isinstance(hf_map, dict) and hf_map:
+            gpu_ids = set()
+            for v in hf_map.values():
+                if isinstance(v, int):
+                    gpu_ids.add(v)
+                elif isinstance(v, str) and v.startswith("cuda"):
+                    try:
+                        gpu_ids.add(int(v.split(":", 1)[1]))
+                    except Exception:
+                        gpu_ids.add(0)
+            if gpu_ids:
+                if len(gpu_ids) > 1:
+                    device = "cuda:balanced:" + ",".join(str(i) for i in sorted(gpu_ids))
+                else:
+                    device = f"cuda:{sorted(gpu_ids)[0]}"
+
+                # In some FLUX+ControlNet setups, balanced dispatch can leave
+                # controlnet on CPU while hidden states are on CUDA, causing
+                # matmul device mismatch. Pin controlnet to transformer device.
+                if arch == "flux" and hasattr(pipe, "controlnet") and hasattr(pipe, "transformer"):
+                    try:
+                        exec_dev = getattr(pipe, "_execution_device", None)
+                        exec_dev = str(exec_dev) if exec_dev is not None else ""
+                        tr_dev = str(next(pipe.transformer.parameters()).device)
+                        target_dev = None
+
+                        # Prefer the pipeline execution device when available.
+                        if exec_dev.startswith("cuda"):
+                            target_dev = exec_dev
+
+                        # If transformer is already concretely on CUDA, use it.
+                        if target_dev is None and tr_dev.startswith("cuda"):
+                            target_dev = tr_dev
+
+                        # As a stable fallback in balanced mode, prefer the
+                        # first CUDA device rather than the highest index.
+                        if target_dev is None and gpu_ids:
+                            target_dev = f"cuda:{sorted(gpu_ids)[0]}"
+
+                        if target_dev is not None:
+                            pipe.controlnet = pipe.controlnet.to(target_dev)
+                            logger.info("Pinned FLUX controlnet device to %s", target_dev)
+                    except Exception:
+                        pass
+
+        # FLUX pipelines usually sit right at VRAM limits on 16GB cards when fully
+        # moved to CUDA. Prefer CPU offload first to preserve runtime headroom.
+        if device is None and arch == "flux" and hasattr(pipe, "enable_model_cpu_offload") and cuda_candidates:
+            offload_idx = cuda_candidates[0]
+            try:
+                pipe.enable_model_cpu_offload(gpu_id=offload_idx)
+                device = f"cpu_offload:cuda:{offload_idx}"
+            except Exception as exc:
+                last_cuda_exc = exc
+                device = None
+
+        if device is None:
+            for idx in cuda_candidates:
+                try:
+                    device = f"cuda:{idx}"
+                    pipe = pipe.to(device)
+                    try:
+                        pipe.enable_xformers_memory_efficient_attention()
+                    except Exception:
+                        pass
+                    break
+                except torch.OutOfMemoryError as exc:
+                    last_cuda_exc = exc
+                    try:
+                        torch.cuda.empty_cache()
+                    except Exception:
+                        pass
+                    device = None
+
+        if device is None:
+            # If full placement fails, try CPU offload for large pipelines (e.g. FLUX).
+            if hasattr(pipe, "enable_model_cpu_offload") and cuda_candidates:
+                offload_idx = cuda_candidates[0]
+                try:
+                    pipe.enable_model_cpu_offload(gpu_id=offload_idx)
+                    device = f"cpu_offload:cuda:{offload_idx}"
+                except Exception:
+                    device = None
+
+        # Extra memory guards; noop if unsupported by the selected pipeline.
+        try:
+            pipe.enable_attention_slicing("max")
+        except Exception:
+            pass
+        try:
+            pipe.enable_vae_slicing()
+        except Exception:
+            pass
+        try:
+            pipe.enable_vae_tiling()
+        except Exception:
+            pass
+
+        if device is None:
+            if last_cuda_exc is not None:
+                raise RuntimeError(
+                    "insufficient VRAM on available GPUs; tried GPUs "
+                    + ", ".join(str(i) for i in cuda_candidates)
+                ) from last_cuda_exc
+            device = "cpu"
+            pipe = pipe.to(device)
+    else:
+        device = "cpu"
+        pipe = pipe.to(device)
+
+    py_pipe_cache[key] = (pipe, device, arch)
+    return pipe, device, arch
+
+
+def _render_with_python_controlnet(
+    prompt,
+    depth_data_url,
+    building_mask_data_url=None,
+    depth_invert=False,
+    negative_prompt="",
+    width=1024,
+    height=1024,
+    num_inference_steps=28,
+    guidance_scale=7.5,
+    controlnet_conditioning_scale=1.0,
+    base_model_id="black-forest-labs/FLUX.1-dev",
+    controlnet_model_id="Shakker-Labs/FLUX.1-dev-ControlNet-Depth",
+    seed=None,
+    requested_cuda_device=None,
+    flux_max_sequence_length=128,
+):
+    try:
+        torch = importlib.import_module("torch")
+        Image = importlib.import_module("PIL.Image")
+    except Exception as exc:
+        raise RuntimeError(
+            "missing python backend deps. install: pip install torch diffusers transformers accelerate safetensors pillow"
+        ) from exc
+
+    tgt_w = max(64, int(width))
+    tgt_h = max(64, int(height))
+    depth_png = _decode_data_url_png(depth_data_url)
+    depth_img_l = Image.open(BytesIO(depth_png)).convert("L").resize((tgt_w, tgt_h))
+    depth_np = np.array(depth_img_l, dtype=np.float32)
+
+    mask_applied = False
+    depth_background_mode = "none"
+    depth_background_value = None
+    if building_mask_data_url and isinstance(building_mask_data_url, str):
+        try:
+            mask_png = _decode_data_url_png(building_mask_data_url)
+            mask_img_l = Image.open(BytesIO(mask_png)).convert("L").resize((tgt_w, tgt_h))
+            mask_np = np.array(mask_img_l, dtype=np.float32) > 20.0
+
+            if np.any(mask_np):
+                vals = depth_np[mask_np]
+                lo = float(np.percentile(vals, 2.0))
+                hi = float(np.percentile(vals, 98.0))
+                if hi <= lo:
+                    lo = float(np.min(vals))
+                    hi = float(np.max(vals) + 1.0)
+
+                norm = np.clip((depth_np - lo) / max(1e-6, hi - lo), 0.0, 1.0)
+                gamma = 0.75  # expands depth contrast for near/far separation
+                norm = np.power(norm, gamma)
+
+                # Keep out-of-mask area neutral so ControlNet focuses on volume geometry
+                # instead of interpreting the whole background as a very near/far plane.
+                neutral = float(np.median(norm[mask_np]))
+                neutral = float(np.clip(neutral, 0.35, 0.65))
+                depth_np = np.where(mask_np, norm * 255.0, neutral * 255.0)
+
+                depth_background_mode = "neutral_median"
+                depth_background_value = neutral
+                mask_applied = True
+            else:
+                depth_np[:] = 127.5
+                depth_background_mode = "neutral_constant"
+                depth_background_value = 0.5
+        except Exception:
+            # Fallback safely if mask decode fails.
+            pass
+
+    if not mask_applied:
+        lo = float(np.percentile(depth_np, 2.0))
+        hi = float(np.percentile(depth_np, 98.0))
+        if hi <= lo:
+            lo = float(np.min(depth_np))
+            hi = float(np.max(depth_np) + 1.0)
+        norm = np.clip((depth_np - lo) / max(1e-6, hi - lo), 0.0, 1.0)
+        gamma = 0.75
+        depth_np = np.power(norm, gamma) * 255.0
+
+    if depth_invert:
+        depth_np = 255.0 - depth_np
+
+    depth_img = Image.fromarray(depth_np.astype(np.uint8), mode="L").convert("RGB")
+
+    pipe, device, arch = _get_python_controlnet_pipeline(
+        base_model_id=base_model_id,
+        controlnet_model_id=controlnet_model_id,
+        dtype_name="float16" if torch.cuda.is_available() else "float32",
+        requested_cuda_device=requested_cuda_device,
+    )
+
+    def _snap64(v):
+        return max(64, int(v) // 64 * 64)
+
+    def _run_pipe(run_w, run_h, run_steps, run_max_seq_len):
+        img_cond = depth_img.resize((run_w, run_h))
+        common_kwargs = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt or None,
+            "num_inference_steps": max(1, int(run_steps)),
+            "guidance_scale": float(guidance_scale),
+            "controlnet_conditioning_scale": float(controlnet_conditioning_scale),
+            "generator": generator,
+            "width": run_w,
+            "height": run_h,
+        }
+        if arch == "flux":
+            common_kwargs["max_sequence_length"] = int(max(64, run_max_seq_len))
+            return pipe(control_image=img_cond, **common_kwargs)
+        return pipe(image=img_cond, **common_kwargs)
+
+    generator = None
+    use_seed = None
+    if seed is not None:
+        try:
+            use_seed = int(seed)
+            gen_device = device if isinstance(device, str) and device.startswith("cuda") else "cpu"
+            generator = torch.Generator(device=gen_device).manual_seed(use_seed)
+        except Exception:
+            use_seed = None
+            generator = None
+
+    run_w = tgt_w
+    run_h = tgt_h
+    run_steps = max(1, int(num_inference_steps))
+    run_max_seq_len = max(64, int(flux_max_sequence_length))
+    oom_fallback_used = False
+
+    try:
+        out = _run_pipe(run_w, run_h, run_steps, run_max_seq_len)
+    except torch.OutOfMemoryError:
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+        except Exception:
+            pass
+
+        run_w = _snap64(max(256, int(tgt_w * 0.625)))
+        run_h = _snap64(max(256, int(tgt_h * 0.625)))
+        run_steps = max(8, int(run_steps * 0.60))
+        run_max_seq_len = max(96, min(run_max_seq_len, 128))
+        oom_fallback_used = True
+
+        try:
+            out = _run_pipe(run_w, run_h, run_steps, run_max_seq_len)
+        except torch.OutOfMemoryError as exc:
+            raise RuntimeError(
+                "CUDA OOM during python_controlnet render. "
+                f"Tried requested {tgt_w}x{tgt_h}/{num_inference_steps}/max_seq={flux_max_sequence_length} "
+                f"and fallback {run_w}x{run_h}/{run_steps}/max_seq={run_max_seq_len}."
+            ) from exc
+        logger.warning(
+            "python_controlnet OOM recovered via fallback from %sx%s/%s to %sx%s/%s",
+            tgt_w,
+            tgt_h,
+            int(num_inference_steps),
+            run_w,
+            run_h,
+            run_steps,
+        )
+    img = out.images[0]
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    out_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    out_data_url = f"data:image/png;base64,{out_b64}"
+
+    meta = {
+        "device": device,
+        "base_model_id": base_model_id,
+        "controlnet_model_id": controlnet_model_id,
+        "architecture": arch,
+        "width": int(width),
+        "height": int(height),
+        "steps": int(num_inference_steps),
+        "effective_width": int(run_w),
+        "effective_height": int(run_h),
+        "effective_steps": int(run_steps),
+        "flux_max_sequence_length": int(run_max_seq_len),
+        "oom_fallback_used": bool(oom_fallback_used),
+        "guidance_scale": float(guidance_scale),
+        "controlnet_conditioning_scale": float(controlnet_conditioning_scale),
+        "seed": use_seed,
+        "mask_applied": bool(mask_applied),
+        "depth_invert": bool(depth_invert),
+        "depth_background_mode": depth_background_mode,
+        "depth_background_value": depth_background_value,
+    }
+    return out_data_url, meta
+
+
+def _load_comfy_workflow(workflow_override):
+    if isinstance(workflow_override, dict) and workflow_override:
+        return copy.deepcopy(workflow_override)
+
+    wf_path = BASE_DIR / "comfyui-flux-depth-workflow.json"
+    if not wf_path.exists():
+        raise FileNotFoundError(
+            f"workflow file not found: {wf_path.name}. "
+            "Add it to the repo root or send workflow JSON in request body."
+        )
+    with open(wf_path) as fh:
+        return json.load(fh)
+
+
+def _inject_prompt_and_depth(workflow, prompt, uploaded_filename, uploaded_mask_filename=None):
+    """Best-effort workflow injection for ComfyUI API-format workflows."""
+    if not isinstance(workflow, dict):
+        raise ValueError("workflow must be a dict keyed by node id")
+
+    prompt_set = False
+    image_set = False
+    mask_set = False
+
+    # 1) Put prompt text into CLIPTextEncode-like nodes (prefer "positive" titled node if present)
+    ordered_nodes = list(workflow.items())
+    for _, node in ordered_nodes:
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") == "CLIPTextEncode":
+            inputs = node.setdefault("inputs", {})
+            if "text" in inputs and isinstance(inputs["text"], str):
+                if not prompt_set:
+                    inputs["text"] = prompt
+                    prompt_set = True
+
+    # fallback: any node with literal text input
+    if not prompt_set:
+        for _, node in ordered_nodes:
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs") or {}
+            if "text" in inputs and isinstance(inputs["text"], str):
+                inputs["text"] = prompt
+                prompt_set = True
+                break
+
+    # 2) Put uploaded filename into image-loader-like nodes
+    image_loader_types = {
+        "LoadImage",
+        "LoadImageMask",
+        "VHS_LoadImagePath",
+        "Image Load",
+    }
+    for _, node in ordered_nodes:
+        if not isinstance(node, dict):
+            continue
+        cls = node.get("class_type")
+        inputs = node.setdefault("inputs", {})
+        if cls in image_loader_types and "image" in inputs:
+            inputs["image"] = uploaded_filename
+            image_set = True
+
+    # fallback: any node input field literally named image with string value
+    if not image_set:
+        for _, node in ordered_nodes:
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs") or {}
+            if "image" in inputs and isinstance(inputs["image"], str):
+                inputs["image"] = uploaded_filename
+                image_set = True
+                break
+
+    if uploaded_mask_filename:
+        for _, node in ordered_nodes:
+            if not isinstance(node, dict):
+                continue
+            cls = node.get("class_type")
+            inputs = node.setdefault("inputs", {})
+            title = ((node.get("_meta") or {}).get("title") or "").lower()
+
+            if cls == "LoadImageMask":
+                if "image" in inputs and isinstance(inputs.get("image"), str):
+                    inputs["image"] = uploaded_mask_filename
+                    mask_set = True
+                if "mask" in inputs and isinstance(inputs.get("mask"), str):
+                    inputs["mask"] = uploaded_mask_filename
+                    mask_set = True
+
+            if cls == "LoadImage" and "mask" in title and "image" in inputs and isinstance(inputs.get("image"), str):
+                inputs["image"] = uploaded_mask_filename
+                mask_set = True
+
+        if not mask_set:
+            for _, node in ordered_nodes:
+                if not isinstance(node, dict):
+                    continue
+                inputs = node.get("inputs") or {}
+                for key in ("mask", "image_mask"):
+                    if key in inputs and isinstance(inputs[key], str):
+                        inputs[key] = uploaded_mask_filename
+                        mask_set = True
+                        break
+                if mask_set:
+                    break
+
+    if not image_set:
+        raise ValueError("could not inject depth image into workflow (no image loader found)")
+
+    return workflow
+
+
+def _http_post_json(url, payload, timeout=30, extra_headers=None):
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if isinstance(extra_headers, dict):
+        headers.update(extra_headers)
+    req = urlrequest.Request(
+        url,
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            text = raw.decode("utf-8", errors="replace")
+            return resp.status, (json.loads(text) if text else {})
+    except urlerror.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} POST {url}: {text[:300]}") from exc
+    except urlerror.URLError as exc:
+        raise RuntimeError(f"POST {url} failed: {exc.reason}") from exc
+
+
+def _http_get_json(url, timeout=30):
+    req = urlrequest.Request(url, method="GET")
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            text = raw.decode("utf-8", errors="replace")
+            return resp.status, (json.loads(text) if text else {})
+    except urlerror.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} GET {url}: {text[:300]}") from exc
+    except urlerror.URLError as exc:
+        raise RuntimeError(f"GET {url} failed: {exc.reason}") from exc
+
+
+def _http_get_bytes(url, params=None, timeout=30):
+    full_url = url
+    if params:
+        full_url = f"{url}?{urlparse.urlencode(params)}"
+    req = urlrequest.Request(full_url, method="GET")
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as resp:
+            return resp.status, resp.read()
+    except urlerror.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} GET {full_url}: {text[:300]}") from exc
+    except urlerror.URLError as exc:
+        raise RuntimeError(f"GET {full_url} failed: {exc.reason}") from exc
+
+
+def _http_post_multipart(url, fields, files, timeout=30, extra_headers=None):
+    boundary = f"----fp-boundary-{uuid.uuid4().hex}"
+    body = bytearray()
+
+    for key, val in (fields or {}).items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8"))
+        body.extend(str(val).encode("utf-8"))
+        body.extend(b"\r\n")
+
+    for key, file_info in (files or {}).items():
+        filename = file_info.get("filename", "upload.bin")
+        content_type = file_info.get("content_type", "application/octet-stream")
+        content = file_info.get("content", b"")
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            f'Content-Disposition: form-data; name="{key}"; filename="{filename}"\r\n'.encode("utf-8")
+        )
+        body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        body.extend(content)
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if isinstance(extra_headers, dict):
+        headers.update(extra_headers)
+    req = urlrequest.Request(
+        url,
+        data=bytes(body),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            text = raw.decode("utf-8", errors="replace")
+            return resp.status, (json.loads(text) if text else {})
+    except urlerror.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} POST {url}: {text[:300]}") from exc
+    except urlerror.URLError as exc:
+        raise RuntimeError(f"POST {url} failed: {exc.reason}") from exc
+
+
+def _pick_openai_image_size(width, height):
+    # Keep to common currently-supported sizes for cloud image generation.
+    choices = [(1024, 1024), (1024, 1536), (1536, 1024)]
+    tw = max(256, int(width))
+    th = max(256, int(height))
+    best = min(choices, key=lambda wh: abs(wh[0] - tw) + abs(wh[1] - th))
+    return f"{best[0]}x{best[1]}"
+
+
+def _extract_openai_image_data_url(resp_json):
+    data = (resp_json or {}).get("data")
+    if not isinstance(data, list) or not data:
+        raise RuntimeError("OpenAI returned no image data")
+    first = data[0] or {}
+    b64 = first.get("b64_json")
+    if b64 and isinstance(b64, str):
+        return f"data:image/png;base64,{b64}"
+    url = first.get("url")
+    if url and isinstance(url, str):
+        _, img_bytes = _http_get_bytes(url, timeout=90)
+        out_b64 = base64.b64encode(img_bytes).decode("ascii")
+        return f"data:image/png;base64,{out_b64}"
+    raise RuntimeError("OpenAI image response missing b64_json/url")
+
+
+def _render_with_openai(
+    prompt,
+    depth_data_url,
+    openai_api_key=None,
+    model="gpt-image-1",
+    quality="medium",
+    width=1024,
+    height=1024,
+):
+    api_key = str(openai_api_key or os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("missing OpenAI API key (provide openai_api_key or set OPENAI_API_KEY)")
+
+    base_url = "https://api.openai.com/v1/images"
+    size = _pick_openai_image_size(width, height)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    clean_quality = str(quality or "medium").strip().lower()
+    if clean_quality not in {"low", "medium", "high", "auto"}:
+        clean_quality = "medium"
+
+    used_endpoint = "generations"
+    used_depth_reference = False
+    first_error = None
+
+    # First attempt: edits endpoint with the depth map as reference image.
+    try:
+        depth_png = _decode_data_url_png(depth_data_url)
+        fields = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "quality": clean_quality,
+        }
+        files = {
+            "image": {
+                "filename": "depth.png",
+                "content_type": "image/png",
+                "content": depth_png,
+            }
+        }
+        _, payload = _http_post_multipart(
+            f"{base_url}/edits",
+            fields=fields,
+            files=files,
+            timeout=180,
+            extra_headers=headers,
+        )
+        out_data_url = _extract_openai_image_data_url(payload)
+        used_endpoint = "edits"
+        used_depth_reference = True
+    except Exception as exc:
+        first_error = str(exc)
+        # Fallback: plain prompt generation.
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "quality": clean_quality,
+        }
+        _, resp = _http_post_json(
+            f"{base_url}/generations",
+            payload,
+            timeout=180,
+            extra_headers=headers,
+        )
+        out_data_url = _extract_openai_image_data_url(resp)
+
+    meta = {
+        "provider": "openai",
+        "model": model,
+        "quality": clean_quality,
+        "size": size,
+        "requested_width": int(width),
+        "requested_height": int(height),
+        "endpoint": used_endpoint,
+        "used_depth_reference": bool(used_depth_reference),
+        "edits_error": first_error,
+    }
+    return out_data_url, meta
+
+
+def _render_with_comfy_local(
+    comfy_url,
+    prompt,
+    depth_data_url,
+    building_mask_data_url=None,
+    depth_invert=False,
+    workflow_override=None,
+):
+    png_bytes = _decode_data_url_png(depth_data_url)
+    if depth_invert:
+        try:
+            Image = importlib.import_module("PIL.Image")
+            depth_img = Image.open(BytesIO(png_bytes)).convert("L")
+            depth_np = np.array(depth_img, dtype=np.uint8)
+            depth_np = (255 - depth_np).astype(np.uint8)
+            out_buf = BytesIO()
+            Image.fromarray(depth_np, mode="L").save(out_buf, format="PNG")
+            png_bytes = out_buf.getvalue()
+        except Exception:
+            # Keep original depth if inversion preprocessing fails.
+            pass
+    mask_png_bytes = None
+    if building_mask_data_url and isinstance(building_mask_data_url, str):
+        try:
+            mask_png_bytes = _decode_data_url_png(building_mask_data_url)
+        except Exception:
+            mask_png_bytes = None
+
+    # Upload depth image into ComfyUI input folder
+    file_name = f"depth_{uuid.uuid4().hex[:10]}.png"
+    upload_url = f"{comfy_url}/upload/image"
+    _, upj = _http_post_multipart(
+        upload_url,
+        fields={"type": "input", "overwrite": "true"},
+        files={
+            "image": {
+                "filename": file_name,
+                "content_type": "image/png",
+                "content": png_bytes,
+            }
+        },
+        timeout=30,
+    )
+    uploaded_name = upj.get("name") or file_name
+
+    uploaded_mask_name = None
+    if mask_png_bytes:
+        mask_file_name = f"mask_{uuid.uuid4().hex[:10]}.png"
+        _, mskj = _http_post_multipart(
+            upload_url,
+            fields={"type": "input", "overwrite": "true"},
+            files={
+                "image": {
+                    "filename": mask_file_name,
+                    "content_type": "image/png",
+                    "content": mask_png_bytes,
+                }
+            },
+            timeout=30,
+        )
+        uploaded_mask_name = mskj.get("name") or mask_file_name
+
+    # Prepare prompt payload
+    wf = _load_comfy_workflow(workflow_override)
+    wf = _inject_prompt_and_depth(wf, prompt, uploaded_name, uploaded_mask_name)
+
+    submit_url = f"{comfy_url}/prompt"
+    client_id = uuid.uuid4().hex
+    _, sbj = _http_post_json(
+        submit_url,
+        payload={"prompt": wf, "client_id": client_id},
+        timeout=30,
+    )
+    prompt_id = sbj.get("prompt_id")
+    if not prompt_id:
+        raise RuntimeError("ComfyUI did not return prompt_id")
+
+    # Poll history for completion
+    history_url = f"{comfy_url}/history/{prompt_id}"
+    deadline = time.time() + 180
+    history_obj = None
+    while time.time() < deadline:
+        _, hj = _http_get_json(history_url, timeout=20)
+        if isinstance(hj, dict) and hj.get(prompt_id):
+            history_obj = hj[prompt_id]
+            break
+        time.sleep(1.0)
+
+    if history_obj is None:
+        raise TimeoutError("ComfyUI generation timed out waiting for history")
+
+    outputs = history_obj.get("outputs") or {}
+    image_desc = None
+    for _, out in outputs.items():
+        imgs = out.get("images") if isinstance(out, dict) else None
+        if imgs:
+            image_desc = imgs[0]
+            break
+
+    if not image_desc:
+        raise RuntimeError("ComfyUI returned no output images")
+
+    filename = image_desc.get("filename")
+    subfolder = image_desc.get("subfolder", "")
+    img_type = image_desc.get("type", "output")
+    if not filename:
+        raise RuntimeError("output image descriptor missing filename")
+
+    view_url = f"{comfy_url}/view"
+    _, out_bytes = _http_get_bytes(
+        view_url,
+        params={"filename": filename, "subfolder": subfolder, "type": img_type},
+        timeout=40,
+    )
+
+    out_b64 = base64.b64encode(out_bytes).decode("ascii")
+    out_data_url = f"data:image/png;base64,{out_b64}"
+    meta = {
+        "comfy_url": comfy_url,
+        "prompt_id": prompt_id,
+        "mask_uploaded": bool(uploaded_mask_name),
+        "depth_invert": bool(depth_invert),
+        "output": {
+            "filename": filename,
+            "subfolder": subfolder,
+            "type": img_type,
+        },
+    }
+    return out_data_url, meta
 
 
 # ── query helpers ─────────────────────────────────────────────────────────────

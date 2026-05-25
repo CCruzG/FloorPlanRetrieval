@@ -1,0 +1,25 @@
+{
+  "1": {
+    "inputs": {
+      "image": "depth_input.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Depth Input"
+    }
+  },
+  "2": {
+    "inputs": {
+      "images": [
+        "1",
+        0
+      ],
+      "filename_prefix": "render_from_depth"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Output"
+    }
+  }
+}

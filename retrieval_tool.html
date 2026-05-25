@@ -30,38 +30,169 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 
 #body { display:flex; flex:1; overflow:hidden; }
 
+#viewer-shell { flex:1; display:flex; flex-direction:column; min-width:0; }
+#view-tabs { height:34px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; padding:0 10px; background:var(--surface); }
+.view-tab { border:1px solid var(--border2); background:transparent; color:var(--muted); border-radius:4px; padding:5px 10px; font-family:var(--mono); font-size:11px; cursor:pointer; transition:all .12s; }
+.view-tab:hover { color:var(--text); border-color:var(--accent); }
+.view-tab.active { color:#fff; border-color:var(--accent); background:rgba(59,130,246,.22); }
+.view-panel { flex:1; min-height:0; position:relative; }
+#panel-2d { display:flex; }
+#panel-3d { display:none; flex-direction:column; background:#f0f0f0; }
+
+#viewer-3d-toolbar { height:36px; border-bottom:1px solid #d6d6d6; display:flex; align-items:center; gap:8px; padding:0 10px; color:#444; background:#fafafa; }
+#viewer-3d-status { font-size:11px; color:#666; }
+#viewer-3d { flex:1; min-height:0; position:relative; }
+#viewer-3d-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:12px; pointer-events:none; }
+#capture-panel { position:absolute; left:10px; top:46px; width:220px; background:rgba(255,255,255,0.92); border:1px solid #d1d5db; border-radius:8px; padding:8px; display:none; backdrop-filter:blur(3px); }
+#capture-panel.show { display:block; }
+#capture-panel.collapsed #capture-body { display:none; }
+#capture-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:6px; }
+#capture-switch { display:flex; gap:6px; margin-bottom:6px; }
+.capture-tab { flex:1; border:1px solid #cbd5e1; border-radius:5px; background:#fff; color:#4b5563; font-family:var(--mono); font-size:10px; padding:4px 6px; cursor:pointer; }
+.capture-tab.active { border-color:#3b82f6; background:#dbeafe; color:#1e3a8a; }
+#capture-active {
+  border:1px solid #d1d5db;
+  border-radius:6px;
+  background:#f8fafc;
+  overflow:hidden;
+}
+#capture-active-img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+#capture-active-label { font-size:10px; color:#4b5563; text-align:center; padding:4px; border-top:1px solid #e5e7eb; background:#fff; }
+
+#render-panel {
+  position:absolute;
+  right:10px;
+  top:10px;
+  width:300px;
+  max-height:calc(100% - 20px);
+  overflow:auto;
+  background:rgba(255,255,255,0.95);
+  border:1px solid #d1d5db;
+  border-radius:10px;
+  padding:10px;
+  backdrop-filter:blur(3px);
+}
+#render-panel.collapsed #render-body { display:none; }
+#render-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:8px; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.panel-collapse-btn {
+  border:1px solid #cbd5e1;
+  border-radius:5px;
+  background:#fff;
+  color:#374151;
+  font-family:var(--mono);
+  font-size:10px;
+  line-height:1;
+  padding:3px 6px;
+  cursor:pointer;
+}
+.panel-collapse-btn:hover { border-color:#3b82f6; color:#1d4ed8; }
+.render-row { display:flex; gap:6px; margin-bottom:7px; }
+.render-row label { width:70px; font-size:10px; color:#4b5563; padding-top:6px; }
+.render-row select, .render-row textarea {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:#111827;
+  background:#fff;
+}
+.render-row input {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:#111827;
+  background:#fff;
+}
+.render-row textarea { resize:vertical; min-height:56px; }
+#python-grid-resolution {
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+#python-grid-resolution span {
+  font-size:10px;
+  color:#4b5563;
+}
+#backend-switch { display:flex; gap:8px; font-size:10px; color:#374151; padding-top:4px; }
+#backend-switch label { width:auto; padding-top:0; display:flex; align-items:center; gap:4px; cursor:pointer; }
+#comfy-row { align-items:flex-start; }
+#comfy-tools { display:flex; flex-direction:column; gap:6px; width:100%; }
+#comfy-inline { display:flex; gap:6px; }
+#comfy-status { font-size:10px; color:#4b5563; line-height:1.3; }
+#workflow-file { font-size:10px; }
+#workflow-name { font-size:10px; color:#4b5563; line-height:1.3; word-break:break-word; }
+#btn-check-comfy, #btn-clear-workflow {
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  background:#fff;
+  color:#374151;
+  font-family:var(--mono);
+  font-size:10px;
+  padding:6px;
+  cursor:pointer;
+}
+#btn-check-comfy:hover, #btn-clear-workflow:hover { border-color:#3b82f6; color:#1d4ed8; }
+#btn-generate-render {
+  width:100%;
+  margin-top:3px;
+  border:1px solid #3b82f6;
+  background:#3b82f6;
+  color:#fff;
+  border-radius:7px;
+  padding:8px;
+  font-family:var(--mono);
+  font-size:11px;
+  cursor:pointer;
+}
+#btn-generate-render:disabled { opacity:0.5; cursor:default; }
+#render-result { margin-top:8px; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; background:#f8fafc; display:none; }
+#render-result.show { display:block; }
+#render-result img { width:100%; display:block; }
+#render-result-meta { border-top:1px solid #e5e7eb; background:#fff; color:#4b5563; font-size:10px; padding:6px; line-height:1.4; }
+
 #sidebar { width:196px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
 .ss { padding:10px 12px; border-bottom:1px solid var(--border); }
-.sl { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.sl { font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
 
-.dz { border:1px dashed var(--border2); border-radius:4px; padding:6px 8px; cursor:pointer; color:var(--muted); font-size:10px; display:flex; align-items:center; gap:6px; margin-bottom:5px; transition:border-color .12s,background .12s; }
+.dz { border:1px dashed var(--border2); border-radius:4px; padding:6px 8px; cursor:pointer; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:5px; transition:border-color .12s,background .12s; }
 .dz:hover,.dz.over { border-color:var(--accent); background:rgba(59,130,246,.07); color:var(--text); }
 .dz input { display:none; }
-.dz-tag { font-size:9px; font-weight:500; color:var(--muted); flex-shrink:0; width:28px; }
+.dz-tag { font-size:11px; font-weight:500; color:var(--muted); flex-shrink:0; width:28px; }
 .dz-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 .field { display:flex; flex-direction:column; gap:3px; margin-bottom:8px; }
-.field label { font-size:10px; color:var(--muted); display:flex; justify-content:space-between; }
+.field label { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; }
 .field label span { color:var(--text); font-weight:500; }
 input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 
-.run-btn { width:100%; padding:7px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-family:var(--mono); font-size:11px; font-weight:500; cursor:pointer; letter-spacing:0.05em; transition:opacity .15s; margin-top:2px; }
+.run-btn { width:100%; padding:7px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-family:var(--mono); font-size:13px; font-weight:500; cursor:pointer; letter-spacing:0.05em; transition:opacity .15s; margin-top:2px; }
 .run-btn:hover { opacity:0.85; }
 .run-btn:disabled { opacity:0.3; cursor:default; }
 
-.clear-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; margin-top:6px; transition:all .12s; }
+.clear-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:12px; cursor:pointer; margin-top:6px; transition:all .12s; }
 .clear-btn:hover { border-color:var(--red); color:var(--red); }
 
-.stat { display:flex; justify-content:space-between; padding:2px 0; font-size:10px; border-bottom:1px solid var(--border); }
+.stat { display:flex; justify-content:space-between; padding:2px 0; font-size:12px; border-bottom:1px solid var(--border); }
 .stat:last-child { border:none; }
 .stat-k { color:var(--muted); }
 .stat-v { color:var(--text); font-weight:500; }
 
-.hint { font-size:10px; color:var(--muted); line-height:1.7; }
-.hint kbd { background:var(--surface2); border:1px solid var(--border2); border-radius:3px; padding:0 3px; font-family:var(--mono); font-size:9px; color:var(--text); }
+.hint { font-size:12px; color:var(--muted); line-height:1.7; }
+.hint kbd { background:var(--surface2); border:1px solid var(--border2); border-radius:3px; padding:0 3px; font-family:var(--mono); font-size:11px; color:var(--text); }
 
 #canvas-wrap { flex:1; display:flex; align-items:center; justify-content:center; background:var(--bg); position:relative; overflow:hidden; }
 #main-canvas { display:block; cursor:crosshair; border-radius:4px; }
+#btn-generate-3d { position:absolute; top:10px; right:10px; z-index:12; border:1px solid var(--border2); background:rgba(24,28,39,0.92); color:var(--text); border-radius:4px; padding:6px 8px; font-family:var(--mono); font-size:10px; letter-spacing:0.04em; cursor:pointer; }
+#btn-generate-3d:hover { border-color:var(--accent); color:#fff; }
 #canvas-hint { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); pointer-events:none; white-space:nowrap; }
 #coord-disp { position:absolute; top:10px; left:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
 #shift-ind { position:absolute; bottom:12px; right:12px; font-size:10px; color:var(--amber); pointer-events:none; display:none; }
@@ -213,16 +344,133 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
     </div>
   </div>
 
-  <div id="canvas-wrap">
-    <canvas id="main-canvas"></canvas>
-    <div id="coord-disp"></div>
-    <div id="canvas-hint">draw a boundary polygon to begin</div>
-    <div id="shift-ind">SHIFT LOCK</div>
-    <div id="canvas-palette">
-      <label><input type="checkbox" id="chk-show-bdry" checked onchange="showPlanBdry=this.checked;render()"> plan boundary</label>
-      <label><input type="checkbox" id="chk-show-win" checked onchange="showWindows=this.checked;render()"> windows</label>
-      <label><input type="checkbox" id="chk-show-idoors" checked onchange="showDoors=this.checked;render()"> int. doors</label>
-      <label><input type="checkbox" id="chk-show-common" checked onchange="showCommonArea=this.checked;render()"> common area</label>
+  <div id="viewer-shell">
+    <div id="view-tabs">
+      <button class="view-tab active" id="tab-2d" onclick="setViewTab('2d')">2D Plan</button>
+      <button class="view-tab" id="tab-3d" onclick="setViewTab('3d')">3D View</button>
+    </div>
+
+    <div id="panel-2d" class="view-panel">
+      <div id="canvas-wrap">
+        <canvas id="main-canvas"></canvas>
+        <button id="btn-generate-3d" onclick="onGenerate3DClick()">Generate 3D</button>
+        <div id="coord-disp"></div>
+        <div id="canvas-hint">draw a boundary polygon to begin</div>
+        <div id="shift-ind">SHIFT LOCK</div>
+        <div id="canvas-palette">
+          <label><input type="checkbox" id="chk-show-bdry" checked onchange="showPlanBdry=this.checked;render()"> plan boundary</label>
+          <label><input type="checkbox" id="chk-show-win" checked onchange="showWindows=this.checked;render()"> windows</label>
+          <label><input type="checkbox" id="chk-show-idoors" checked onchange="showDoors=this.checked;render()"> int. doors</label>
+          <label><input type="checkbox" id="chk-show-common" checked onchange="showCommonArea=this.checked;render()"> common area</label>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-3d" class="view-panel">
+      <div id="viewer-3d-toolbar">
+        <button class="clear-btn" style="margin:0;width:auto;padding:5px 8px" onclick="sync3DSceneIfNeeded(true)">Rebuild Scene</button>
+        <button class="clear-btn" style="margin:0;width:auto;padding:5px 8px" onclick="captureDepthAndPreview()">Capture Depth</button>
+        <span id="viewer-3d-status">Switch to 3D to initialize viewer.</span>
+      </div>
+      <div id="viewer-3d"></div>
+      <div id="render-panel">
+        <div class="panel-head">
+          <div id="render-title">Render Controls</div>
+          <button class="panel-collapse-btn" id="btn-collapse-render" onclick="togglePanelCollapse('render-panel','render-body','btn-collapse-render')">-</button>
+        </div>
+        <div id="render-body">
+        <div class="render-row">
+          <label for="render-style">Style</label>
+          <select id="render-style">
+            <option value="photorealistic" selected>photorealistic</option>
+            <option value="architectural sketch">architectural sketch</option>
+            <option value="conceptual massing">conceptual massing</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-view">View</label>
+          <select id="render-view">
+            <option value="exterior" selected>exterior</option>
+            <option value="street perspective">street perspective</option>
+            <option value="aerial three-quarter">aerial three-quarter</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-light">Lighting</label>
+          <select id="render-light">
+            <option value="golden hour" selected>golden hour</option>
+            <option value="overcast">overcast</option>
+            <option value="night">night</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-material">Material</label>
+          <select id="render-material">
+            <option value="timber" selected>timber</option>
+            <option value="concrete">concrete</option>
+            <option value="brick">brick</option>
+            <option value="glass">glass</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-prompt">Prompt</label>
+          <textarea id="render-prompt" placeholder="Add details: facade rhythm, glazing ratio, landscaping, people scale, camera mood..."></textarea>
+        </div>
+        <div class="render-row">
+          <label>Backend</label>
+          <div id="backend-switch">
+            <label><input type="radio" name="render-backend" value="openai" checked disabled> OpenAI (cloud)</label>
+          </div>
+        </div>
+        <div class="render-row" id="openai-row-api-key">
+          <label for="render-openai-key">OpenAI Key</label>
+          <input id="render-openai-key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+        </div>
+        <div class="render-row" id="openai-row-model">
+          <label for="render-openai-model">OpenAI Model</label>
+          <input id="render-openai-model" type="text" value="gpt-image-1" spellcheck="false">
+        </div>
+        <div class="render-row" id="openai-row-quality">
+          <label for="render-openai-quality">Quality</label>
+          <select id="render-openai-quality">
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="high">high</option>
+            <option value="auto">auto</option>
+          </select>
+        </div>
+        <div class="render-row" id="python-row-resolution">
+          <label>Resolution</label>
+          <div id="python-grid-resolution">
+            <input id="py-width" type="number" min="256" max="1536" step="64" value="1024" placeholder="width">
+            <span>x</span>
+            <input id="py-height" type="number" min="256" max="1536" step="64" value="1024" placeholder="height">
+          </div>
+        </div>
+        <button id="btn-generate-render" onclick="generateRenderMock()">Generate Render</button>
+        <div id="render-result">
+          <img id="render-result-img" alt="Generated render output">
+          <div id="render-result-meta"></div>
+        </div>
+        </div>
+      </div>
+      <div id="capture-panel">
+        <div class="panel-head" style="margin-bottom:6px;">
+          <div id="capture-title" style="margin-bottom:0;">Latest Capture</div>
+          <button class="panel-collapse-btn" id="btn-collapse-capture" onclick="togglePanelCollapse('capture-panel','capture-body','btn-collapse-capture')">-</button>
+        </div>
+        <div id="capture-body">
+          <div id="capture-switch">
+            <button class="capture-tab active" id="capture-tab-preview" onclick="setCaptureView('preview')">Preview</button>
+            <button class="capture-tab" id="capture-tab-depth" onclick="setCaptureView('depth')">Depth</button>
+          </div>
+          <div id="capture-active">
+            <img id="capture-active-img" alt="Captured image">
+            <div id="capture-active-label">Preview</div>
+          </div>
+        </div>
+      </div>
+      <div id="viewer-3d-empty">Select a retrieved plan, then click Generate 3D.</div>
     </div>
   </div>
 
@@ -309,20 +557,1057 @@ let cW=0,cH=0;
 
 const canvas=document.getElementById('main-canvas');
 const ctx=canvas.getContext('2d');
+const WORLD_SCALE=10;
+const ROOM_HEIGHT=2.8;
+const WINDOW_SILL_HEIGHT=1.0;
+const WINDOW_HEIGHT=1.2;
+const WINDOW_THICKNESS=0.08;
+const WINDOW_BALCONY_EDGE_TOL=0.12;
+const BALCONY_OPENING_DOOR_HEIGHT=2.2;
+const BALCONY_TYPE_ID=9;
+const BALCONY_FLOOR_THICKNESS=0.08;
+const BALCONY_PARAPET_HEIGHT=1.2;
+const BALCONY_PARAPET_THICKNESS=0.08;
+let activeTab='2d';
+let threeDepsPromise=null;
+const viewer3D={
+  initialized:false,
+  scene:null,
+  camera:null,
+  renderer:null,
+  controls:null,
+  grid:null,
+  planGroup:null,
+  lastFingerprint:null,
+  animId:0,
+};
+const renderCaptureState={
+  depthDataUrl:null,
+  maskDataUrl:null,
+  previewDataUrl:null,
+  capturedAt:null,
+  activeView:'preview',
+};
+const renderRequestState={
+  backend:'openai',
+  assembledPrompt:'',
+  lastResultDataUrl:null,
+  lastResultMeta:'',
+  workflowOverride:null,
+  workflowName:'',
+};
 
 // ── resize ────────────────────────────────────────────────────────────────
 function resize(){
+  if(activeTab==='3d'){
+    resize3DViewer();
+    return;
+  }
   const wrap=document.getElementById('canvas-wrap');
+  if(!wrap||wrap.clientWidth<40||wrap.clientHeight<40)return;
   const S=Math.min(wrap.clientWidth-32,wrap.clientHeight-32);
   cW=S;cH=S;
   const dpr=window.devicePixelRatio||1;
   canvas.width=S*dpr;canvas.height=S*dpr;
   canvas.style.width=S+'px';canvas.style.height=S+'px';
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.scale(dpr,dpr);
   render();
 }
 window.addEventListener('resize',resize);
 setTimeout(resize,0);
+
+function setViewer3DStatus(msg){
+  const el=document.getElementById('viewer-3d-status');
+  if(el)el.textContent=msg;
+}
+
+function updateCapturePanel(){
+  const panel=document.getElementById('capture-panel');
+  const activeImg=document.getElementById('capture-active-img');
+  const activeLabel=document.getElementById('capture-active-label');
+  const tabPreview=document.getElementById('capture-tab-preview');
+  const tabDepth=document.getElementById('capture-tab-depth');
+  if(!panel||!activeImg||!activeLabel||!tabPreview||!tabDepth)return;
+  if(renderCaptureState.previewDataUrl&&renderCaptureState.depthDataUrl){
+    const showPreview=renderCaptureState.activeView!=='depth';
+    activeImg.src=showPreview?renderCaptureState.previewDataUrl:renderCaptureState.depthDataUrl;
+    activeLabel.textContent=showPreview?'Preview':'Depth';
+    tabPreview.classList.toggle('active',showPreview);
+    tabDepth.classList.toggle('active',!showPreview);
+    panel.classList.add('show');
+  }else{
+    panel.classList.remove('show');
+  }
+}
+
+function setCaptureView(view){
+  renderCaptureState.activeView=view==='depth'?'depth':'preview';
+  updateCapturePanel();
+}
+
+function togglePanelCollapse(panelId,bodyId,btnId){
+  const panel=document.getElementById(panelId);
+  const body=document.getElementById(bodyId);
+  const btn=document.getElementById(btnId);
+  if(!panel||!body||!btn)return;
+  const collapsed=panel.classList.toggle('collapsed');
+  body.style.display=collapsed?'none':'';
+  btn.textContent=collapsed?'+':'-';
+}
+
+function getRenderBackend(){
+  return 'openai';
+}
+
+function toIntInput(id, fallback, minVal, maxVal){
+  const raw=(document.getElementById(id)?.value||'').trim();
+  let n=parseInt(raw,10);
+  if(Number.isNaN(n))n=fallback;
+  if(typeof minVal==='number')n=Math.max(minVal,n);
+  if(typeof maxVal==='number')n=Math.min(maxVal,n);
+  return n;
+}
+
+function toFloatInput(id, fallback, minVal, maxVal){
+  const raw=(document.getElementById(id)?.value||'').trim();
+  let n=parseFloat(raw);
+  if(Number.isNaN(n))n=fallback;
+  if(typeof minVal==='number')n=Math.max(minVal,n);
+  if(typeof maxVal==='number')n=Math.min(maxVal,n);
+  return n;
+}
+
+function updateBackendDependentUI(){
+  const openaiRowsVisible=true;
+
+  ['openai-row-api-key','openai-row-model','openai-row-quality'].forEach((id)=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=openaiRowsVisible?'flex':'none';
+  });
+
+  const resolutionRow=document.getElementById('python-row-resolution');
+  if(resolutionRow)resolutionRow.style.display='flex';
+}
+
+function getOpenAIRenderParams(){
+  const key=(document.getElementById('render-openai-key')?.value||'').trim();
+  const model=(document.getElementById('render-openai-model')?.value||'gpt-image-1').trim()||'gpt-image-1';
+  const quality=(document.getElementById('render-openai-quality')?.value||'medium').trim()||'medium';
+  const width=toIntInput('py-width',1024,256,2048);
+  const height=toIntInput('py-height',1024,256,2048);
+  return {key,model,quality,width,height};
+}
+
+function composeRenderPrompt(){
+  const style=document.getElementById('render-style')?.value||'photorealistic';
+  const view=document.getElementById('render-view')?.value||'exterior';
+  const lighting=document.getElementById('render-light')?.value||'golden hour';
+  const material=document.getElementById('render-material')?.value||'timber';
+  const free=(document.getElementById('render-prompt')?.value||'').trim();
+  const base=`${style} architectural render, ${view} view, ${lighting} lighting, ${material} facade, clean composition, realistic scale`;
+  return free?`${base}, ${free}`:base;
+}
+
+function updateRenderResultUI(dataUrl,meta){
+  const box=document.getElementById('render-result');
+  const img=document.getElementById('render-result-img');
+  const metaEl=document.getElementById('render-result-meta');
+  if(!box||!img||!metaEl)return;
+  img.src=dataUrl;
+  metaEl.textContent=meta;
+  box.classList.add('show');
+}
+
+async function parseApiResponse(resp){
+  const text=await resp.text();
+  let data=null;
+  try{data=text?JSON.parse(text):{};}catch{data=null;}
+  return {ok:resp.ok,status:resp.status,data,text};
+}
+
+function setComfyStatus(msg,isError=false){
+  const el=document.getElementById('comfy-status');
+  if(!el)return;
+  el.textContent=msg;
+  el.style.color=isError?'#b91c1c':'#4b5563';
+}
+
+async function checkComfyConnection(){
+  const comfyUrl=(document.getElementById('render-comfy-url')?.value||'http://127.0.0.1:8188').trim();
+  const btn=document.getElementById('btn-check-comfy');
+  if(btn)btn.disabled=true;
+  setComfyStatus('Checking connection...');
+  try{
+    const resp=await fetch('/comfy_health',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({comfy_url:comfyUrl}),
+    });
+    const parsed=await parseApiResponse(resp);
+    const data=parsed.data;
+    if(!parsed.ok){
+      const msg=(data&&data.error)?data.error:(parsed.text||`server ${parsed.status}`);
+      throw new Error(msg);
+    }
+    if(!data||data.error)throw new Error((data&&data.error)||'invalid server response');
+    setComfyStatus(`Connected: ${data.summary||'ComfyUI reachable.'}`);
+  }catch(err){
+    setComfyStatus(`Connection failed: ${err.message}`,true);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+function loadWorkflowOverride(input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(reader.result);
+      renderRequestState.workflowOverride=parsed;
+      renderRequestState.workflowName=file.name;
+      const el=document.getElementById('workflow-name');
+      if(el)el.textContent=`Using uploaded workflow: ${file.name}`;
+      setViewer3DStatus('Workflow override loaded.');
+    }catch(err){
+      renderRequestState.workflowOverride=null;
+      renderRequestState.workflowName='';
+      const el=document.getElementById('workflow-name');
+      if(el)el.textContent='Invalid workflow JSON. Using repo default.';
+      setViewer3DStatus(`Workflow parse error: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearWorkflowOverride(){
+  renderRequestState.workflowOverride=null;
+  renderRequestState.workflowName='';
+  const inEl=document.getElementById('workflow-file');
+  if(inEl)inEl.value='';
+  const nameEl=document.getElementById('workflow-name');
+  if(nameEl)nameEl.textContent='Using repo default: comfyui-flux-depth-workflow.json';
+  setViewer3DStatus('Workflow override cleared.');
+}
+
+async function generateRenderMock(){
+  const btn=document.getElementById('btn-generate-render');
+  if(!renderCaptureState.depthDataUrl||!renderCaptureState.previewDataUrl){
+    setViewer3DStatus('Capture depth first before generating render.');
+    return;
+  }
+
+  const backend='openai';
+  const prompt=composeRenderPrompt();
+  const openaiParams=getOpenAIRenderParams();
+  renderRequestState.backend=backend;
+  renderRequestState.assembledPrompt=prompt;
+
+  if(btn)btn.disabled=true;
+  const backendLabel='OpenAI cloud';
+  setViewer3DStatus(`Generating render (${backendLabel})…`);
+
+  try{
+    const resp=await fetch('/render',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        backend,
+        prompt,
+        depth_data_url:renderCaptureState.depthDataUrl,
+        building_mask_data_url:renderCaptureState.maskDataUrl,
+        // OpenAI backend parameters
+        openai_api_key:openaiParams.key||undefined,
+        openai_model:openaiParams.model,
+        openai_quality:openaiParams.quality,
+        openai_width:openaiParams.width,
+        openai_height:openaiParams.height,
+      }),
+    });
+    const parsed=await parseApiResponse(resp);
+    const data=parsed.data;
+    if(!parsed.ok){
+      const msg=(data&&data.error)?data.error:(parsed.text||`server ${parsed.status}`);
+      throw new Error(msg);
+    }
+    if(!data||data.error)throw new Error((data&&data.error)||'invalid server response');
+
+    const resultDataUrl=data.image_data_url;
+    const metaObj=data.meta||{};
+    const meta=`backend: ${backendLabel} | prompt: ${prompt} | id: ${metaObj.prompt_id||'n/a'}`;
+    renderRequestState.lastResultDataUrl=resultDataUrl;
+    renderRequestState.lastResultMeta=meta;
+    updateRenderResultUI(resultDataUrl,meta);
+    setViewer3DStatus('Render generated successfully.');
+  }catch(err){
+    setViewer3DStatus(`Render failed: ${err.message}`);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+function captureCanvasImageData(srcCanvas){
+  const w=srcCanvas.width,h=srcCanvas.height;
+  const out=document.createElement('canvas');
+  out.width=w;out.height=h;
+  const octx=out.getContext('2d');
+  octx.drawImage(srcCanvas,0,0);
+  return octx.getImageData(0,0,w,h);
+}
+
+function imageDataToDataUrl(imgData){
+  const out=document.createElement('canvas');
+  out.width=imgData.width;
+  out.height=imgData.height;
+  const octx=out.getContext('2d');
+  octx.putImageData(imgData,0,0);
+  return out.toDataURL('image/png');
+}
+
+function percentileFromHist(hist,total,pct){
+  const target=Math.max(0,Math.min(total-1,Math.floor((pct/100)*total)));
+  let acc=0;
+  for(let i=0;i<256;i++){
+    acc+=hist[i];
+    if(acc>target)return i;
+  }
+  return 255;
+}
+
+function makeBinaryMaskDataUrl(maskImg){
+  const out=new ImageData(new Uint8ClampedArray(maskImg.data),maskImg.width,maskImg.height);
+  const d=out.data;
+  for(let i=0;i<d.length;i+=4){
+    const v=d[i]>20?255:0;
+    d[i]=v;d[i+1]=v;d[i+2]=v;d[i+3]=255;
+  }
+  return imageDataToDataUrl(out);
+}
+
+function decodePackedDepth01(r,g,b,a){
+  // Using BasicDepthPacking: depth is stored in the red channel.
+  return r/255;
+}
+
+function depth01ToViewZ(depth01,near,far){
+  const z=depth01*2-1;
+  return (2*near*far)/Math.max(1e-6,(far+near - z*(far-near)));
+}
+
+function makeDepthDataUrlFromImageData(depthImg,maskImg,near,far){
+  const out=new ImageData(new Uint8ClampedArray(depthImg.data),depthImg.width,depthImg.height);
+  const src=depthImg.data;
+  const d=out.data;
+  const m=maskImg?.data||null;
+
+  const vals=[];
+  let count=0;
+  for(let i=0;i<src.length;i+=4){
+    const inside=m?m[i]>20:true;
+    if(!inside)continue;
+    const depth01=decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3]);
+    const viewZ=depth01ToViewZ(depth01,near,far);
+    vals.push(viewZ);
+    count++;
+  }
+
+  if(count===0){
+    for(let i=0;i<d.length;i+=4){
+      d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=255;
+    }
+    return imageDataToDataUrl(out);
+  }
+
+  vals.sort((a,b)=>a-b);
+  const lo=vals[Math.max(0,Math.floor(0.02*vals.length))];
+  const hi=Math.max(lo+1e-6,vals[Math.max(0,Math.floor(0.98*vals.length))]);
+  const gamma=0.75; // expand perceived depth differences inside volume
+
+  for(let i=0;i<src.length;i+=4){
+    const inside=m?m[i]>20:true;
+    if(!inside){
+      d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=255;
+      continue;
+    }
+    const depth01=decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3]);
+    const viewZ=depth01ToViewZ(depth01,near,far);
+    const nv=Math.max(0,Math.min(1,(viewZ-lo)/(hi-lo)));
+    // Default to white-near / black-far to match common ControlNet depth priors.
+    const v=Math.round(255*(1-Math.pow(nv,gamma)));
+    d[i]=v;d[i+1]=v;d[i+2]=v;d[i+3]=255;
+  }
+  return imageDataToDataUrl(out);
+}
+
+function withCaptureVisibility(fn){
+  const touched=[];
+  const hide=(obj)=>{
+    if(obj&&obj.visible){
+      touched.push(obj);
+      obj.visible=false;
+    }
+  };
+
+  // Exclude helper geometry from conditioning captures.
+  hide(viewer3D.grid);
+  if(viewer3D.planGroup){
+    viewer3D.planGroup.traverse((obj)=>{
+      if(obj?.userData?.captureRole==='ground')hide(obj);
+    });
+  }
+
+  try{return fn();}
+  finally{touched.forEach((obj)=>{obj.visible=true;});}
+}
+
+function captureMaskImageData(scene,camera,renderer){
+  const prevOverride=scene.overrideMaterial;
+  const prevBg=scene.background;
+  const prevClr=renderer.getClearColor(new THREE.Color()).clone();
+  const prevAlpha=renderer.getClearAlpha();
+
+  const maskMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
+  scene.overrideMaterial=maskMat;
+  scene.background=new THREE.Color(0x000000);
+  renderer.setClearColor(0x000000,1);
+  renderer.render(scene,camera);
+  const maskImg=captureCanvasImageData(renderer.domElement);
+
+  scene.overrideMaterial=prevOverride||null;
+  scene.background=prevBg;
+  renderer.setClearColor(prevClr,prevAlpha);
+  maskMat.dispose();
+  return maskImg;
+}
+
+function loadScriptOnce(src){
+  return new Promise((resolve,reject)=>{
+    const existing=document.querySelector(`script[src="${src}"]`);
+    if(existing){
+      const isThreeCore=src.includes('three.min.js')&&window.THREE;
+      const isOrbit=src.includes('OrbitControls.js')&&window.THREE&&window.THREE.OrbitControls;
+      if(existing.dataset.loaded==='1'||isThreeCore||isOrbit)return resolve();
+      existing.addEventListener('load',()=>resolve(),{once:true});
+      existing.addEventListener('error',()=>reject(new Error(`failed to load ${src}`)),{once:true});
+      return;
+    }
+    const script=document.createElement('script');
+    script.src=src;
+    script.async=true;
+    script.onload=()=>{script.dataset.loaded='1';resolve();};
+    script.onerror=()=>reject(new Error(`failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+function ensureThreeDeps(){
+  if(window.THREE&&window.THREE.OrbitControls)return Promise.resolve();
+  if(threeDepsPromise)return threeDepsPromise;
+  threeDepsPromise=loadScriptOnce('https://unpkg.com/three@0.128.0/build/three.min.js')
+    .then(()=>loadScriptOnce('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js'));
+  return threeDepsPromise;
+}
+
+function buildPositiveGrid(size=10,step=0.5){
+  const verts=[];
+  for(let p=0;p<=size+1e-9;p+=step){
+    verts.push(0,0,p,size,0,p); // horizontal rows
+    verts.push(p,0,0,p,0,size); // vertical columns
+  }
+  const geom=new THREE.BufferGeometry();
+  geom.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  const mat=new THREE.LineBasicMaterial({color:0xd0d0d0,transparent:true,opacity:0.9});
+  const lines=new THREE.LineSegments(geom,mat);
+  lines.position.y=-0.002;
+
+  const borderGeom=new THREE.BufferGeometry();
+  borderGeom.setAttribute('position',new THREE.Float32BufferAttribute([
+    0,0,0, size,0,0,
+    size,0,0, size,0,size,
+    size,0,size, 0,0,size,
+    0,0,size, 0,0,0,
+  ],3));
+  const border=new THREE.LineSegments(borderGeom,new THREE.LineBasicMaterial({color:0x9ca3af}));
+  border.position.y=-0.001;
+
+  const g=new THREE.Group();
+  g.add(lines);
+  g.add(border);
+  return g;
+}
+
+async function init3DViewer(){
+  if(viewer3D.initialized)return;
+  setViewer3DStatus('Loading Three.js…');
+  await ensureThreeDeps();
+  const mount=document.getElementById('viewer-3d');
+  const w=Math.max(1,mount.clientWidth),h=Math.max(1,mount.clientHeight);
+
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xf0f0f0);
+
+  const camera=new THREE.PerspectiveCamera(60,w/h,0.01,100);
+  camera.position.set(5,12,15);
+  camera.lookAt(5,0,5);
+
+  const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+  renderer.setPixelRatio(window.devicePixelRatio||1);
+  renderer.setSize(w,h);
+  mount.appendChild(renderer.domElement);
+
+  const controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;
+  controls.target.set(5,0,5);
+
+  const amb=new THREE.AmbientLight(0xffffff,0.6);
+  scene.add(amb);
+  const dir=new THREE.DirectionalLight(0xffffff,0.8);
+  dir.position.set(1,2,1.5);
+  scene.add(dir);
+
+  const grid=buildPositiveGrid(10,0.5);
+  scene.add(grid);
+
+  const planGroup=new THREE.Group();
+  scene.add(planGroup);
+
+  viewer3D.scene=scene;
+  viewer3D.camera=camera;
+  viewer3D.renderer=renderer;
+  viewer3D.controls=controls;
+  viewer3D.grid=grid;
+  viewer3D.planGroup=planGroup;
+  viewer3D.initialized=true;
+
+  const animate=()=>{
+    viewer3D.animId=requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene,camera);
+  };
+  animate();
+  setViewer3DStatus('3D viewer ready.');
+}
+
+function resize3DViewer(){
+  if(!viewer3D.initialized)return;
+  const mount=document.getElementById('viewer-3d');
+  const w=Math.max(1,mount.clientWidth),h=Math.max(1,mount.clientHeight);
+  viewer3D.camera.aspect=w/h;
+  viewer3D.camera.updateProjectionMatrix();
+  viewer3D.renderer.setPixelRatio(window.devicePixelRatio||1);
+  viewer3D.renderer.setSize(w,h);
+}
+
+function clear3DPlanGroup(){
+  if(!viewer3D.planGroup)return;
+  viewer3D.planGroup.position.set(0,0,0);
+  while(viewer3D.planGroup.children.length){
+    const child=viewer3D.planGroup.children.pop();
+    if(child.geometry)child.geometry.dispose();
+    if(child.material){
+      if(Array.isArray(child.material))child.material.forEach(m=>m&&m.dispose&&m.dispose());
+      else if(child.material.dispose)child.material.dispose();
+    }
+    viewer3D.planGroup.remove(child);
+  }
+}
+
+function getCurrentPlanFingerprint(){
+  const s=getActiveFPState();
+  if(!s||selected===null)return null;
+  const r=results[selected]||{};
+  const fp=s.fp||{};
+  return[
+    selected,
+    fitMode?1:0,
+    r.name||fp.id||'plan',
+    r.rot||0,
+    r.mirror?1:0,
+    (fp.rooms||[]).length,
+    (fp.boundary||[]).length,
+  ].join('|');
+}
+
+function planVertexToXY(v){
+  if(Array.isArray(v))return [v[0],v[1]];
+  if(v&&typeof v==='object')return [v.x,v.y];
+  return [0,0];
+}
+
+function planPtToSceneXY(pt,state){
+  let [x,y]=planVertexToXY(pt);
+  const cen=(state.rot||state.mirror)?bdryCenter(state.fpBdry):null;
+  if(state.mirror)x=2*cen[0]-x;
+  if(state.rot)[x,y]=rotatePtAround([x,y],state.rot,cen);
+  x+=state.offset[0];
+  y+=state.offset[1];
+  return [x*WORLD_SCALE,y*WORLD_SCALE];
+}
+
+function shapeFromPlanPolygon(poly,state){
+  if(!poly||poly.length<3)return null;
+  const shape=new THREE.Shape();
+  poly.forEach((pt,i)=>{
+    const [x,z]=planPtToSceneXY(pt,state);
+    // ExtrudeGeometry is rotated later (rotateX(-PI/2)); negate here so
+    // extruded solids and box-based objects share the same plan-axis direction.
+    if(i===0)shape.moveTo(x,-z);
+    else shape.lineTo(x,-z);
+  });
+  shape.closePath();
+  return shape;
+}
+
+function roomTypeColor(){
+  // Keep the whole 3D massing monochrome for clearer volume reading.
+  return 0xb8b8b8;
+}
+
+function roomCentroidScene(room,state){
+  if(!room?.polygon?.length)return null;
+  let sx=0,sz=0;
+  room.polygon.forEach(pt=>{
+    const [x,z]=planPtToSceneXY(pt,state);
+    sx+=x;sz+=z;
+  });
+  return [sx/room.polygon.length,sz/room.polygon.length];
+}
+
+function bboxToSceneRect(bbox,state){
+  if(!Array.isArray(bbox)||bbox.length!==4)return null;
+  const [x1,y1,x2,y2]=bbox;
+  const corners=[
+    planPtToSceneXY([x1,y1],state),
+    planPtToSceneXY([x2,y1],state),
+    planPtToSceneXY([x2,y2],state),
+    planPtToSceneXY([x1,y2],state),
+  ];
+  const xs=corners.map(p=>p[0]);
+  const zs=corners.map(p=>p[1]);
+  return {
+    minX:Math.min(...xs),
+    maxX:Math.max(...xs),
+    minZ:Math.min(...zs),
+    maxZ:Math.max(...zs),
+  };
+}
+
+function closestPointOnSegment2D(px,pz,ax,az,bx,bz){
+  const dx=bx-ax,dz=bz-az;
+  const len2=dx*dx+dz*dz;
+  if(len2<1e-9)return {x:ax,z:az,t:0,d2:(px-ax)*(px-ax)+(pz-az)*(pz-az)};
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(pz-az)*dz)/len2));
+  const x=ax+t*dx,z=az+t*dz;
+  const d2=(px-x)*(px-x)+(pz-z)*(pz-z);
+  return {x,z,t,d2};
+}
+
+function closestSegmentOnPolygonScene(poly,state,px,pz){
+  if(!Array.isArray(poly)||poly.length<2)return null;
+  const pts=poly.map((pt)=>planPtToSceneXY(pt,state));
+  let best=null;
+  for(let i=0;i<pts.length;i++){
+    const [ax,az]=pts[i];
+    const [bx,bz]=pts[(i+1)%pts.length];
+    const cp=closestPointOnSegment2D(px,pz,ax,az,bx,bz);
+    if(!best||cp.d2<best.d2){
+      best={
+        x:cp.x,
+        z:cp.z,
+        d2:cp.d2,
+        ax,
+        az,
+        bx,
+        bz,
+      };
+    }
+  }
+  return best;
+}
+
+function closestSegmentOnBoundaryScene(boundary,state,px,pz){
+  if(!Array.isArray(boundary)||boundary.length<2)return null;
+  const pts=boundary.map((v)=>{
+    const [x,y]=planVertexToXY(v);
+    return planPtToSceneXY([x,y],state);
+  });
+  let best=null;
+  for(let i=0;i<pts.length;i++){
+    const [ax,az]=pts[i];
+    const [bx,bz]=pts[(i+1)%pts.length];
+    const cp=closestPointOnSegment2D(px,pz,ax,az,bx,bz);
+    if(!best||cp.d2<best.d2){
+      best={x:cp.x,z:cp.z,d2:cp.d2,ax,az,bx,bz};
+    }
+  }
+  return best;
+}
+
+function isBalconyRoom(room){
+  const st=room?.source_type??room?.type;
+  return st===BALCONY_TYPE_ID;
+}
+
+function resolveWindowRefRooms(win,rooms){
+  const refs=Array.isArray(win?.room_refs)?win.room_refs:[];
+  if(!refs.length)return [];
+  const seen=new Set();
+  const out=[];
+  refs.forEach((ref)=>{
+    const refStr=String(ref);
+    let room=rooms.find((r)=>String(r.id)===refStr);
+    if(!room){
+      const idx=parseInt(refStr,10);
+      if(Number.isInteger(idx)&&idx>=0&&idx<rooms.length)room=rooms[idx];
+    }
+    if(!room)return;
+    const key=String(room.id??'');
+    if(seen.has(key))return;
+    seen.add(key);
+    out.push(room);
+  });
+  return out;
+}
+
+function isBalconyFacingAnchorSegment(seg,balconyRooms,state){
+  if(!seg||!Array.isArray(balconyRooms)||!balconyRooms.length)return false;
+  const mx=(seg.ax+seg.bx)/2;
+  const mz=(seg.az+seg.bz)/2;
+  const sdx=seg.bx-seg.ax;
+  const sdz=seg.bz-seg.az;
+  const slen=Math.hypot(sdx,sdz);
+  if(slen<1e-6)return false;
+
+  for(const room of balconyRooms){
+    const bseg=closestSegmentOnPolygonScene(room.polygon,state,mx,mz);
+    if(!bseg)continue;
+    if(Math.sqrt(bseg.d2)>WINDOW_BALCONY_EDGE_TOL)continue;
+
+    const bdx=bseg.bx-bseg.ax;
+    const bdz=bseg.bz-bseg.az;
+    const blen=Math.hypot(bdx,bdz);
+    if(blen<1e-6)continue;
+
+    const absDot=Math.abs((sdx*bdx+sdz*bdz)/(slen*blen));
+    if(absDot>0.985)return true;
+  }
+  return false;
+}
+
+function findWindowAnchorSegment(win,fp,state,cx,cz){
+  const rooms=(fp.rooms||[]).filter((r)=>Array.isArray(r?.polygon)&&r.polygon.length>=2);
+  if(rooms.length){
+    // First, trust explicit room refs when they resolve.
+    const refs=Array.isArray(win?.room_refs)?win.room_refs:[];
+    for(const ref of refs){
+      const refStr=String(ref);
+      const byId=rooms.find((r)=>String(r.id)===refStr);
+      if(byId){
+        const seg=closestSegmentOnPolygonScene(byId.polygon,state,cx,cz);
+        if(seg)return {...seg,room:byId};
+      }
+      const idx=parseInt(refStr,10);
+      if(Number.isInteger(idx)&&idx>=0&&idx<rooms.length){
+        const seg=closestSegmentOnPolygonScene(rooms[idx].polygon,state,cx,cz);
+        if(seg)return {...seg,room:rooms[idx]};
+      }
+    }
+
+    // Fallback: snap to nearest room wall segment in active transformed geometry.
+    let best=null;
+    rooms.forEach((r)=>{
+      const seg=closestSegmentOnPolygonScene(r.polygon,state,cx,cz);
+      if(!seg)return;
+      if(!best||seg.d2<best.d2)best={...seg,room:r};
+    });
+    if(best)return best;
+  }
+
+  // Last resort: boundary segment if no room geometry is available.
+  const bSeg=closestSegmentOnBoundaryScene(fp?.boundary||[],state,cx,cz);
+  if(bSeg)return {...bSeg,room:null};
+
+  return null;
+}
+
+function addBalconyGeometry(room,state){
+  if(!room?.polygon||room.polygon.length<3)return;
+  const pts=room.polygon.map((pt)=>planPtToSceneXY(pt,state));
+
+  const floorShape=new THREE.Shape();
+  pts.forEach(([x,z],i)=>{
+    if(i===0)floorShape.moveTo(x,-z);
+    else floorShape.lineTo(x,-z);
+  });
+  floorShape.closePath();
+
+  const floorGeom=new THREE.ExtrudeGeometry(floorShape,{depth:BALCONY_FLOOR_THICKNESS,bevelEnabled:false,steps:1});
+  floorGeom.rotateX(-Math.PI/2);
+  const floorMesh=new THREE.Mesh(
+    floorGeom,
+    new THREE.MeshStandardMaterial({color:0xbdbdbd,roughness:0.9,metalness:0.02,side:THREE.DoubleSide})
+  );
+  floorMesh.userData.captureRole='volume';
+  floorMesh.castShadow=false;
+  floorMesh.receiveShadow=true;
+  viewer3D.planGroup.add(floorMesh);
+
+  for(let i=0;i<pts.length;i++){
+    const [x1,z1]=pts[i];
+    const [x2,z2]=pts[(i+1)%pts.length];
+    const dx=x2-x1,dz=z2-z1;
+    const len=Math.hypot(dx,dz);
+    if(len<1e-6)continue;
+    const parapetGeom=new THREE.BoxGeometry(len,BALCONY_PARAPET_HEIGHT,BALCONY_PARAPET_THICKNESS);
+    const parapetMesh=new THREE.Mesh(
+      parapetGeom,
+      new THREE.MeshStandardMaterial({color:0xa8a8a8,roughness:0.9,metalness:0.02})
+    );
+    parapetMesh.position.set((x1+x2)/2,BALCONY_PARAPET_HEIGHT/2,(z1+z2)/2);
+    parapetMesh.rotation.y=Math.atan2(dz,dx);
+    parapetMesh.userData.captureRole='volume';
+    parapetMesh.castShadow=false;
+    parapetMesh.receiveShadow=true;
+    viewer3D.planGroup.add(parapetMesh);
+  }
+}
+
+function addWindowGeometry(fp,state){
+  const windows=fp.windows||[];
+  const rooms=(fp.rooms||[]).filter((r)=>Array.isArray(r?.polygon)&&r.polygon.length>=2);
+  const balconyRooms=rooms.filter((r)=>isBalconyRoom(r));
+  windows.forEach((w)=>{
+    const refRooms=resolveWindowRefRooms(w,rooms);
+    if(refRooms.some((room)=>isBalconyRoom(room)))return;
+
+    const rect=bboxToSceneRect(w?.bbox,state);
+    if(!rect)return;
+
+    const cx=(rect.minX+rect.maxX)/2;
+    const cz=(rect.minZ+rect.maxZ)/2;
+    const winLen=Math.max(WINDOW_THICKNESS,Math.max(rect.maxX-rect.minX,rect.maxZ-rect.minZ));
+
+    let targetX=cx,targetZ=cz;
+    let segAngle=0;
+
+    const seg=findWindowAnchorSegment(w,fp,state,cx,cz);
+    if(seg){
+      targetX=seg.x;
+      targetZ=seg.z;
+      segAngle=Math.atan2(seg.bz-seg.az,seg.bx-seg.ax);
+    }
+
+    const balconyDoorOpening=
+      seg&&!isBalconyRoom(seg.room)&&isBalconyFacingAnchorSegment(seg,balconyRooms,state);
+    const openingHeight=balconyDoorOpening?BALCONY_OPENING_DOOR_HEIGHT:WINDOW_HEIGHT;
+    const sillHeight=balconyDoorOpening?0:WINDOW_SILL_HEIGHT;
+    const openingMaterial=balconyDoorOpening
+      ?new THREE.MeshStandardMaterial({color:0xa36a2a,roughness:0.6,metalness:0.08})
+      :new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75});
+
+    const geom=new THREE.BoxGeometry(winLen,openingHeight,WINDOW_THICKNESS);
+    const mesh=new THREE.Mesh(geom,openingMaterial);
+    mesh.position.set(targetX,sillHeight+openingHeight/2,targetZ);
+    mesh.rotation.y=segAngle;
+    mesh.userData.captureRole='volume';
+    mesh.castShadow=false;
+    mesh.receiveShadow=false;
+    viewer3D.planGroup.add(mesh);
+  });
+}
+
+function build3DSceneFromActivePlan(){
+  const s=getActiveFPState();
+  const empty=document.getElementById('viewer-3d-empty');
+  clear3DPlanGroup();
+  if(!s||!s.fp){
+    if(empty)empty.style.display='flex';
+    setViewer3DStatus('No active plan selected.');
+    return;
+  }
+  if(empty)empty.style.display='none';
+
+  const fp=s.fp;
+  const rooms=fp.rooms||[];
+  const boundaryPoly=fp.boundary||[];
+
+  const roomGeomOpts={depth:ROOM_HEIGHT,bevelEnabled:false,steps:1};
+  rooms.forEach(room=>{
+    const st=room.source_type??room.type;
+    if(st===BALCONY_TYPE_ID){
+      addBalconyGeometry(room,s);
+      return;
+    }
+
+    const shape=shapeFromPlanPolygon(room.polygon,s);
+    if(!shape)return;
+    const geom=new THREE.ExtrudeGeometry(shape,roomGeomOpts);
+    geom.rotateX(-Math.PI/2);
+    const mat=new THREE.MeshStandardMaterial({color:roomTypeColor(st),roughness:0.85,metalness:0.05,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(geom,mat);
+    mesh.userData.captureRole='volume';
+    mesh.castShadow=false;
+    mesh.receiveShadow=true;
+    viewer3D.planGroup.add(mesh);
+  });
+
+  addWindowGeometry(fp,s);
+
+  const boundaryShape=shapeFromPlanPolygon(boundaryPoly,s);
+  if(boundaryShape){
+    const slabGeom=new THREE.ExtrudeGeometry(boundaryShape,{depth:0.1,bevelEnabled:false,steps:1});
+    slabGeom.rotateX(-Math.PI/2);
+    const slab=new THREE.Mesh(
+      slabGeom,
+      new THREE.MeshStandardMaterial({color:0xd2d2d2,roughness:0.92,metalness:0.0,side:THREE.DoubleSide})
+    );
+    slab.userData.captureRole='ground';
+    slab.position.y=-0.1;
+    viewer3D.planGroup.add(slab);
+
+    const roofGeom=new THREE.ExtrudeGeometry(boundaryShape,{depth:0.15,bevelEnabled:false,steps:1});
+    roofGeom.rotateX(-Math.PI/2);
+    const roof=new THREE.Mesh(
+      roofGeom,
+      new THREE.MeshStandardMaterial({color:0x9a9a9a,roughness:0.85,metalness:0.03,side:THREE.DoubleSide})
+    );
+    roof.userData.captureRole='volume';
+    roof.position.y=ROOM_HEIGHT;
+    viewer3D.planGroup.add(roof);
+  }
+
+  const bCen=bdryCenter((boundaryPoly||[]).map(planVertexToXY));
+  const [cx,cz]=planPtToSceneXY(bCen,s);
+
+  // Re-center generated geometry so model stays in view regardless of plan offset.
+  const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
+  if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){
+    const geomCx=(bounds.min.x+bounds.max.x)/2;
+    const geomCz=(bounds.min.z+bounds.max.z)/2;
+    viewer3D.planGroup.position.x+=5-geomCx;
+    viewer3D.planGroup.position.z+=5-geomCz;
+  }
+
+  const finalCenterX=viewer3D.planGroup.position.x+cx;
+  const finalCenterZ=viewer3D.planGroup.position.z+cz;
+  viewer3D.controls.target.set(finalCenterX,0,finalCenterZ);
+  viewer3D.controls.update();
+  setViewer3DStatus(`Scene built: ${rooms.length} rooms extruded.`);
+}
+
+async function sync3DSceneIfNeeded(force=false){
+  if(activeTab!=='3d')return;
+  try{
+    await init3DViewer();
+    resize3DViewer();
+    const fp=getCurrentPlanFingerprint();
+    if(force||fp!==viewer3D.lastFingerprint){
+      build3DSceneFromActivePlan();
+      viewer3D.lastFingerprint=fp;
+    }
+  }catch(err){
+    console.error('3D viewer init failed:',err);
+    setViewer3DStatus('3D initialization failed. Check network/CDN access.');
+  }
+}
+
+function setViewTab(tab,opts={}){
+  activeTab=tab;
+  const panel2d=document.getElementById('panel-2d');
+  const panel3d=document.getElementById('panel-3d');
+  const tab2d=document.getElementById('tab-2d');
+  const tab3d=document.getElementById('tab-3d');
+
+  const is2d=tab==='2d';
+  panel2d.style.display=is2d?'flex':'none';
+  panel3d.style.display=is2d?'none':'flex';
+  tab2d.classList.toggle('active',is2d);
+  tab3d.classList.toggle('active',!is2d);
+
+  if(is2d){
+    const panel=document.getElementById('capture-panel');
+    if(panel)panel.classList.remove('show');
+    resize();
+  }else{
+    document.querySelectorAll('input[name="render-backend"]').forEach(el=>{
+      el.checked=el.value===renderRequestState.backend;
+      el.onchange=()=>{
+        if(el.checked)renderRequestState.backend=el.value;
+        updateBackendDependentUI();
+      };
+    });
+    updateBackendDependentUI();
+    updateCapturePanel();
+    sync3DSceneIfNeeded(!!opts.triggerBuild);
+  }
+}
+
+function onGenerate3DClick(){
+  setViewTab('3d',{triggerBuild:true});
+}
+
+function captureDepthAndPreview(){
+  if(!viewer3D.initialized||!viewer3D.scene||!viewer3D.camera||!viewer3D.renderer){
+    setViewer3DStatus('3D viewer not initialized yet.');
+    return;
+  }
+  const scene=viewer3D.scene;
+  const camera=viewer3D.camera;
+  const renderer=viewer3D.renderer;
+
+  const prevOverride=scene.overrideMaterial;
+  const prevNear=camera.near;
+  const prevFar=camera.far;
+  const depthMat=new THREE.MeshDepthMaterial({depthPacking:THREE.BasicDepthPacking});
+
+  let captureNear=camera.near;
+  let captureFar=camera.far;
+
+  const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
+  if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){
+    const center=bounds.getCenter(new THREE.Vector3());
+    const size=bounds.getSize(new THREE.Vector3());
+    const radius=Math.max(size.x,size.y,size.z)*0.6+0.25;
+    const dist=camera.position.distanceTo(center);
+    const fitNear=Math.max(0.01,dist-radius*2.2);
+    const fitFar=Math.max(fitNear+1.0,dist+radius*2.2);
+    camera.near=fitNear;
+    camera.far=fitFar;
+    captureNear=fitNear;
+    captureFar=fitFar;
+    camera.updateProjectionMatrix();
+  }
+
+  const captured=withCaptureVisibility(()=>{
+    scene.overrideMaterial=depthMat;
+    renderer.render(scene,camera);
+    const depthImg=captureCanvasImageData(renderer.domElement);
+
+    const maskImg=captureMaskImageData(scene,camera,renderer);
+    const depthDataUrl=makeDepthDataUrlFromImageData(depthImg,maskImg,captureNear,captureFar);
+    const maskDataUrl=makeBinaryMaskDataUrl(maskImg);
+    return {depthDataUrl,maskDataUrl};
+  });
+
+  scene.overrideMaterial=prevOverride||null;
+  camera.near=prevNear;
+  camera.far=prevFar;
+  camera.updateProjectionMatrix();
+  renderer.render(scene,camera);
+  const previewDataUrl=renderer.domElement.toDataURL('image/png');
+
+  depthMat.dispose();
+
+  renderCaptureState.depthDataUrl=captured.depthDataUrl;
+  renderCaptureState.maskDataUrl=captured.maskDataUrl;
+  renderCaptureState.previewDataUrl=previewDataUrl;
+  renderCaptureState.capturedAt=new Date().toISOString();
+  renderCaptureState.activeView='preview';
+  updateCapturePanel();
+  setViewer3DStatus(`Depth captured (near ${captureNear.toFixed(3)}, far ${captureFar.toFixed(3)}).`);
+}
 
 // ── coord helpers ─────────────────────────────────────────────────────────
 function n2c(nx,ny){
@@ -1248,6 +2533,7 @@ function clearBoundary(){
   document.getElementById('s-bv').textContent='—';
   document.getElementById('result-count').textContent='';
   checkReady();render();
+  sync3DSceneIfNeeded(true);
 }
 
 // ── boundary library ──────────────────────────────────────────────────────
@@ -1674,6 +2960,7 @@ async function runRetrievalLocal(){
       setStatus(`top ${params.topn} retrieved (local)`,'ok');
       document.getElementById('result-count').textContent=results.length+' results';
       render();
+      sync3DSceneIfNeeded(true);
   }catch(e){setStatus('error: '+e.message,'err');console.error(e);}
 }
 
@@ -1751,6 +3038,7 @@ function renderAdaptedResults(plans){
     card.appendChild(meta);
     list.appendChild(card);
   });
+  sync3DSceneIfNeeded(true);
 }
 
 // ── results panel ─────────────────────────────────────────────────────────
@@ -1796,6 +3084,7 @@ function selectResult(i){
   document.querySelectorAll('.result-card').forEach((c,j)=>c.classList.toggle('selected',j===selected));
   if(fitMode&&selected!==null&&!fittedCache[selected])fetchFitted(selected);
   updateCursor();render();
+  sync3DSceneIfNeeded(true);
 }
 
 // Transform query boundary into the retrieved plan's original coordinate space
@@ -1821,6 +3110,7 @@ function toggleFitMode(on){
     fetchFitted(selected);
   }
   render();
+  sync3DSceneIfNeeded(true);
 }
 
 async function fetchFitted(i){

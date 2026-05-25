@@ -1,0 +1,9 @@
+# Optional dependencies for Python-based ControlNet backend in server.py
+# Install only if you plan to use backend=python_controlnet
+
+torch
+pillow
+diffusers
+transformers
+accelerate
+safetensors
