@@ -290,11 +290,13 @@ def render_image():
     Generate an architectural render from depth map + prompt.
 
             Request body:
-                backend          : "openai" (default)
+                backend          : "openai" (default) or "comfy"
       prompt           : str
       depth_data_url   : data:image/png;base64,...
         building_mask_data_url : optional data:image/png;base64,...
         depth_invert               : optional bool (reserved)
+            comfy_url                  : optional str (comfy backend; default http://127.0.0.1:8188)
+            workflow_override          : optional dict (comfy backend; workflow JSON)
             openai_api_key             : optional str (openai backend; falls back to OPENAI_API_KEY env)
             openai_model               : optional str (openai backend; default gpt-image-1)
             openai_quality             : optional str (openai backend; default medium)
@@ -313,6 +315,9 @@ def render_image():
     prompt = str(body.get("prompt", "")).strip()
     depth_data_url = body.get("depth_data_url")
     building_mask_data_url = body.get("building_mask_data_url")
+    normal_data_url = body.get("normal_data_url")
+    silhouette_data_url = body.get("silhouette_data_url")
+    opacity_mask_data_url = body.get("opacity_mask_data_url")
     depth_invert_raw = body.get("depth_invert", False)
     if isinstance(depth_invert_raw, str):
         depth_invert = depth_invert_raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -324,8 +329,34 @@ def render_image():
     if not depth_data_url or not isinstance(depth_data_url, str):
         return jsonify({"error": "missing depth_data_url"}), 400
 
+    if backend in {"comfy", "comfyui", "local"}:
+        comfy_url = str(body.get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")
+        workflow_override = body.get("workflow_override")
+        try:
+            image_data_url, meta = _render_with_comfy_local(
+                comfy_url=comfy_url,
+                prompt=prompt,
+                depth_data_url=depth_data_url,
+                building_mask_data_url=building_mask_data_url,
+                normal_data_url=normal_data_url,
+                silhouette_data_url=silhouette_data_url,
+                opacity_mask_data_url=opacity_mask_data_url,
+                depth_invert=depth_invert,
+                workflow_override=workflow_override,
+            )
+        except Exception as exc:
+            logger.exception("ComfyUI render failed")
+            return jsonify({"error": f"comfy render failed: {exc}"}), 500
+
+        return jsonify({
+            "status": "ok",
+            "backend": "comfy",
+            "image_data_url": image_data_url,
+            "meta": meta,
+        })
+
     if backend != "openai":
-        return jsonify({"error": f"unsupported backend: {backend}. only 'openai' is enabled"}), 400
+        return jsonify({"error": f"unsupported backend: {backend}. supported: 'openai', 'comfy'"}), 400
 
     try:
         image_data_url, meta = _render_with_openai(
@@ -897,7 +928,7 @@ def _load_comfy_workflow(workflow_override):
     if isinstance(workflow_override, dict) and workflow_override:
         return copy.deepcopy(workflow_override)
 
-    wf_path = BASE_DIR / "comfyui-flux-depth-workflow.json"
+    wf_path = BASE_DIR / "comfyui-sdxl-depth-multi-workflow.json"
     if not wf_path.exists():
         raise FileNotFoundError(
             f"workflow file not found: {wf_path.name}. "
@@ -907,21 +938,96 @@ def _load_comfy_workflow(workflow_override):
         return json.load(fh)
 
 
-def _inject_prompt_and_depth(workflow, prompt, uploaded_filename, uploaded_mask_filename=None):
-    """Best-effort workflow injection for ComfyUI API-format workflows."""
+def _inject_prompt_and_depth(
+    workflow,
+    prompt,
+    uploaded_filename,
+    uploaded_mask_filename=None,
+    uploaded_normal_filename=None,
+    uploaded_silhouette_filename=None,
+    uploaded_opacity_filename=None,
+):
+    """Best-effort workflow injection for ComfyUI workflow payloads."""
     if not isinstance(workflow, dict):
-        raise ValueError("workflow must be a dict keyed by node id")
+        raise ValueError("workflow must be a dict")
+
+    # Accept wrapped payloads that place API nodes under common wrapper keys.
+    if isinstance(workflow.get("prompt"), dict):
+        workflow_nodes = workflow["prompt"]
+    elif isinstance(workflow.get("workflow"), dict):
+        workflow_nodes = workflow["workflow"]
+    else:
+        workflow_nodes = workflow
+
+    if not isinstance(workflow_nodes, dict):
+        raise ValueError("workflow prompt must be a dict keyed by node id")
+
+    # UI-export workflows are not directly executable by /prompt.
+    if isinstance(workflow_nodes.get("nodes"), list):
+        raise ValueError(
+            "workflow override appears to be ComfyUI UI export format. "
+            "Please export API format (Save as API format) and upload that JSON."
+        )
+
+    node_types = []
+    for _, node in workflow_nodes.items():
+        if isinstance(node, dict):
+            t = node.get("class_type") or node.get("type")
+            if t:
+                node_types.append(str(t).strip().lower())
+
+    has_sampler = any(("ksampler" in t) or ("sampler" in t) for t in node_types)
+    has_modelish = any(
+        ("checkpointloader" in t)
+        or ("unetloader" in t)
+        or ("cliploader" in t)
+        or ("dualcliploader" in t)
+        or ("diffusion" in t)
+        or ("model" in t)
+        for t in node_types
+    )
+    has_decode = any(("decode" in t) or ("vaedecode" in t) for t in node_types)
+    has_controlnet_apply = any(("controlnetapply" in t) or ("advanced" in t and "controlnet" in t) for t in node_types)
+    has_prompt_encode = any(("cliptextencode" in t) or ("textencode" in t) for t in node_types)
+    has_latent = any(("latent" in t) for t in node_types)
+    has_output_save = any(("saveimage" in t) for t in node_types)
+    has_image_io_only = all(
+        (
+            ("loadimage" in t)
+            or ("saveimage" in t)
+            or ("previewimage" in t)
+            or ("imagescale" in t)
+        )
+        for t in node_types
+    ) if node_types else False
+
+    generative_signals = (
+        has_sampler
+        or (has_modelish and has_decode)
+        or has_controlnet_apply
+        or (has_prompt_encode and has_modelish)
+        or (has_latent and has_output_save)
+    )
+    likely_passthrough = (not generative_signals) and has_image_io_only
+    if likely_passthrough:
+        preview = ", ".join(sorted(set(node_types))[:12]) if node_types else "none"
+        raise ValueError(
+            "workflow appears to be non-generative (likely depth passthrough). "
+            "Expected a full generation graph with sampler/model nodes, not only image load/save. "
+            f"Detected node types: {preview}"
+        )
 
     prompt_set = False
     image_set = False
     mask_set = False
 
     # 1) Put prompt text into CLIPTextEncode-like nodes (prefer "positive" titled node if present)
-    ordered_nodes = list(workflow.items())
+    ordered_nodes = list(workflow_nodes.items())
     for _, node in ordered_nodes:
         if not isinstance(node, dict):
             continue
-        if node.get("class_type") == "CLIPTextEncode":
+        cls = node.get("class_type") or node.get("type")
+        if cls == "CLIPTextEncode":
             inputs = node.setdefault("inputs", {})
             if "text" in inputs and isinstance(inputs["text"], str):
                 if not prompt_set:
@@ -939,42 +1045,175 @@ def _inject_prompt_and_depth(workflow, prompt, uploaded_filename, uploaded_mask_
                 prompt_set = True
                 break
 
-    # 2) Put uploaded filename into image-loader-like nodes
+    # 2) Put uploaded filenames into targeted image-loader-like nodes.
     image_loader_types = {
-        "LoadImage",
-        "LoadImageMask",
-        "VHS_LoadImagePath",
-        "Image Load",
+        "loadimage",
+        "loadimagemask",
+        "vhs_loadimagepath",
+        "image load",
+        "loadimagefrompath",
     }
-    for _, node in ordered_nodes:
+    loader_nodes = []
+    for node_id, node in ordered_nodes:
         if not isinstance(node, dict):
             continue
-        cls = node.get("class_type")
+        cls = str(node.get("class_type") or node.get("type") or "").strip().lower()
         inputs = node.setdefault("inputs", {})
-        if cls in image_loader_types and "image" in inputs:
-            inputs["image"] = uploaded_filename
-            image_set = True
+        if cls in image_loader_types or "loadimage" in cls:
+            title = str(((node.get("_meta") or {}).get("title") or "")).lower()
+            key_blob = " ".join(str(k).lower() for k in (inputs or {}).keys())
+            value_blob = " ".join(
+                str(v).lower()
+                for v in (
+                    inputs.get("image"),
+                    inputs.get("path"),
+                    inputs.get("filename"),
+                )
+                if isinstance(v, str)
+            )
+            loader_nodes.append((str(node_id), node, inputs, cls, title, key_blob, value_blob))
 
-    # fallback: any node input field literally named image with string value
-    if not image_set:
-        for _, node in ordered_nodes:
+    used_loader_ids = set()
+
+    def _set_loader_image(inputs, filename):
+        if "image" in inputs:
+            inputs["image"] = filename
+        elif "path" in inputs:
+            inputs["path"] = filename
+        elif "filename" in inputs:
+            inputs["filename"] = filename
+        else:
+            inputs["image"] = filename
+
+    def _assign_to_loaders(filename, predicate, max_assign=1):
+        if not filename:
+            return False
+        assigned = False
+        assigned_count = 0
+        for node_id, _node, inputs, cls, title, key_blob, value_blob in loader_nodes:
+            if node_id in used_loader_ids:
+                continue
+            if not predicate(cls, title, key_blob, value_blob, inputs):
+                continue
+            _set_loader_image(inputs, filename)
+            used_loader_ids.add(node_id)
+            assigned = True
+            assigned_count += 1
+            if max_assign and assigned_count >= max_assign:
+                break
+        return assigned
+
+    def _assign_by_keys(filename, keys):
+        if not filename:
+            return False
+        assigned = False
+        for _node_id, node in ordered_nodes:
             if not isinstance(node, dict):
                 continue
             inputs = node.get("inputs") or {}
-            if "image" in inputs and isinstance(inputs["image"], str):
-                inputs["image"] = uploaded_filename
-                image_set = True
-                break
+            for key in keys:
+                if key in inputs and isinstance(inputs.get(key), str):
+                    inputs[key] = filename
+                    assigned = True
+        return assigned
+
+    # Depth map: prefer loaders explicitly labelled for depth.
+    image_set = _assign_to_loaders(
+        uploaded_filename,
+        lambda _cls, title, key_blob, value_blob, _inputs: (
+            "depth" in title
+            or "depth" in key_blob
+            or "depth" in value_blob
+        ),
+        max_assign=1,
+    )
+    if not image_set:
+        image_set = _assign_to_loaders(uploaded_filename, lambda *_args: True, max_assign=1)
+
+    # Normal map loaders.
+    _assign_to_loaders(
+        uploaded_normal_filename,
+        lambda _cls, title, key_blob, value_blob, _inputs: (
+            "normal" in title
+            or "normal" in key_blob
+            or "normal" in value_blob
+        ),
+        max_assign=1,
+    )
+    _assign_by_keys(uploaded_normal_filename, ("normal", "normal_map", "input_normal", "image_normal"))
+
+    # Silhouette map loaders.
+    _assign_to_loaders(
+        uploaded_silhouette_filename,
+        lambda _cls, title, key_blob, value_blob, _inputs: (
+            "silhouette" in title
+            or "silhouette" in key_blob
+            or "silhouette" in value_blob
+            or "outline" in title
+            or "outline" in value_blob
+            or "building mask" in title
+            or "building mask" in value_blob
+        ),
+        max_assign=1,
+    )
+    _assign_by_keys(uploaded_silhouette_filename, ("silhouette", "outline", "building_mask"))
+
+    # Opacity/material mask loaders.
+    _assign_to_loaders(
+        uploaded_opacity_filename,
+        lambda _cls, title, key_blob, value_blob, _inputs: (
+            "opacity" in title
+            or "alpha" in title
+            or "semantic" in title
+            or "material" in title
+            or "id mask" in title
+            or "opacity" in key_blob
+            or "alpha" in key_blob
+            or "semantic" in key_blob
+            or "material" in key_blob
+            or "opacity" in value_blob
+            or "alpha" in value_blob
+            or "semantic" in value_blob
+            or "material" in value_blob
+        ),
+        max_assign=1,
+    )
+    _assign_by_keys(uploaded_opacity_filename, ("opacity", "alpha", "semantic", "material_mask", "id_mask"))
+
+    # Binary mask map loaders (legacy building mask).
+    mask_set = _assign_to_loaders(
+        uploaded_mask_filename,
+        lambda cls, title, key_blob, value_blob, _inputs: (
+            cls == "loadimagemask"
+            or (
+                "mask" in title
+                and "normal" not in title
+                and "opacity" not in title
+                and "alpha" not in title
+            )
+            or (
+                "mask" in key_blob
+                and "normal" not in key_blob
+                and "opacity" not in key_blob
+                and "alpha" not in key_blob
+            )
+            or (
+                "mask" in value_blob
+                and "normal" not in value_blob
+                and "opacity" not in value_blob
+                and "alpha" not in value_blob
+            )
+        ),
+        max_assign=1,
+    )
 
     if uploaded_mask_filename:
-        for _, node in ordered_nodes:
+        for _node_id, node in ordered_nodes:
             if not isinstance(node, dict):
                 continue
-            cls = node.get("class_type")
+            cls = str(node.get("class_type") or node.get("type") or "").strip().lower()
             inputs = node.setdefault("inputs", {})
-            title = ((node.get("_meta") or {}).get("title") or "").lower()
-
-            if cls == "LoadImageMask":
+            if cls == "loadimagemask":
                 if "image" in inputs and isinstance(inputs.get("image"), str):
                     inputs["image"] = uploaded_mask_filename
                     mask_set = True
@@ -982,24 +1221,54 @@ def _inject_prompt_and_depth(workflow, prompt, uploaded_filename, uploaded_mask_
                     inputs["mask"] = uploaded_mask_filename
                     mask_set = True
 
-            if cls == "LoadImage" and "mask" in title and "image" in inputs and isinstance(inputs.get("image"), str):
-                inputs["image"] = uploaded_mask_filename
-                mask_set = True
+    if not mask_set:
+        _assign_by_keys(uploaded_mask_filename, ("mask", "image_mask"))
 
-        if not mask_set:
-            for _, node in ordered_nodes:
-                if not isinstance(node, dict):
-                    continue
-                inputs = node.get("inputs") or {}
-                for key in ("mask", "image_mask"):
-                    if key in inputs and isinstance(inputs[key], str):
-                        inputs[key] = uploaded_mask_filename
-                        mask_set = True
-                        break
-                if mask_set:
+    # fallback: any node input field literally named image with string value
+    if not image_set:
+        for _node_id, node in ordered_nodes:
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs") or {}
+            for key in ("image", "depth_image", "image_path", "path", "filename"):
+                if key in inputs and isinstance(inputs[key], str):
+                    inputs[key] = uploaded_filename
+                    image_set = True
                     break
+            if image_set:
+                break
+
+    # last-resort fallback: replace png/jpg-like string input on image-related nodes
+    if not image_set:
+        for _node_id, node in ordered_nodes:
+            if not isinstance(node, dict):
+                continue
+            cls = str((node.get("class_type") or node.get("type") or "")).lower()
+            if "image" not in cls and "depth" not in cls and "load" not in cls:
+                continue
+            inputs = node.get("inputs") or {}
+            for key, value in inputs.items():
+                if isinstance(value, str) and value.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                    inputs[key] = uploaded_filename
+                    image_set = True
+                    break
+            if image_set:
+                break
 
     if not image_set:
+        seen_types = []
+        for _, node in ordered_nodes:
+            if isinstance(node, dict):
+                t = node.get("class_type") or node.get("type")
+                if t:
+                    seen_types.append(str(t))
+        seen_types = sorted(set(seen_types))
+        if seen_types:
+            preview = ", ".join(seen_types[:12])
+            raise ValueError(
+                "could not inject depth image into workflow (no image loader found). "
+                f"Detected node types: {preview}"
+            )
         raise ValueError("could not inject depth image into workflow (no image loader found)")
 
     return workflow
@@ -1215,6 +1484,9 @@ def _render_with_comfy_local(
     prompt,
     depth_data_url,
     building_mask_data_url=None,
+    normal_data_url=None,
+    silhouette_data_url=None,
+    opacity_mask_data_url=None,
     depth_invert=False,
     workflow_override=None,
 ):
@@ -1237,44 +1509,89 @@ def _render_with_comfy_local(
             mask_png_bytes = _decode_data_url_png(building_mask_data_url)
         except Exception:
             mask_png_bytes = None
+    normal_png_bytes = None
+    if normal_data_url and isinstance(normal_data_url, str):
+        try:
+            normal_png_bytes = _decode_data_url_png(normal_data_url)
+        except Exception:
+            normal_png_bytes = None
+    silhouette_png_bytes = None
+    if silhouette_data_url and isinstance(silhouette_data_url, str):
+        try:
+            silhouette_png_bytes = _decode_data_url_png(silhouette_data_url)
+        except Exception:
+            silhouette_png_bytes = None
+    opacity_png_bytes = None
+    if opacity_mask_data_url and isinstance(opacity_mask_data_url, str):
+        try:
+            opacity_png_bytes = _decode_data_url_png(opacity_mask_data_url)
+        except Exception:
+            opacity_png_bytes = None
 
-    # Upload depth image into ComfyUI input folder
-    file_name = f"depth_{uuid.uuid4().hex[:10]}.png"
     upload_url = f"{comfy_url}/upload/image"
-    _, upj = _http_post_multipart(
-        upload_url,
-        fields={"type": "input", "overwrite": "true"},
-        files={
-            "image": {
-                "filename": file_name,
-                "content_type": "image/png",
-                "content": png_bytes,
-            }
-        },
-        timeout=30,
-    )
-    uploaded_name = upj.get("name") or file_name
 
-    uploaded_mask_name = None
-    if mask_png_bytes:
-        mask_file_name = f"mask_{uuid.uuid4().hex[:10]}.png"
-        _, mskj = _http_post_multipart(
+    def _upload_png(prefix, content):
+        file_name = f"{prefix}_{uuid.uuid4().hex[:10]}.png"
+        _, upj = _http_post_multipart(
             upload_url,
             fields={"type": "input", "overwrite": "true"},
             files={
                 "image": {
-                    "filename": mask_file_name,
+                    "filename": file_name,
                     "content_type": "image/png",
-                    "content": mask_png_bytes,
+                    "content": content,
                 }
             },
             timeout=30,
         )
-        uploaded_mask_name = mskj.get("name") or mask_file_name
+        return upj.get("name") or file_name
+
+    uploaded_name = _upload_png("depth", png_bytes)
+    uploaded_mask_name = _upload_png("mask", mask_png_bytes) if mask_png_bytes else None
+    uploaded_normal_name = _upload_png("normal", normal_png_bytes) if normal_png_bytes else None
+    uploaded_silhouette_name = _upload_png("silhouette", silhouette_png_bytes) if silhouette_png_bytes else None
+    uploaded_opacity_name = _upload_png("opacity", opacity_png_bytes) if opacity_png_bytes else None
 
     # Prepare prompt payload
+    workflow_fallback_used = False
     wf = _load_comfy_workflow(workflow_override)
-    wf = _inject_prompt_and_depth(wf, prompt, uploaded_name, uploaded_mask_name)
+    try:
+        wf = _inject_prompt_and_depth(
+            wf,
+            prompt,
+            uploaded_name,
+            uploaded_mask_filename=uploaded_mask_name,
+            uploaded_normal_filename=uploaded_normal_name,
+            uploaded_silhouette_filename=uploaded_silhouette_name,
+            uploaded_opacity_filename=uploaded_opacity_name,
+        )
+    except ValueError as exc:
+        msg = str(exc).lower()
+        if workflow_override and ("non-generative" in msg or "depth passthrough" in msg):
+            logger.warning(
+                "workflow_override rejected as non-generative; falling back to repo default workflow"
+            )
+            workflow_fallback_used = True
+            wf = _load_comfy_workflow(None)
+            wf = _inject_prompt_and_depth(
+                wf,
+                prompt,
+                uploaded_name,
+                uploaded_mask_filename=uploaded_mask_name,
+                uploaded_normal_filename=uploaded_normal_name,
+                uploaded_silhouette_filename=uploaded_silhouette_name,
+                uploaded_opacity_filename=uploaded_opacity_name,
+            )
+        else:
+            raise
+
+    # Keep a node map for selecting the correct final output image later.
+    if isinstance(wf.get("prompt"), dict):
+        wf_nodes = wf.get("prompt") or {}
+    elif isinstance(wf.get("workflow"), dict):
+        wf_nodes = wf.get("workflow") or {}
+    else:
+        wf_nodes = wf
 
     submit_url = f"{comfy_url}/prompt"
     client_id = uuid.uuid4().hex
@@ -1303,11 +1620,31 @@ def _render_with_comfy_local(
 
     outputs = history_obj.get("outputs") or {}
     image_desc = None
-    for _, out in outputs.items():
+
+    # Prefer SaveImage outputs; some workflows also emit preview/control images.
+    save_node_ids = []
+    if isinstance(wf_nodes, dict):
+        for node_id, node in wf_nodes.items():
+            if not isinstance(node, dict):
+                continue
+            cls = str(node.get("class_type") or node.get("type") or "").strip().lower()
+            if cls == "saveimage" or "saveimage" in cls:
+                save_node_ids.append(str(node_id))
+
+    for node_id in save_node_ids:
+        out = outputs.get(node_id)
         imgs = out.get("images") if isinstance(out, dict) else None
         if imgs:
             image_desc = imgs[0]
             break
+
+    # Fallback: any available image output.
+    if not image_desc:
+        for _, out in outputs.items():
+            imgs = out.get("images") if isinstance(out, dict) else None
+            if imgs:
+                image_desc = imgs[0]
+                break
 
     if not image_desc:
         raise RuntimeError("ComfyUI returned no output images")
@@ -1331,6 +1668,10 @@ def _render_with_comfy_local(
         "comfy_url": comfy_url,
         "prompt_id": prompt_id,
         "mask_uploaded": bool(uploaded_mask_name),
+        "normal_uploaded": bool(uploaded_normal_name),
+        "silhouette_uploaded": bool(uploaded_silhouette_name),
+        "opacity_mask_uploaded": bool(uploaded_opacity_name),
+        "workflow_fallback_used": bool(workflow_fallback_used),
         "depth_invert": bool(depth_invert),
         "output": {
             "filename": filename,

@@ -47,9 +47,21 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 #capture-panel.show { display:block; }
 #capture-panel.collapsed #capture-body { display:none; }
 #capture-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:6px; }
-#capture-switch { display:flex; gap:6px; margin-bottom:6px; }
-.capture-tab { flex:1; border:1px solid #cbd5e1; border-radius:5px; background:#fff; color:#4b5563; font-family:var(--mono); font-size:10px; padding:4px 6px; cursor:pointer; }
-.capture-tab.active { border-color:#3b82f6; background:#dbeafe; color:#1e3a8a; }
+#capture-switch { margin-bottom:6px; }
+#capture-view-select {
+  width:100%;
+  border:1px solid #cbd5e1;
+  border-radius:5px;
+  background:#fff;
+  color:#4b5563;
+  font-family:var(--mono);
+  font-size:10px;
+  padding:5px 6px;
+}
+#btn-download-capture {
+  width:100%;
+  margin-bottom:6px;
+}
 #capture-active {
   border:1px solid #d1d5db;
   border-radius:6px;
@@ -58,14 +70,42 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 }
 #capture-active-img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
 #capture-active-label { font-size:10px; color:#4b5563; text-align:center; padding:4px; border-top:1px solid #e5e7eb; background:#fff; }
+#opacity-legend {
+  margin-top:6px;
+  border:1px solid #d1d5db;
+  border-radius:6px;
+  padding:5px;
+  background:#fff;
+  font-size:9px;
+  color:#4b5563;
+  line-height:1.4;
+}
+#opacity-legend.hidden { display:none; }
+.opacity-legend-row { display:flex; align-items:center; gap:5px; margin-bottom:2px; }
+.opacity-legend-row:last-child { margin-bottom:0; }
+.opacity-legend-swatch { width:9px; height:9px; border-radius:2px; border:1px solid rgba(0,0,0,0.25); flex-shrink:0; }
+.opacity-legend-name { min-width:46px; color:#374151; }
+.opacity-legend-color { min-width:42px; color:#6b7280; }
+.opacity-legend-material {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:4px;
+  padding:2px 4px;
+  font-family:var(--mono);
+  font-size:9px;
+  color:#374151;
+  background:#fff;
+}
 
 #render-panel {
   position:absolute;
   right:10px;
-  top:10px;
-  width:300px;
-  max-height:calc(100% - 20px);
-  overflow:auto;
+  top:46px;
+  width:360px;
+  max-height:calc(100% - 56px);
+  overflow-y:auto;
+  overflow-x:hidden;
   background:rgba(255,255,255,0.95);
   border:1px solid #d1d5db;
   border-radius:10px;
@@ -112,6 +152,18 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
   background:#fff;
 }
 .render-row textarea { resize:vertical; min-height:56px; }
+#render-prompt-preview {
+  width:100%;
+  min-height:130px;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:#374151;
+  background:#f8fafc;
+  resize:vertical;
+}
 #python-grid-resolution {
   flex:1;
   display:flex;
@@ -369,7 +421,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
     <div id="panel-3d" class="view-panel">
       <div id="viewer-3d-toolbar">
         <button class="clear-btn" style="margin:0;width:auto;padding:5px 8px" onclick="sync3DSceneIfNeeded(true)">Rebuild Scene</button>
-        <button class="clear-btn" style="margin:0;width:auto;padding:5px 8px" onclick="captureDepthAndPreview()">Capture Depth</button>
+        <button class="clear-btn" style="margin:0;width:auto;padding:5px 8px" onclick="captureDepthAndPreview()">Capture Maps</button>
         <span id="viewer-3d-status">Switch to 3D to initialize viewer.</span>
       </div>
       <div id="viewer-3d"></div>
@@ -417,9 +469,30 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           <textarea id="render-prompt" placeholder="Add details: facade rhythm, glazing ratio, landscaping, people scale, camera mood..."></textarea>
         </div>
         <div class="render-row">
+          <label for="render-prompt-preview">Preview</label>
+          <textarea id="render-prompt-preview" readonly spellcheck="false" aria-label="Structured prompt preview"></textarea>
+        </div>
+        <div class="render-row">
           <label>Backend</label>
           <div id="backend-switch">
-            <label><input type="radio" name="render-backend" value="openai" checked disabled> OpenAI (cloud)</label>
+            <label><input type="radio" name="render-backend" value="openai"> OpenAI (cloud)</label>
+            <label><input type="radio" name="render-backend" value="comfy" checked> ComfyUI (local)</label>
+          </div>
+        </div>
+        <div class="render-row" id="comfy-row" style="display:none;">
+          <label for="render-comfy-url">ComfyUI</label>
+          <div id="comfy-tools">
+            <input id="render-comfy-url" type="text" value="http://127.0.0.1:8188" spellcheck="false">
+            <div id="comfy-inline">
+              <button id="btn-check-comfy" type="button" onclick="checkComfyConnection()">Check</button>
+              <input id="workflow-file" type="file" accept=".json" onchange="loadWorkflowOverride(this)">
+              <button id="btn-clear-workflow" type="button" onclick="clearWorkflowOverride()">Clear Workflow</button>
+            </div>
+            <label style="width:auto;padding-top:0;display:flex;align-items:center;gap:6px;">
+              <input id="render-comfy-invert" type="checkbox"> invert depth before upload
+            </label>
+            <div id="workflow-name">Using repo default: comfyui-sdxl-depth-multi-workflow.json</div>
+            <div id="comfy-status">Use Check to validate local ComfyUI.</div>
           </div>
         </div>
         <div class="render-row" id="openai-row-api-key">
@@ -442,9 +515,9 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <div class="render-row" id="python-row-resolution">
           <label>Resolution</label>
           <div id="python-grid-resolution">
-            <input id="py-width" type="number" min="256" max="1536" step="64" value="1024" placeholder="width">
+            <input id="py-width" type="number" min="256" max="1536" step="64" value="512" placeholder="width">
             <span>x</span>
-            <input id="py-height" type="number" min="256" max="1536" step="64" value="1024" placeholder="height">
+            <input id="py-height" type="number" min="256" max="1536" step="64" value="512" placeholder="height">
           </div>
         </div>
         <button id="btn-generate-render" onclick="generateRenderMock()">Generate Render</button>
@@ -461,12 +534,50 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         </div>
         <div id="capture-body">
           <div id="capture-switch">
-            <button class="capture-tab active" id="capture-tab-preview" onclick="setCaptureView('preview')">Preview</button>
-            <button class="capture-tab" id="capture-tab-depth" onclick="setCaptureView('depth')">Depth</button>
+            <select id="capture-view-select" onchange="setCaptureView(this.value)">
+              <option value="preview">Preview</option>
+              <option value="depth">Depth</option>
+              <option value="normal">Normal</option>
+              <option value="silhouette">Silhouette</option>
+              <option value="opacity">Opacity</option>
+            </select>
           </div>
+          <button id="btn-download-capture" class="clear-btn" type="button" onclick="downloadLatestCaptureBundle()">Download Capture Bundle</button>
           <div id="capture-active">
             <img id="capture-active-img" alt="Captured image">
             <div id="capture-active-label">Preview</div>
+          </div>
+          <div id="opacity-legend" class="hidden">
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#6b7280"></span>
+              <span class="opacity-legend-name">walls</span>
+              <span class="opacity-legend-color">gray</span>
+              <input id="opacity-mat-walls" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#fb923c"></span>
+              <span class="opacity-legend-name">doors</span>
+              <span class="opacity-legend-color">orange</span>
+              <input id="opacity-mat-doors" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#22d3ee"></span>
+              <span class="opacity-legend-name">windows</span>
+              <span class="opacity-legend-color">cyan</span>
+              <input id="opacity-mat-windows" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#f8fafc"></span>
+              <span class="opacity-legend-name">slabs</span>
+              <span class="opacity-legend-color">white</span>
+              <input id="opacity-mat-slabs" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#ef4444"></span>
+              <span class="opacity-legend-name">parapets</span>
+              <span class="opacity-legend-color">red</span>
+              <input id="opacity-mat-parapets" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
           </div>
         </div>
       </div>
@@ -568,6 +679,17 @@ const BALCONY_TYPE_ID=9;
 const BALCONY_FLOOR_THICKNESS=0.08;
 const BALCONY_PARAPET_HEIGHT=1.2;
 const BALCONY_PARAPET_THICKNESS=0.08;
+const DOOR_HEIGHT=2.2;
+const DOOR_THICKNESS=0.12;
+const OPACITY_MASK_COLORS={
+  walls:0x6b7280,
+  doors:0xfb923c,
+  windows:0x22d3ee,
+  slabs:0xf8fafc,
+  parapets:0xef4444,
+};
+const OPACITY_MASK_PROMPT_LEGEND='opacity legend: walls=gray, doors=orange, windows=cyan, slabs=white, parapets=red';
+const SILHOUETTE_CONSTRAINT_PROMPT='silhouette constraint: the silhouette mask defines the exact building extents and massing footprint; treat everything outside the silhouette as context only; do not add extra building wings, annexes, balconies, canopies, or additional built elements beyond the silhouette.';
 let activeTab='2d';
 let threeDepsPromise=null;
 const viewer3D={
@@ -584,12 +706,15 @@ const viewer3D={
 const renderCaptureState={
   depthDataUrl:null,
   maskDataUrl:null,
+  silhouetteDataUrl:null,
+  normalDataUrl:null,
+  opacityMaskDataUrl:null,
   previewDataUrl:null,
   capturedAt:null,
   activeView:'preview',
 };
 const renderRequestState={
-  backend:'openai',
+  backend:'comfy',
   assembledPrompt:'',
   lastResultDataUrl:null,
   lastResultMeta:'',
@@ -626,24 +751,36 @@ function updateCapturePanel(){
   const panel=document.getElementById('capture-panel');
   const activeImg=document.getElementById('capture-active-img');
   const activeLabel=document.getElementById('capture-active-label');
-  const tabPreview=document.getElementById('capture-tab-preview');
-  const tabDepth=document.getElementById('capture-tab-depth');
-  if(!panel||!activeImg||!activeLabel||!tabPreview||!tabDepth)return;
+  const captureSelect=document.getElementById('capture-view-select');
+  const opacityLegend=document.getElementById('opacity-legend');
+  if(!panel||!activeImg||!activeLabel||!captureSelect||!opacityLegend)return;
   if(renderCaptureState.previewDataUrl&&renderCaptureState.depthDataUrl){
-    const showPreview=renderCaptureState.activeView!=='depth';
-    activeImg.src=showPreview?renderCaptureState.previewDataUrl:renderCaptureState.depthDataUrl;
-    activeLabel.textContent=showPreview?'Preview':'Depth';
-    tabPreview.classList.toggle('active',showPreview);
-    tabDepth.classList.toggle('active',!showPreview);
+    const view=renderCaptureState.activeView||'preview';
+    const mapByView={
+      preview:{src:renderCaptureState.previewDataUrl,label:'Preview'},
+      depth:{src:renderCaptureState.depthDataUrl,label:'Depth'},
+      normal:{src:renderCaptureState.normalDataUrl,label:'Normal'},
+      silhouette:{src:renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,label:'Silhouette'},
+      opacity:{src:renderCaptureState.opacityMaskDataUrl,label:'Opacity Mask'},
+    };
+    const selected=mapByView[view]||mapByView.preview;
+    const fallback=selected.src?selected:mapByView.preview;
+    activeImg.src=fallback.src||renderCaptureState.previewDataUrl;
+    activeLabel.textContent=fallback.label;
+    captureSelect.value=view;
+    opacityLegend.classList.toggle('hidden',view!=='opacity');
     panel.classList.add('show');
   }else{
+    opacityLegend.classList.add('hidden');
     panel.classList.remove('show');
   }
 }
 
 function setCaptureView(view){
-  renderCaptureState.activeView=view==='depth'?'depth':'preview';
+  const allowed=new Set(['preview','depth','normal','silhouette','opacity']);
+  renderCaptureState.activeView=allowed.has(view)?view:'preview';
   updateCapturePanel();
+  refreshStructuredPromptPreview();
 }
 
 function togglePanelCollapse(panelId,bodyId,btnId){
@@ -657,7 +794,9 @@ function togglePanelCollapse(panelId,bodyId,btnId){
 }
 
 function getRenderBackend(){
-  return 'openai';
+  const selected=document.querySelector('input[name="render-backend"]:checked');
+  if(selected&&selected.value)return selected.value;
+  return renderRequestState.backend||'comfy';
 }
 
 function toIntInput(id, fallback, minVal, maxVal){
@@ -679,23 +818,28 @@ function toFloatInput(id, fallback, minVal, maxVal){
 }
 
 function updateBackendDependentUI(){
-  const openaiRowsVisible=true;
+  const backend=getRenderBackend();
+  const openaiRowsVisible=backend==='openai';
+  const comfyRowsVisible=backend==='comfy';
 
   ['openai-row-api-key','openai-row-model','openai-row-quality'].forEach((id)=>{
     const el=document.getElementById(id);
     if(el)el.style.display=openaiRowsVisible?'flex':'none';
   });
 
+  const comfyRow=document.getElementById('comfy-row');
+  if(comfyRow)comfyRow.style.display=comfyRowsVisible?'flex':'none';
+
   const resolutionRow=document.getElementById('python-row-resolution');
-  if(resolutionRow)resolutionRow.style.display='flex';
+  if(resolutionRow)resolutionRow.style.display=openaiRowsVisible?'flex':'none';
 }
 
 function getOpenAIRenderParams(){
   const key=(document.getElementById('render-openai-key')?.value||'').trim();
   const model=(document.getElementById('render-openai-model')?.value||'gpt-image-1').trim()||'gpt-image-1';
   const quality=(document.getElementById('render-openai-quality')?.value||'medium').trim()||'medium';
-  const width=toIntInput('py-width',1024,256,2048);
-  const height=toIntInput('py-height',1024,256,2048);
+  const width=toIntInput('py-width',512,256,2048);
+  const height=toIntInput('py-height',512,256,2048);
   return {key,model,quality,width,height};
 }
 
@@ -704,9 +848,75 @@ function composeRenderPrompt(){
   const view=document.getElementById('render-view')?.value||'exterior';
   const lighting=document.getElementById('render-light')?.value||'golden hour';
   const material=document.getElementById('render-material')?.value||'timber';
-  const free=(document.getElementById('render-prompt')?.value||'').trim();
-  const base=`${style} architectural render, ${view} view, ${lighting} lighting, ${material} facade, clean composition, realistic scale`;
-  return free?`${base}, ${free}`:base;
+  const siteContext=(document.getElementById('render-prompt')?.value||'').trim();
+
+  const qualityBlock=[
+    '[quality]',
+    `${style} architectural render, professional architectural photography, 8k, sharp focus, realistic scale`,
+  ];
+
+  const subjectBlock=[
+    '[subject + viewpoint]',
+    `modern residential building, ${view} view${siteContext?`, ${siteContext}`:', context-aware setting'}`,
+  ];
+
+  let lightingText='clean neutral daylight, soft sky light, realistic shadow contrast';
+  if(lighting==='golden hour'){
+    lightingText='warm golden hour sunlight, low sun angle, long horizontal shadows, amber sky, warm 5000K light';
+  }else if(lighting==='overcast'){
+    lightingText='soft overcast daylight, diffuse sky dome illumination, cool-neutral 6500K light, gentle low-contrast shadows';
+  }else if(lighting==='night'){
+    lightingText='night scene with balanced exterior practical lighting, warm interior glow, cool ambient sky fill, controlled contrast';
+  }
+  const lightingBlock=[
+    '[lighting]',
+    lightingText,
+  ];
+
+  let materialLead='vertical timber battens';
+  if(material==='concrete')materialLead='board-formed concrete facade';
+  else if(material==='brick')materialLead='warm textured brick facade';
+  else if(material==='glass')materialLead='high-performance glass curtain facade';
+  const materialsBlock=[
+    '[materials]',
+    `${materialLead}, reflective glass windows, dark concrete base`,
+  ];
+
+  const parts=[
+    qualityBlock.join('\n'),
+    subjectBlock.join('\n'),
+    lightingBlock.join('\n'),
+    materialsBlock.join('\n'),
+  ];
+
+  if(renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl){
+    parts.push(SILHOUETTE_CONSTRAINT_PROMPT);
+  }
+  if(renderCaptureState.opacityMaskDataUrl){
+    parts.push(`[semantic legend]\n${OPACITY_MASK_PROMPT_LEGEND}`);
+    const overrides=[];
+    const map=[
+      ['walls','opacity-mat-walls'],
+      ['doors','opacity-mat-doors'],
+      ['windows','opacity-mat-windows'],
+      ['slabs','opacity-mat-slabs'],
+      ['parapets','opacity-mat-parapets'],
+    ];
+    map.forEach(([label,id])=>{
+      const value=(document.getElementById(id)?.value||'').trim();
+      if(value)overrides.push(`${label}=${value}`);
+    });
+    if(overrides.length){
+      parts.push(`material overrides by opacity class: ${overrides.join('; ')}`);
+    }
+  }
+  return parts.join('\n\n');
+}
+
+function refreshStructuredPromptPreview(){
+  const el=document.getElementById('render-prompt-preview');
+  if(!el)return;
+  el.value=composeRenderPrompt();
 }
 
 function updateRenderResultUI(dataUrl,meta){
@@ -731,6 +941,34 @@ function setComfyStatus(msg,isError=false){
   if(!el)return;
   el.textContent=msg;
   el.style.color=isError?'#b91c1c':'#4b5563';
+}
+
+function getWorkflowNodeTypes(parsed){
+  if(!parsed||typeof parsed!=='object')return [];
+  let nodes=parsed;
+  if(parsed.prompt&&typeof parsed.prompt==='object'&&!Array.isArray(parsed.prompt)){
+    nodes=parsed.prompt;
+  }else if(parsed.workflow&&typeof parsed.workflow==='object'&&!Array.isArray(parsed.workflow)){
+    nodes=parsed.workflow;
+  }
+  if(!nodes||typeof nodes!=='object'||Array.isArray(nodes))return [];
+  return Object.values(nodes)
+    .map((node)=>String((node&&((node.class_type)||(node.type)))||'').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function workflowLooksPassThrough(nodeTypes){
+  const hasSampler=nodeTypes.some((t)=>t.includes('ksampler')||t.includes('sampler'));
+  const hasModelish=nodeTypes.some((t)=>
+    t.includes('checkpointloader')||
+    t.includes('unetloader')||
+    t.includes('cliploader')||
+    t.includes('dualcliploader')||
+    t.includes('diffusion')||
+    t.includes('model')
+  );
+  const hasDecode=nodeTypes.some((t)=>t.includes('decode')||t.includes('vaedecode'));
+  return !hasSampler&&!(hasModelish&&hasDecode);
 }
 
 async function checkComfyConnection(){
@@ -766,16 +1004,43 @@ function loadWorkflowOverride(input){
   reader.onload=()=>{
     try{
       const parsed=JSON.parse(reader.result);
+      const looksLikeUIExport=!!(parsed&&Array.isArray(parsed.nodes));
+      if(looksLikeUIExport){
+        renderRequestState.workflowOverride=null;
+        renderRequestState.workflowName='';
+        const el=document.getElementById('workflow-name');
+        if(el)el.textContent='UI workflow detected. Export from ComfyUI as API format JSON.';
+        const inEl=document.getElementById('workflow-file');
+        if(inEl)inEl.value='';
+        setComfyStatus('Workflow rejected: use ComfyUI Save (API Format).',true);
+        setViewer3DStatus('Workflow must be API format (dict keyed by node id).');
+        return;
+      }
+      const nodeTypes=getWorkflowNodeTypes(parsed);
+      if(workflowLooksPassThrough(nodeTypes)){
+        renderRequestState.workflowOverride=null;
+        renderRequestState.workflowName='';
+        const el=document.getElementById('workflow-name');
+        if(el)el.textContent='Workflow rejected: appears to be depth passthrough (no sampler/model graph).';
+        const inEl=document.getElementById('workflow-file');
+        if(inEl)inEl.value='';
+        const preview=nodeTypes.length?nodeTypes.slice(0,8).join(', '):'none';
+        setComfyStatus(`Workflow rejected: non-generative graph detected (${preview}).`,true);
+        setViewer3DStatus('Upload a full ComfyUI API workflow with sampler + model nodes.');
+        return;
+      }
       renderRequestState.workflowOverride=parsed;
       renderRequestState.workflowName=file.name;
       const el=document.getElementById('workflow-name');
       if(el)el.textContent=`Using uploaded workflow: ${file.name}`;
+      setComfyStatus('Workflow loaded (API format).');
       setViewer3DStatus('Workflow override loaded.');
     }catch(err){
       renderRequestState.workflowOverride=null;
       renderRequestState.workflowName='';
       const el=document.getElementById('workflow-name');
       if(el)el.textContent='Invalid workflow JSON. Using repo default.';
+      setComfyStatus('Invalid workflow JSON file.',true);
       setViewer3DStatus(`Workflow parse error: ${err.message}`);
     }
   };
@@ -788,7 +1053,8 @@ function clearWorkflowOverride(){
   const inEl=document.getElementById('workflow-file');
   if(inEl)inEl.value='';
   const nameEl=document.getElementById('workflow-name');
-  if(nameEl)nameEl.textContent='Using repo default: comfyui-flux-depth-workflow.json';
+  if(nameEl)nameEl.textContent='Using repo default: comfyui-sdxl-depth-multi-workflow.json';
+  setComfyStatus('Using repo default workflow.');
   setViewer3DStatus('Workflow override cleared.');
 }
 
@@ -799,32 +1065,47 @@ async function generateRenderMock(){
     return;
   }
 
-  const backend='openai';
+  const backend=getRenderBackend();
   const prompt=composeRenderPrompt();
   const openaiParams=getOpenAIRenderParams();
+  const comfyUrl=(document.getElementById('render-comfy-url')?.value||'http://127.0.0.1:8188').trim();
+  const depthInvert=!!document.getElementById('render-comfy-invert')?.checked;
   renderRequestState.backend=backend;
   renderRequestState.assembledPrompt=prompt;
 
   if(btn)btn.disabled=true;
-  const backendLabel='OpenAI cloud';
+  const backendLabel=backend==='comfy'?'ComfyUI local':'OpenAI cloud';
   setViewer3DStatus(`Generating render (${backendLabel})…`);
 
   try{
+    const requestBody={
+      backend,
+      prompt,
+      depth_data_url:renderCaptureState.depthDataUrl,
+      building_mask_data_url:renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,
+      normal_data_url:renderCaptureState.normalDataUrl,
+      silhouette_data_url:renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,
+      opacity_mask_data_url:renderCaptureState.opacityMaskDataUrl,
+    };
+
+    if(backend==='comfy'){
+      requestBody.comfy_url=comfyUrl;
+      requestBody.depth_invert=depthInvert;
+      if(renderRequestState.workflowOverride){
+        requestBody.workflow_override=renderRequestState.workflowOverride;
+      }
+    }else{
+      requestBody.openai_api_key=openaiParams.key||undefined;
+      requestBody.openai_model=openaiParams.model;
+      requestBody.openai_quality=openaiParams.quality;
+      requestBody.openai_width=openaiParams.width;
+      requestBody.openai_height=openaiParams.height;
+    }
+
     const resp=await fetch('/render',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        backend,
-        prompt,
-        depth_data_url:renderCaptureState.depthDataUrl,
-        building_mask_data_url:renderCaptureState.maskDataUrl,
-        // OpenAI backend parameters
-        openai_api_key:openaiParams.key||undefined,
-        openai_model:openaiParams.model,
-        openai_quality:openaiParams.quality,
-        openai_width:openaiParams.width,
-        openai_height:openaiParams.height,
-      }),
+      body:JSON.stringify(requestBody),
     });
     const parsed=await parseApiResponse(resp);
     const data=parsed.data;
@@ -866,6 +1147,69 @@ function imageDataToDataUrl(imgData){
   return out.toDataURL('image/png');
 }
 
+function downloadDataUrlFile(dataUrl,fileName){
+  if(!dataUrl||typeof dataUrl!=='string')return;
+  const a=document.createElement('a');
+  a.href=dataUrl;
+  a.download=fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadTextFile(text,fileName){
+  const blob=new Blob([String(text||'')],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadLatestCaptureBundle(){
+  if(!renderCaptureState.depthDataUrl){
+    setViewer3DStatus('Capture maps first, then download bundle.');
+    return;
+  }
+
+  const stamp=(renderCaptureState.capturedAt||new Date().toISOString())
+    .replace(/[:]/g,'-')
+    .replace(/\..*/,'');
+  const base=`capture_${stamp}`;
+
+  const prompt=composeRenderPrompt();
+  const backend=getRenderBackend();
+  const comfyUrl=(document.getElementById('render-comfy-url')?.value||'http://127.0.0.1:8188').trim();
+  const bundleInfo={
+    captured_at:renderCaptureState.capturedAt,
+    backend,
+    comfy_url:comfyUrl,
+    prompt,
+    files:{
+      preview:'preview.png',
+      depth:'depth.png',
+      silhouette:'silhouette.png',
+      building_mask:'building_mask.png',
+      normal:'normal.png',
+      opacity_mask:'opacity_mask.png',
+    },
+  };
+
+  downloadDataUrlFile(renderCaptureState.previewDataUrl,`${base}__preview.png`);
+  downloadDataUrlFile(renderCaptureState.depthDataUrl,`${base}__depth.png`);
+  downloadDataUrlFile(renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,`${base}__silhouette.png`);
+  downloadDataUrlFile(renderCaptureState.maskDataUrl,`${base}__building_mask.png`);
+  downloadDataUrlFile(renderCaptureState.normalDataUrl,`${base}__normal.png`);
+  downloadDataUrlFile(renderCaptureState.opacityMaskDataUrl,`${base}__opacity_mask.png`);
+  downloadTextFile(prompt,`${base}__prompt.txt`);
+  downloadTextFile(JSON.stringify(bundleInfo,null,2),`${base}__bundle.json`);
+
+  setViewer3DStatus('Capture bundle downloaded.');
+}
+
 function percentileFromHist(hist,total,pct){
   const target=Math.max(0,Math.min(total-1,Math.floor((pct/100)*total)));
   let acc=0;
@@ -887,7 +1231,7 @@ function makeBinaryMaskDataUrl(maskImg){
 }
 
 function decodePackedDepth01(r,g,b,a){
-  // Using BasicDepthPacking: depth is stored in the red channel.
+  // BasicDepthPacking stores depth in the red channel.
   return r/255;
 }
 
@@ -907,7 +1251,7 @@ function makeDepthDataUrlFromImageData(depthImg,maskImg,near,far){
   for(let i=0;i<src.length;i+=4){
     const inside=m?m[i]>20:true;
     if(!inside)continue;
-    const depth01=decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3]);
+    const depth01=Math.max(0,Math.min(1,decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3])));
     const viewZ=depth01ToViewZ(depth01,near,far);
     vals.push(viewZ);
     count++;
@@ -931,13 +1275,39 @@ function makeDepthDataUrlFromImageData(depthImg,maskImg,near,far){
       d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=255;
       continue;
     }
-    const depth01=decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3]);
+    const depth01=Math.max(0,Math.min(1,decodePackedDepth01(src[i],src[i+1],src[i+2],src[i+3])));
     const viewZ=depth01ToViewZ(depth01,near,far);
     const nv=Math.max(0,Math.min(1,(viewZ-lo)/(hi-lo)));
     // Default to white-near / black-far to match common ControlNet depth priors.
     const v=Math.round(255*(1-Math.pow(nv,gamma)));
     d[i]=v;d[i+1]=v;d[i+2]=v;d[i+3]=255;
   }
+
+  // Light blur suppresses residual banding from 8-bit output quantization.
+  const blurred=new Uint8ClampedArray(d);
+  const w=out.width,h=out.height;
+  const idx=(x,y)=>((y*w+x)*4);
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const center=idx(x,y);
+      const inside=m?m[center]>20:true;
+      if(!inside)continue;
+      let s=0,c=0;
+      for(let oy=-1;oy<=1;oy++){
+        for(let ox=-1;ox<=1;ox++){
+          const j=idx(x+ox,y+oy);
+          if(m&&m[j]<=20)continue;
+          s+=d[j];
+          c++;
+        }
+      }
+      if(c>0){
+        const v=Math.round(s/c);
+        blurred[center]=v;blurred[center+1]=v;blurred[center+2]=v;
+      }
+    }
+  }
+  out.data.set(blurred);
   return imageDataToDataUrl(out);
 }
 
@@ -980,6 +1350,90 @@ function captureMaskImageData(scene,camera,renderer){
   renderer.setClearColor(prevClr,prevAlpha);
   maskMat.dispose();
   return maskImg;
+}
+
+function captureNormalImageData(scene,camera,renderer){
+  const prevOverride=scene.overrideMaterial;
+  const prevBg=scene.background;
+  const prevClr=renderer.getClearColor(new THREE.Color()).clone();
+  const prevAlpha=renderer.getClearAlpha();
+
+  const normalMat=new THREE.MeshNormalMaterial({side:THREE.DoubleSide});
+  scene.overrideMaterial=normalMat;
+  scene.background=new THREE.Color(0x000000);
+  renderer.setClearColor(0x000000,1);
+  renderer.render(scene,camera);
+  const normalImg=captureCanvasImageData(renderer.domElement);
+
+  scene.overrideMaterial=prevOverride||null;
+  scene.background=prevBg;
+  renderer.setClearColor(prevClr,prevAlpha);
+  normalMat.dispose();
+  return normalImg;
+}
+
+function makeNormalDataUrlFromImageData(normalImg,maskImg){
+  const out=new ImageData(new Uint8ClampedArray(normalImg.data),normalImg.width,normalImg.height);
+  const d=out.data;
+  const m=maskImg?.data||null;
+  for(let i=0;i<d.length;i+=4){
+    const inside=m?m[i]>20:true;
+    if(!inside){
+      d[i]=0;d[i+1]=0;d[i+2]=0;d[i+3]=255;
+      continue;
+    }
+    d[i+3]=255;
+  }
+  return imageDataToDataUrl(out);
+}
+
+function captureOpacityMaskDataUrl(scene,camera,renderer){
+  const prevOverride=scene.overrideMaterial;
+  const prevBg=scene.background;
+  const prevClr=renderer.getClearColor(new THREE.Color()).clone();
+  const prevAlpha=renderer.getClearAlpha();
+  const touched=[];
+
+  if(viewer3D.planGroup){
+    viewer3D.planGroup.traverse((obj)=>{
+      if(!obj||!obj.isMesh)return;
+      const role=String(obj?.userData?.captureRole||'').toLowerCase();
+      touched.push({obj,visible:obj.visible,material:obj.material});
+      if(!role||!Object.prototype.hasOwnProperty.call(OPACITY_MASK_COLORS,role)){
+        obj.visible=false;
+        return;
+      }
+      obj.visible=true;
+      obj.material=new THREE.MeshBasicMaterial({
+        color:OPACITY_MASK_COLORS[role],
+        side:THREE.DoubleSide,
+      });
+    });
+  }
+
+  scene.background=new THREE.Color(0x000000);
+  renderer.setClearColor(0x000000,1);
+  scene.overrideMaterial=null;
+  renderer.render(scene,camera);
+  const maskImg=captureCanvasImageData(renderer.domElement);
+
+  touched.forEach(({obj,visible,material})=>{
+    if(obj.material&&obj.material!==material){
+      if(Array.isArray(obj.material))obj.material.forEach((m)=>m&&m.dispose&&m.dispose());
+      else if(obj.material.dispose)obj.material.dispose();
+    }
+    obj.material=material;
+    obj.visible=visible;
+  });
+
+  scene.background=prevBg;
+  renderer.setClearColor(prevClr,prevAlpha);
+  scene.overrideMaterial=prevOverride||null;
+
+  const out=new ImageData(new Uint8ClampedArray(maskImg.data),maskImg.width,maskImg.height);
+  const d=out.data;
+  for(let i=0;i<d.length;i+=4)d[i+3]=255;
+  return imageDataToDataUrl(out);
 }
 
 function loadScriptOnce(src){
@@ -1349,7 +1803,7 @@ function addBalconyGeometry(room,state){
     floorGeom,
     new THREE.MeshStandardMaterial({color:0xbdbdbd,roughness:0.9,metalness:0.02,side:THREE.DoubleSide})
   );
-  floorMesh.userData.captureRole='volume';
+  floorMesh.userData.captureRole='slabs';
   floorMesh.castShadow=false;
   floorMesh.receiveShadow=true;
   viewer3D.planGroup.add(floorMesh);
@@ -1367,11 +1821,44 @@ function addBalconyGeometry(room,state){
     );
     parapetMesh.position.set((x1+x2)/2,BALCONY_PARAPET_HEIGHT/2,(z1+z2)/2);
     parapetMesh.rotation.y=Math.atan2(dz,dx);
-    parapetMesh.userData.captureRole='volume';
+    parapetMesh.userData.captureRole='parapets';
     parapetMesh.castShadow=false;
     parapetMesh.receiveShadow=true;
     viewer3D.planGroup.add(parapetMesh);
   }
+}
+
+function addDoorGeometry(fp,state){
+  const doors=fp.doors||[];
+  doors.forEach((d)=>{
+    const rect=bboxToSceneRect(d?.bbox,state);
+    if(!rect)return;
+
+    const cx=(rect.minX+rect.maxX)/2;
+    const cz=(rect.minZ+rect.maxZ)/2;
+    const doorLen=Math.max(DOOR_THICKNESS,Math.max(rect.maxX-rect.minX,rect.maxZ-rect.minZ));
+
+    let targetX=cx,targetZ=cz;
+    let segAngle=0;
+    const seg=findWindowAnchorSegment(d,fp,state,cx,cz);
+    if(seg){
+      targetX=seg.x;
+      targetZ=seg.z;
+      segAngle=Math.atan2(seg.bz-seg.az,seg.bx-seg.ax);
+    }
+
+    const geom=new THREE.BoxGeometry(doorLen,DOOR_HEIGHT,DOOR_THICKNESS);
+    const mesh=new THREE.Mesh(
+      geom,
+      new THREE.MeshStandardMaterial({color:0x9a6a34,roughness:0.6,metalness:0.08})
+    );
+    mesh.position.set(targetX,DOOR_HEIGHT/2,targetZ);
+    mesh.rotation.y=segAngle;
+    mesh.userData.captureRole='doors';
+    mesh.castShadow=false;
+    mesh.receiveShadow=false;
+    viewer3D.planGroup.add(mesh);
+  });
 }
 
 function addWindowGeometry(fp,state){
@@ -1411,7 +1898,7 @@ function addWindowGeometry(fp,state){
     const mesh=new THREE.Mesh(geom,openingMaterial);
     mesh.position.set(targetX,sillHeight+openingHeight/2,targetZ);
     mesh.rotation.y=segAngle;
-    mesh.userData.captureRole='volume';
+    mesh.userData.captureRole=balconyDoorOpening?'doors':'windows';
     mesh.castShadow=false;
     mesh.receiveShadow=false;
     viewer3D.planGroup.add(mesh);
@@ -1447,12 +1934,13 @@ function build3DSceneFromActivePlan(){
     geom.rotateX(-Math.PI/2);
     const mat=new THREE.MeshStandardMaterial({color:roomTypeColor(st),roughness:0.85,metalness:0.05,side:THREE.DoubleSide});
     const mesh=new THREE.Mesh(geom,mat);
-    mesh.userData.captureRole='volume';
+    mesh.userData.captureRole='walls';
     mesh.castShadow=false;
     mesh.receiveShadow=true;
     viewer3D.planGroup.add(mesh);
   });
 
+  addDoorGeometry(fp,s);
   addWindowGeometry(fp,s);
 
   const boundaryShape=shapeFromPlanPolygon(boundaryPoly,s);
@@ -1473,7 +1961,7 @@ function build3DSceneFromActivePlan(){
       roofGeom,
       new THREE.MeshStandardMaterial({color:0x9a9a9a,roughness:0.85,metalness:0.03,side:THREE.DoubleSide})
     );
-    roof.userData.captureRole='volume';
+    roof.userData.captureRole='slabs';
     roof.position.y=ROOM_HEIGHT;
     viewer3D.planGroup.add(roof);
   }
@@ -1540,6 +2028,7 @@ function setViewTab(tab,opts={}){
     });
     updateBackendDependentUI();
     updateCapturePanel();
+    refreshStructuredPromptPreview();
     sync3DSceneIfNeeded(!!opts.triggerBuild);
   }
 }
@@ -1586,9 +2075,18 @@ function captureDepthAndPreview(){
     const depthImg=captureCanvasImageData(renderer.domElement);
 
     const maskImg=captureMaskImageData(scene,camera,renderer);
+    const normalImg=captureNormalImageData(scene,camera,renderer);
     const depthDataUrl=makeDepthDataUrlFromImageData(depthImg,maskImg,captureNear,captureFar);
     const maskDataUrl=makeBinaryMaskDataUrl(maskImg);
-    return {depthDataUrl,maskDataUrl};
+    const normalDataUrl=makeNormalDataUrlFromImageData(normalImg,maskImg);
+    const opacityMaskDataUrl=captureOpacityMaskDataUrl(scene,camera,renderer);
+    return {
+      depthDataUrl,
+      maskDataUrl,
+      silhouetteDataUrl:maskDataUrl,
+      normalDataUrl,
+      opacityMaskDataUrl,
+    };
   });
 
   scene.overrideMaterial=prevOverride||null;
@@ -1602,11 +2100,15 @@ function captureDepthAndPreview(){
 
   renderCaptureState.depthDataUrl=captured.depthDataUrl;
   renderCaptureState.maskDataUrl=captured.maskDataUrl;
+  renderCaptureState.silhouetteDataUrl=captured.silhouetteDataUrl;
+  renderCaptureState.normalDataUrl=captured.normalDataUrl;
+  renderCaptureState.opacityMaskDataUrl=captured.opacityMaskDataUrl;
   renderCaptureState.previewDataUrl=previewDataUrl;
   renderCaptureState.capturedAt=new Date().toISOString();
   renderCaptureState.activeView='preview';
   updateCapturePanel();
-  setViewer3DStatus(`Depth captured (near ${captureNear.toFixed(3)}, far ${captureFar.toFixed(3)}).`);
+  refreshStructuredPromptPreview();
+  setViewer3DStatus(`Maps captured (near ${captureNear.toFixed(3)}, far ${captureFar.toFixed(3)}).`);
 }
 
 // ── coord helpers ─────────────────────────────────────────────────────────
@@ -3331,6 +3833,27 @@ async function autoLoad(){
 if(location.protocol!=='file:'){
   window.addEventListener('DOMContentLoaded',autoLoad);
 }
+window.addEventListener('DOMContentLoaded',()=>{
+  const ids=[
+    'render-style',
+    'render-view',
+    'render-light',
+    'render-material',
+    'render-prompt',
+    'opacity-mat-walls',
+    'opacity-mat-doors',
+    'opacity-mat-windows',
+    'opacity-mat-slabs',
+    'opacity-mat-parapets',
+  ];
+  ids.forEach((id)=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.addEventListener('input',refreshStructuredPromptPreview);
+    el.addEventListener('change',refreshStructuredPromptPreview);
+  });
+  refreshStructuredPromptPreview();
+});
 
 // ── legend ────────────────────────────────────────────────────────────────
 (function buildLegend(){
