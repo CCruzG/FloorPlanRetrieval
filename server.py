@@ -297,6 +297,7 @@ def render_image():
         depth_invert               : optional bool (reserved)
             comfy_url                  : optional str (comfy backend; default http://127.0.0.1:8188)
             workflow_override          : optional dict (comfy backend; workflow JSON)
+            segmentation_data_url      : optional data:image/png;base64,... (comfy backend)
             openai_api_key             : optional str (openai backend; falls back to OPENAI_API_KEY env)
             openai_model               : optional str (openai backend; default gpt-image-1)
             openai_quality             : optional str (openai backend; default medium)
@@ -318,6 +319,7 @@ def render_image():
     normal_data_url = body.get("normal_data_url")
     silhouette_data_url = body.get("silhouette_data_url")
     opacity_mask_data_url = body.get("opacity_mask_data_url")
+    segmentation_data_url = body.get("segmentation_data_url")
     depth_invert_raw = body.get("depth_invert", False)
     if isinstance(depth_invert_raw, str):
         depth_invert = depth_invert_raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -341,6 +343,7 @@ def render_image():
                 normal_data_url=normal_data_url,
                 silhouette_data_url=silhouette_data_url,
                 opacity_mask_data_url=opacity_mask_data_url,
+                segmentation_data_url=segmentation_data_url,
                 depth_invert=depth_invert,
                 workflow_override=workflow_override,
             )
@@ -946,6 +949,7 @@ def _inject_prompt_and_depth(
     uploaded_normal_filename=None,
     uploaded_silhouette_filename=None,
     uploaded_opacity_filename=None,
+    uploaded_segmentation_filename=None,
 ):
     """Best-effort workflow injection for ComfyUI workflow payloads."""
     if not isinstance(workflow, dict):
@@ -1164,21 +1168,67 @@ def _inject_prompt_and_depth(
         lambda _cls, title, key_blob, value_blob, _inputs: (
             "opacity" in title
             or "alpha" in title
-            or "semantic" in title
             or "material" in title
             or "id mask" in title
             or "opacity" in key_blob
             or "alpha" in key_blob
-            or "semantic" in key_blob
             or "material" in key_blob
             or "opacity" in value_blob
             or "alpha" in value_blob
-            or "semantic" in value_blob
             or "material" in value_blob
         ),
         max_assign=1,
     )
-    _assign_by_keys(uploaded_opacity_filename, ("opacity", "alpha", "semantic", "material_mask", "id_mask"))
+    _assign_by_keys(uploaded_opacity_filename, ("opacity", "alpha", "material_mask", "id_mask"))
+
+    # Segmentation map loaders (ADE20K / semantic segmentation controls).
+    segmentation_assigned = _assign_to_loaders(
+        uploaded_segmentation_filename,
+        lambda _cls, title, key_blob, value_blob, _inputs: (
+            "segmentation" in title
+            or "ade20k" in title
+            or "semantic" in title
+            or "segment" in title
+            or "opacity" in title
+            or "segmentation" in key_blob
+            or "ade20k" in key_blob
+            or "semantic" in key_blob
+            or "segment" in key_blob
+            or "opacity" in key_blob
+            or "segmentation" in value_blob
+            or "ade20k" in value_blob
+            or "semantic" in value_blob
+            or "segment" in value_blob
+            or "opacity" in value_blob
+        ),
+        max_assign=1,
+    )
+    _assign_by_keys(
+        uploaded_segmentation_filename,
+        ("segmentation", "semantic", "segment_map", "ade20k", "seg_map", "semantic_map", "opacity", "opacity_mask"),
+    )
+
+    # Compatibility fallback: if caller did not provide a dedicated segmentation
+    # map, reuse opacity map for segmentation loaders.
+    if (not segmentation_assigned) and uploaded_opacity_filename:
+        _assign_to_loaders(
+            uploaded_opacity_filename,
+            lambda _cls, title, key_blob, value_blob, _inputs: (
+                "segmentation" in title
+                or "ade20k" in title
+                or "semantic" in title
+                or "segment" in title
+                or "segmentation" in key_blob
+                or "ade20k" in key_blob
+                or "semantic" in key_blob
+                or "segment" in key_blob
+                or "segmentation" in value_blob
+                or "ade20k" in value_blob
+                or "semantic" in value_blob
+                or "segment" in value_blob
+            ),
+            max_assign=1,
+        )
 
     # Binary mask map loaders (legacy building mask).
     mask_set = _assign_to_loaders(
@@ -1487,6 +1537,7 @@ def _render_with_comfy_local(
     normal_data_url=None,
     silhouette_data_url=None,
     opacity_mask_data_url=None,
+    segmentation_data_url=None,
     depth_invert=False,
     workflow_override=None,
 ):
@@ -1527,6 +1578,12 @@ def _render_with_comfy_local(
             opacity_png_bytes = _decode_data_url_png(opacity_mask_data_url)
         except Exception:
             opacity_png_bytes = None
+    segmentation_png_bytes = None
+    if segmentation_data_url and isinstance(segmentation_data_url, str):
+        try:
+            segmentation_png_bytes = _decode_data_url_png(segmentation_data_url)
+        except Exception:
+            segmentation_png_bytes = None
 
     upload_url = f"{comfy_url}/upload/image"
 
@@ -1551,6 +1608,7 @@ def _render_with_comfy_local(
     uploaded_normal_name = _upload_png("normal", normal_png_bytes) if normal_png_bytes else None
     uploaded_silhouette_name = _upload_png("silhouette", silhouette_png_bytes) if silhouette_png_bytes else None
     uploaded_opacity_name = _upload_png("opacity", opacity_png_bytes) if opacity_png_bytes else None
+    uploaded_segmentation_name = _upload_png("segmentation", segmentation_png_bytes) if segmentation_png_bytes else None
 
     # Prepare prompt payload
     workflow_fallback_used = False
@@ -1564,6 +1622,7 @@ def _render_with_comfy_local(
             uploaded_normal_filename=uploaded_normal_name,
             uploaded_silhouette_filename=uploaded_silhouette_name,
             uploaded_opacity_filename=uploaded_opacity_name,
+            uploaded_segmentation_filename=uploaded_segmentation_name,
         )
     except ValueError as exc:
         msg = str(exc).lower()
@@ -1581,6 +1640,7 @@ def _render_with_comfy_local(
                 uploaded_normal_filename=uploaded_normal_name,
                 uploaded_silhouette_filename=uploaded_silhouette_name,
                 uploaded_opacity_filename=uploaded_opacity_name,
+                uploaded_segmentation_filename=uploaded_segmentation_name,
             )
         else:
             raise

@@ -549,33 +549,33 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           </div>
           <div id="opacity-legend" class="hidden">
             <div class="opacity-legend-row">
-              <span class="opacity-legend-swatch" style="background:#6b7280"></span>
+              <span class="opacity-legend-swatch" style="background:#787878"></span>
               <span class="opacity-legend-name">walls</span>
-              <span class="opacity-legend-color">gray</span>
+              <span class="opacity-legend-color">#787878</span>
               <input id="opacity-mat-walls" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
             </div>
             <div class="opacity-legend-row">
-              <span class="opacity-legend-swatch" style="background:#fb923c"></span>
+              <span class="opacity-legend-swatch" style="background:#08ff33"></span>
               <span class="opacity-legend-name">doors</span>
-              <span class="opacity-legend-color">orange</span>
+              <span class="opacity-legend-color">#08ff33</span>
               <input id="opacity-mat-doors" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
             </div>
             <div class="opacity-legend-row">
-              <span class="opacity-legend-swatch" style="background:#22d3ee"></span>
+              <span class="opacity-legend-swatch" style="background:#e6e6e6"></span>
               <span class="opacity-legend-name">windows</span>
-              <span class="opacity-legend-color">cyan</span>
+              <span class="opacity-legend-color">#e6e6e6</span>
               <input id="opacity-mat-windows" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
             </div>
             <div class="opacity-legend-row">
-              <span class="opacity-legend-swatch" style="background:#f8fafc"></span>
+              <span class="opacity-legend-swatch" style="background:#503232"></span>
               <span class="opacity-legend-name">slabs</span>
-              <span class="opacity-legend-color">white</span>
+              <span class="opacity-legend-color">#503232</span>
               <input id="opacity-mat-slabs" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
             </div>
             <div class="opacity-legend-row">
-              <span class="opacity-legend-swatch" style="background:#ef4444"></span>
+              <span class="opacity-legend-swatch" style="background:#ffb806"></span>
               <span class="opacity-legend-name">parapets</span>
-              <span class="opacity-legend-color">red</span>
+              <span class="opacity-legend-color">#ffb806</span>
               <input id="opacity-mat-parapets" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
             </div>
           </div>
@@ -682,14 +682,13 @@ const BALCONY_PARAPET_THICKNESS=0.08;
 const DOOR_HEIGHT=2.2;
 const DOOR_THICKNESS=0.12;
 const OPACITY_MASK_COLORS={
-  walls:0x6b7280,
-  doors:0xfb923c,
-  windows:0x22d3ee,
-  slabs:0xf8fafc,
-  parapets:0xef4444,
+  walls:0x787878,    // ADE20K wall
+  doors:0x08ff33,    // ADE20K door
+  windows:0xe6e6e6,  // ADE20K windowpane
+  slabs:0x503232,    // ADE20K floor-like tone
+  parapets:0xffb806, // Amber parapet class
 };
-const OPACITY_MASK_PROMPT_LEGEND='opacity legend: walls=gray, doors=orange, windows=cyan, slabs=white, parapets=red';
-const SILHOUETTE_CONSTRAINT_PROMPT='silhouette constraint: the silhouette mask defines the exact building extents and massing footprint; treat everything outside the silhouette as context only; do not add extra building wings, annexes, balconies, canopies, or additional built elements beyond the silhouette.';
+const SILHOUETTE_CONSTRAINT_PROMPT='strict silhouette lock: keep exact building extents and massing from the silhouette, no added wings, annexes, balconies, canopies, or extra built elements.';
 let activeTab='2d';
 let threeDepsPromise=null;
 const viewer3D={
@@ -843,73 +842,124 @@ function getOpenAIRenderParams(){
   return {key,model,quality,width,height};
 }
 
+function getCameraPerspectivePrompt(view){
+  const normalizedView=(view||'exterior').trim().toLowerCase();
+  const fallback=normalizedView==='interior'
+    ?'eye-level interior two-point perspective'
+    :'eye-level two-point perspective exterior view';
+
+  if(!viewer3D.initialized||!viewer3D.camera)return fallback;
+
+  const camera=viewer3D.camera;
+  const target=viewer3D.controls?.target||new THREE.Vector3(0,0,0);
+  const dy=camera.position.y-target.y;
+  const dx=camera.position.x-target.x;
+  const dz=camera.position.z-target.z;
+  const horizontal=Math.max(1e-4,Math.hypot(dx,dz));
+  const pitchDeg=Math.atan2(dy,horizontal)*(180/Math.PI);
+
+  if(normalizedView==='interior'){
+    if(dy<1.8&&Math.abs(pitchDeg)<=18)return 'eye-level interior two-point perspective';
+    if(dy<3.8)return 'slightly elevated interior perspective';
+    return 'elevated interior overview perspective';
+  }
+
+  if(dy<1.8&&Math.abs(pitchDeg)<=18)return 'eye-level two-point perspective exterior view';
+  if(dy<4.5&&pitchDeg>=0)return 'slightly elevated exterior perspective view';
+  if(dy<9.0&&pitchDeg>=8)return 'elevated exterior view';
+  if(dy>=9.0)return 'birds-eye exterior oblique view';
+  if(pitchDeg<-8)return 'low camera upward exterior perspective';
+  return 'architectural exterior perspective view';
+}
+
 function composeRenderPrompt(){
-  const style=document.getElementById('render-style')?.value||'photorealistic';
-  const view=document.getElementById('render-view')?.value||'exterior';
-  const lighting=document.getElementById('render-light')?.value||'golden hour';
-  const material=document.getElementById('render-material')?.value||'timber';
+  const style=(document.getElementById('render-style')?.value||'photorealistic').trim();
+  const view=(document.getElementById('render-view')?.value||'exterior').trim();
+  const lighting=(document.getElementById('render-light')?.value||'golden hour').trim();
+  const material=(document.getElementById('render-material')?.value||'timber').trim();
   const siteContext=(document.getElementById('render-prompt')?.value||'').trim();
 
-  const qualityBlock=[
-    '[quality]',
-    `${style} architectural render, professional architectural photography, 8k, sharp focus, realistic scale`,
-  ];
+  const lightingByPreset={
+    'golden hour':'golden hour sunlight, long soft shadows, warm sky bounce',
+    overcast:'overcast daylight, diffuse skylight, soft shadow edges',
+    night:'night exterior, practical architectural lighting, balanced warm-cool contrast',
+  };
+  const materialMapByPreset={
+    timber:{
+      walls:'timber',
+      doors:'timber - timber frame',
+      windows:'glass, metal frame',
+      slabs:'timber',
+      parapets:'timber',
+    },
+    concrete:{
+      walls:'board-formed concrete',
+      doors:'concrete surround, timber frame',
+      windows:'glass, dark metal frame',
+      slabs:'concrete',
+      parapets:'concrete',
+    },
+    brick:{
+      walls:'textured brick',
+      doors:'brick reveal, timber frame',
+      windows:'glass, dark metal frame',
+      slabs:'concrete',
+      parapets:'brick',
+    },
+    glass:{
+      walls:'glass facade, slim metal frame',
+      doors:'glass door, metal frame',
+      windows:'glass, slim metal frame',
+      slabs:'concrete',
+      parapets:'glass and metal',
+    },
+  };
 
-  const subjectBlock=[
-    '[subject + viewpoint]',
-    `modern residential building, ${view} view${siteContext?`, ${siteContext}`:', context-aware setting'}`,
-  ];
+  const siteText=(siteContext||'urban residential context').replace(/\s+/g,' ').trim();
+  const lightingText=lightingByPreset[lighting]||`${lighting} architectural lighting`;
+  const perspectiveText=getCameraPerspectivePrompt(view);
 
-  let lightingText='clean neutral daylight, soft sky light, realistic shadow contrast';
-  if(lighting==='golden hour'){
-    lightingText='warm golden hour sunlight, low sun angle, long horizontal shadows, amber sky, warm 5000K light';
-  }else if(lighting==='overcast'){
-    lightingText='soft overcast daylight, diffuse sky dome illumination, cool-neutral 6500K light, gentle low-contrast shadows';
-  }else if(lighting==='night'){
-    lightingText='night scene with balanced exterior practical lighting, warm interior glow, cool ambient sky fill, controlled contrast';
-  }
-  const lightingBlock=[
-    '[lighting]',
+  const baseMaterialMap=materialMapByPreset[material]||{
+    walls:material,
+    doors:`${material} door, ${material} frame`,
+    windows:'glass, metal frame',
+    slabs:material,
+    parapets:material,
+  };
+
+  const materialMap={...baseMaterialMap};
+  const map=[
+    ['walls','opacity-mat-walls'],
+    ['doors','opacity-mat-doors'],
+    ['windows','opacity-mat-windows'],
+    ['slabs','opacity-mat-slabs'],
+    ['parapets','opacity-mat-parapets'],
+  ];
+  map.forEach(([label,id])=>{
+    const value=(document.getElementById(id)?.value||'').trim();
+    if(value)materialMap[label]=value;
+  });
+
+  const materialSection=`materials by element: walls: ${materialMap.walls}; doors: ${materialMap.doors}; windows: ${materialMap.windows}; slabs: ${materialMap.slabs}; parapets: ${materialMap.parapets}`;
+
+  const clipCore=[
+    style==='photorealistic'?'photorealistic architectural render':`${style} architectural render`,
+    'professional architectural photography',
+    '8k',
+    'sharp focus',
+    'realistic scale',
+    'modern residential building',
+    perspectiveText,
+    siteText,
     lightingText,
   ];
 
-  let materialLead='vertical timber battens';
-  if(material==='concrete')materialLead='board-formed concrete facade';
-  else if(material==='brick')materialLead='warm textured brick facade';
-  else if(material==='glass')materialLead='high-performance glass curtain facade';
-  const materialsBlock=[
-    '[materials]',
-    `${materialLead}, reflective glass windows, dark concrete base`,
-  ];
-
-  const parts=[
-    qualityBlock.join('\n'),
-    subjectBlock.join('\n'),
-    lightingBlock.join('\n'),
-    materialsBlock.join('\n'),
-  ];
+  const parts=[clipCore.join(', '),materialSection];
 
   if(renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl){
     parts.push(SILHOUETTE_CONSTRAINT_PROMPT);
   }
-  if(renderCaptureState.opacityMaskDataUrl){
-    parts.push(`[semantic legend]\n${OPACITY_MASK_PROMPT_LEGEND}`);
-    const overrides=[];
-    const map=[
-      ['walls','opacity-mat-walls'],
-      ['doors','opacity-mat-doors'],
-      ['windows','opacity-mat-windows'],
-      ['slabs','opacity-mat-slabs'],
-      ['parapets','opacity-mat-parapets'],
-    ];
-    map.forEach(([label,id])=>{
-      const value=(document.getElementById(id)?.value||'').trim();
-      if(value)overrides.push(`${label}=${value}`);
-    });
-    if(overrides.length){
-      parts.push(`material overrides by opacity class: ${overrides.join('; ')}`);
-    }
-  }
+
   return parts.join('\n\n');
 }
 
@@ -1083,9 +1133,8 @@ async function generateRenderMock(){
       prompt,
       depth_data_url:renderCaptureState.depthDataUrl,
       building_mask_data_url:renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,
-      normal_data_url:renderCaptureState.normalDataUrl,
       silhouette_data_url:renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl,
-      opacity_mask_data_url:renderCaptureState.opacityMaskDataUrl,
+      segmentation_data_url:renderCaptureState.opacityMaskDataUrl,
     };
 
     if(backend==='comfy'){
@@ -1514,6 +1563,9 @@ async function init3DViewer(){
   const controls=new THREE.OrbitControls(camera,renderer.domElement);
   controls.enableDamping=true;
   controls.target.set(5,0,5);
+  controls.addEventListener('change',()=>{
+    if(activeTab==='3d')refreshStructuredPromptPreview();
+  });
 
   const amb=new THREE.AmbientLight(0xffffff,0.6);
   scene.add(amb);
