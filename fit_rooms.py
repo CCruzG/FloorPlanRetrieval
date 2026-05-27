@@ -31,17 +31,37 @@ Usage (standalone):
 import copy
 import json
 import sys
+from pathlib import Path
 
 import numpy as np
 
 # ── room processing order ─────────────────────────────────────────────────────
 
+ROOM_TYPES = json.loads((Path(__file__).parent / 'room_types.json').read_text())
+ROOM_TYPE_IDS_BY_NAME = {
+    entry['name']: entry['id']
+    for entry in ROOM_TYPES.get('types', [])
+}
+
 ROOM_PROC_ORDER = [
-    frozenset([1, 5, 7]),           # bedrooms  (anchor group)
-    frozenset([3]),                  # bathrooms
-    frozenset([2]),                  # kitchen
-    frozenset([6, 8, 9, 10, 11]),   # study, guest, balcony, entrance, storage
-    frozenset([0, 4]),               # living, dining — fill last
+    frozenset([
+        ROOM_TYPE_IDS_BY_NAME['MasterRoom'],
+        ROOM_TYPE_IDS_BY_NAME['ChildRoom'],
+        ROOM_TYPE_IDS_BY_NAME['SecondRoom'],
+    ]),                               # bedrooms  (anchor group)
+    frozenset([ROOM_TYPE_IDS_BY_NAME['Bathroom']]),
+    frozenset([ROOM_TYPE_IDS_BY_NAME['Kitchen']]),
+    frozenset([
+        ROOM_TYPE_IDS_BY_NAME['StudyRoom'],
+        ROOM_TYPE_IDS_BY_NAME['GuestRoom'],
+        ROOM_TYPE_IDS_BY_NAME['Balcony'],
+        ROOM_TYPE_IDS_BY_NAME['Entrance'],
+        ROOM_TYPE_IDS_BY_NAME['Storage'],
+    ]),                               # study, guest, balcony, entrance, storage
+    frozenset([
+        ROOM_TYPE_IDS_BY_NAME['LivingRoom'],
+        ROOM_TYPE_IDS_BY_NAME['DiningRoom'],
+    ]),
 ]
 
 

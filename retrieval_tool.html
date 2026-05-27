@@ -598,23 +598,67 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 </div>
 
 <script>
-const N_SAMP=128,N_FREQS=48,SCALE=256,SNAP_PX=14,VR=5,PAD=0.08;
+function loadRoomTypesConfig(){
+  const fallback={
+    version:'1.0',
+    types:[
+      {id:0,name:'LivingRoom',abbr:'LR',group:'common'},
+      {id:1,name:'MasterRoom',abbr:'MR',group:'bedroom'},
+      {id:2,name:'Kitchen',abbr:'K',group:'kitchen'},
+      {id:3,name:'Bathroom',abbr:'Ba',group:'bathroom'},
+      {id:4,name:'DiningRoom',abbr:'DR',group:'common'},
+      {id:5,name:'ChildRoom',abbr:'CR',group:'bedroom'},
+      {id:6,name:'StudyRoom',abbr:'SR',group:'misc'},
+      {id:7,name:'SecondRoom',abbr:'S2',group:'bedroom'},
+      {id:8,name:'GuestRoom',abbr:'GR',group:'bedroom'},
+      {id:9,name:'Balcony',abbr:'Bl',group:'balcony'},
+      {id:10,name:'Entrance',abbr:'En',group:'misc'},
+      {id:11,name:'Storage',abbr:'St',group:'misc'},
+      {id:12,name:'WalkIn',abbr:'Wi',group:'misc'},
+    ],
+    groups:{
+      bedroom:[1,5,7,8],
+      bathroom:[3],
+      kitchen:[2],
+      common:[0,4],
+      misc:[6,10,11,12],
+      balcony:[9],
+    },
+    fit_order:['bedroom','bathroom','kitchen','misc','common'],
+    common_area_ids:[0,4],
+    balcony_id:9,
+  };
+  try{
+    if(location.protocol==='file:')return fallback;
+    const req=new XMLHttpRequest();
+    req.open('GET','/room_types.json',false);
+    req.send(null);
+    if(req.status>=200&&req.status<300&&req.responseText){
+      return JSON.parse(req.responseText);
+    }
+  }catch(_err){}
+  return fallback;
+}
+
+const ROOM_TYPES=loadRoomTypesConfig();
+const ROOM_TYPE_IDS_BY_NAME=Object.fromEntries((ROOM_TYPES.types||[]).map((entry)=>[entry.name,entry.id]));
+const N_SAMP=256,N_FREQS=48,SCALE=256,SNAP_PX=14,VR=5,PAD=0.08;
 // Index descriptor layout (new entrance-aware format)
 const SHAPE_DIM=48,ENT_DIM=4,ROOM_DIM=11,TOTAL_DIM=63;
 // Scale: 1.0 normalised unit = 18 metres
 const METRES_PER_UNIT=18;
 
 const ROOM_GROUPS=[
-  {name:'bedroom', set:new Set([1,5,7]),max:5},
-  {name:'living',  set:new Set([0]),   max:2},
-  {name:'kitchen', set:new Set([2]),   max:2},
-  {name:'bathroom',set:new Set([3]),   max:4},
-  {name:'dining',  set:new Set([4]),   max:2},
-  {name:'study',   set:new Set([6]),   max:2},
-  {name:'guest',   set:new Set([8]),   max:2},
-  {name:'balcony', set:new Set([9]),   max:3},
-  {name:'entrance',set:new Set([10]),  max:2},
-  {name:'storage', set:new Set([11]),  max:3},
+  {name:'bedroom', set:new Set([ROOM_TYPE_IDS_BY_NAME.MasterRoom,ROOM_TYPE_IDS_BY_NAME.ChildRoom,ROOM_TYPE_IDS_BY_NAME.SecondRoom]),max:5},
+  {name:'living',  set:new Set([ROOM_TYPE_IDS_BY_NAME.LivingRoom]),max:2},
+  {name:'kitchen', set:new Set([ROOM_TYPE_IDS_BY_NAME.Kitchen]),max:2},
+  {name:'bathroom',set:new Set([ROOM_TYPE_IDS_BY_NAME.Bathroom]),max:4},
+  {name:'dining',  set:new Set([ROOM_TYPE_IDS_BY_NAME.DiningRoom]),max:2},
+  {name:'study',   set:new Set([ROOM_TYPE_IDS_BY_NAME.StudyRoom]),max:2},
+  {name:'guest',   set:new Set([ROOM_TYPE_IDS_BY_NAME.GuestRoom]),max:2},
+  {name:'balcony', set:new Set([ROOM_TYPE_IDS_BY_NAME.Balcony]),max:3},
+  {name:'entrance',set:new Set([ROOM_TYPE_IDS_BY_NAME.Entrance]),max:2},
+  {name:'storage', set:new Set([ROOM_TYPE_IDS_BY_NAME.Storage]),max:3},
 ];
 const ABBR={bedroom:'Bed',living:'Liv',kitchen:'Kit',bathroom:'Bath',
   dining:'Din',study:'Stu',guest:'Gst',balcony:'Bal',entrance:'Ent',storage:'Sto'};
@@ -658,7 +702,7 @@ let fittedCache={};   // index → {fp, stats} or null
 // visibility toggles (active plan)
 let showPlanBdry=true,showWindows=true,showDoors=true,showCommonArea=true;
 // room editing state
-const COMMON_AREA_TYPES=new Set([0,4]);
+const COMMON_AREA_TYPES=new Set((ROOM_TYPES.common_area_ids||[0,4]));
 let selectedRoom=null;  // room index in active fp.rooms, or null
 let hoveredRoom=null;   // {roomIdx, mode:'body'|'edge', edgeAxis:'h'|'v', coordValue} or null
 let hoveredEntrance=false;
@@ -675,7 +719,7 @@ const WINDOW_HEIGHT=1.2;
 const WINDOW_THICKNESS=0.08;
 const WINDOW_BALCONY_EDGE_TOL=0.12;
 const BALCONY_OPENING_DOOR_HEIGHT=2.2;
-const BALCONY_TYPE_ID=9;
+const BALCONY_TYPE_ID=ROOM_TYPES.balcony_id??9;
 const BALCONY_FLOOR_THICKNESS=0.08;
 const BALCONY_PARAPET_HEIGHT=1.2;
 const BALCONY_PARAPET_THICKNESS=0.08;
@@ -1059,7 +1103,7 @@ function loadWorkflowOverride(input){
         renderRequestState.workflowOverride=null;
         renderRequestState.workflowName='';
         const el=document.getElementById('workflow-name');
-        if(el)el.textContent='UI workflow detected. Export from ComfyUI as API format JSON.';
+        if(el)el.textContent='UI workflow detected. Export from ComfyUI as API  format JSON.';
         const inEl=document.getElementById('workflow-file');
         if(inEl)inEl.value='';
         setComfyStatus('Workflow rejected: use ComfyUI Save (API Format).',true);
@@ -2106,49 +2150,52 @@ function captureDepthAndPreview(){
   let captureNear=camera.near;
   let captureFar=camera.far;
 
-  const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
-  if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){
-    const center=bounds.getCenter(new THREE.Vector3());
-    const size=bounds.getSize(new THREE.Vector3());
-    const radius=Math.max(size.x,size.y,size.z)*0.6+0.25;
-    const dist=camera.position.distanceTo(center);
-    const fitNear=Math.max(0.01,dist-radius*2.2);
-    const fitFar=Math.max(fitNear+1.0,dist+radius*2.2);
-    camera.near=fitNear;
-    camera.far=fitFar;
-    captureNear=fitNear;
-    captureFar=fitFar;
+  let captured;
+  let previewDataUrl=null;
+  try{
+    const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
+    if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){
+      const center=bounds.getCenter(new THREE.Vector3());
+      const size=bounds.getSize(new THREE.Vector3());
+      const radius=Math.max(size.x,size.y,size.z)*0.6+0.25;
+      const dist=camera.position.distanceTo(center);
+      const fitNear=Math.max(0.01,dist-radius*2.2);
+      const fitFar=Math.max(fitNear+1.0,dist+radius*2.2);
+      camera.near=fitNear;
+      camera.far=fitFar;
+      captureNear=fitNear;
+      captureFar=fitFar;
+      camera.updateProjectionMatrix();
+    }
+
+    captured=withCaptureVisibility(()=>{
+      scene.overrideMaterial=depthMat;
+      renderer.render(scene,camera);
+      const depthImg=captureCanvasImageData(renderer.domElement);
+
+      const maskImg=captureMaskImageData(scene,camera,renderer);
+      const normalImg=captureNormalImageData(scene,camera,renderer);
+      const depthDataUrl=makeDepthDataUrlFromImageData(depthImg,maskImg,captureNear,captureFar);
+      const maskDataUrl=makeBinaryMaskDataUrl(maskImg);
+      const normalDataUrl=makeNormalDataUrlFromImageData(normalImg,maskImg);
+      const opacityMaskDataUrl=captureOpacityMaskDataUrl(scene,camera,renderer);
+      return {
+        depthDataUrl,
+        maskDataUrl,
+        silhouetteDataUrl:maskDataUrl,
+        normalDataUrl,
+        opacityMaskDataUrl,
+      };
+    });
+  }finally{
+    camera.near=prevNear;
+    camera.far=prevFar;
     camera.updateProjectionMatrix();
-  }
-
-  const captured=withCaptureVisibility(()=>{
-    scene.overrideMaterial=depthMat;
+    scene.overrideMaterial=null;
     renderer.render(scene,camera);
-    const depthImg=captureCanvasImageData(renderer.domElement);
-
-    const maskImg=captureMaskImageData(scene,camera,renderer);
-    const normalImg=captureNormalImageData(scene,camera,renderer);
-    const depthDataUrl=makeDepthDataUrlFromImageData(depthImg,maskImg,captureNear,captureFar);
-    const maskDataUrl=makeBinaryMaskDataUrl(maskImg);
-    const normalDataUrl=makeNormalDataUrlFromImageData(normalImg,maskImg);
-    const opacityMaskDataUrl=captureOpacityMaskDataUrl(scene,camera,renderer);
-    return {
-      depthDataUrl,
-      maskDataUrl,
-      silhouetteDataUrl:maskDataUrl,
-      normalDataUrl,
-      opacityMaskDataUrl,
-    };
-  });
-
-  scene.overrideMaterial=prevOverride||null;
-  camera.near=prevNear;
-  camera.far=prevFar;
-  camera.updateProjectionMatrix();
-  renderer.render(scene,camera);
-  const previewDataUrl=renderer.domElement.toDataURL('image/png');
-
-  depthMat.dispose();
+    previewDataUrl=renderer.domElement.toDataURL('image/png');
+    depthMat.dispose();
+  }
 
   renderCaptureState.depthDataUrl=captured.depthDataUrl;
   renderCaptureState.maskDataUrl=captured.maskDataUrl;
@@ -2349,29 +2396,6 @@ function entranceDescJS(bdry, ent){
   const rel_x=(snap.px-cx)/mean_r;
   const rel_y=(snap.py-cy)/mean_r;
   return new Float32Array([rel_x,rel_y,snap.normX,snap.normY]);
-}
-
-/**
- * Rotation-aware entrance distances: min_α ||q - R(α)·db||
- * Mirrors Python ent_dist_min_rotation().
- * qEnt: Float32Array(4)
- * dbDescs: flat Float32Array (N × TOTAL_DIM)
- * N: number of plans
- * Returns Float32Array(N) of distances (unscaled).
- */
-function entDistMinRotation(qEnt,dbDescs,N){
-  const[q_rx,q_ry,q_cx,q_cy]=qEnt;
-  const qSq=q_rx*q_rx+q_ry*q_ry+q_cx*q_cx+q_cy*q_cy;
-  const dists=new Float32Array(N);
-  for(let i=0;i<N;i++){
-    const off=i*TOTAL_DIM+SHAPE_DIM;
-    const d_rx=dbDescs[off],d_ry=dbDescs[off+1],d_cx=dbDescs[off+2],d_cy=dbDescs[off+3];
-    const A=q_rx*d_rx+q_ry*d_ry+q_cx*d_cx+q_cy*d_cy;
-    const B=q_ry*d_rx-q_rx*d_ry+q_cy*d_cx-q_cx*d_cy;
-    const dSq=d_rx*d_rx+d_ry*d_ry+d_cx*d_cx+d_cy*d_cy;
-    dists[i]=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(A*A+B*B)));
-  }
-  return dists;
 }
 
 /**
@@ -2625,14 +2649,7 @@ function render(){
  */
 function drawScaleGrid(c,W,H,pad){
   const sc=W*(1-2*pad);  // pixels per normalised unit (= pixels per 18 m)
-  const STEPS=[1,2,3,5,6,9,18];
-  let gridM=1;
-  for(const s of STEPS){
-    if(sc/METRES_PER_UNIT*s>=sc/6)break;
-    gridM=s;
-  }
-  // fallback: always use 3 m grid
-  gridM=3;
+  const gridM=3;
   const step=gridM/METRES_PER_UNIT;  // normalised units
   c.save();c.strokeStyle='rgba(0,0,0,0.07)';c.lineWidth=1;c.setLineDash([]);
   for(let x=0;x<=1+step;x+=step){
@@ -3056,6 +3073,7 @@ canvas.addEventListener('dblclick',e=>{
 });
 
 document.addEventListener('keydown',e=>{
+  if(e.target&&e.target.matches&&e.target.matches('input, textarea, select'))return;
   if(e.key==='Escape')clearBoundary();
   if(e.key==='Enter'&&boundary.length>=3&&!closed)closeBoundary();
   if(e.key==='Shift')shiftDown=true;

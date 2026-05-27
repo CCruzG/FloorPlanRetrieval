@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "types": [
+    { "id": 0,  "name": "LivingRoom",  "abbr": "LR",  "group": "common" },
+    { "id": 1,  "name": "MasterRoom",  "abbr": "MR",  "group": "bedroom" },
+    { "id": 2,  "name": "Kitchen",     "abbr": "K",   "group": "kitchen" },
+    { "id": 3,  "name": "Bathroom",    "abbr": "Ba",  "group": "bathroom" },
+    { "id": 4,  "name": "DiningRoom",  "abbr": "DR",  "group": "common" },
+    { "id": 5,  "name": "ChildRoom",   "abbr": "CR",  "group": "bedroom" },
+    { "id": 6,  "name": "StudyRoom",   "abbr": "SR",  "group": "misc" },
+    { "id": 7,  "name": "SecondRoom",  "abbr": "S2",  "group": "bedroom" },
+    { "id": 8,  "name": "GuestRoom",   "abbr": "GR",  "group": "bedroom" },
+    { "id": 9,  "name": "Balcony",     "abbr": "Bl",  "group": "balcony" },
+    { "id": 10, "name": "Entrance",    "abbr": "En",  "group": "misc" },
+    { "id": 11, "name": "Storage",     "abbr": "St",  "group": "misc" },
+    { "id": 12, "name": "WalkIn",      "abbr": "Wi",  "group": "misc" }
+  ],
+  "groups": {
+    "bedroom": [1, 5, 7, 8],
+    "bathroom": [3],
+    "kitchen": [2],
+    "common": [0, 4],
+    "misc": [6, 10, 11, 12],
+    "balcony": [9]
+  },
+  "fit_order": ["bedroom", "bathroom", "kitchen", "misc", "common"],
+  "common_area_ids": [0, 4],
+  "balcony_id": 9
+}
