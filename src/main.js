@@ -49,6 +49,12 @@ import {
 } from './retrieval.js';
 import { createRenderPipeline } from './render-pipeline.js';
 import { createViewer3D } from './viewer-3d.js';
+import {
+  analyse_boundary,
+  check_typology_viability,
+  evaluate_typology_fit,
+  propose_typology_options,
+} from './floor-plate-tools.js';
 import { createInitialState, DEFAULT_RENDER_PROMPT_CONFIG } from './state.js';
 
 const initialState=createInitialState();
@@ -92,79 +98,245 @@ let syncDevModePanel=()=>{};
 let devModeSetupDone=false;
 
 function buildMockFloorPlateState(){
-  const defaultBoundary=[[0.1,0.15],[0.9,0.15],[0.9,0.85],[0.1,0.85]];
-  const plateBoundary=(closed&&boundary.length>=3)
-    ? boundary.map(({x,y})=>[x,y])
-    : defaultBoundary;
-  const minX=Math.min(...plateBoundary.map(([x])=>x));
-  const maxX=Math.max(...plateBoundary.map(([x])=>x));
-  const minY=Math.min(...plateBoundary.map(([,y])=>y));
-  const maxY=Math.max(...plateBoundary.map(([,y])=>y));
-  const midX=(minX+maxX)/2;
-  const midY=(minY+maxY)/2;
-  const h=(maxY-minY);
+  return buildFloorPlateFixture('sample');
+}
 
+function makeMockComplianceReport(fixtureId){
+  if(fixtureId==='near_failing_narrow'){
+    return {
+      requirements:[
+        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'12.9 m',status:'fail'},
+        {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.2 m',status:'pass'},
+        {name:'Travel distance',expected:'<= 30 m',actual:'34.4 m',status:'blocked'},
+        {name:'Unit mix compliance',expected:'2x1bed, 2x2bed',actual:'2x1bed, 1x2bed',status:'fail'},
+      ],
+    };
+  }
+  if(fixtureId==='elongated_slab'){
+    return {
+      requirements:[
+        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'15.2 m',status:'pass'},
+        {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.5 m',status:'pass'},
+        {name:'Travel distance',expected:'<= 30 m',actual:'28.3 m',status:'pass'},
+        {name:'Unit mix compliance',expected:'3x1bed, 3x2bed',actual:'3x1bed, 3x2bed',status:'pass'},
+      ],
+    };
+  }
+  if(fixtureId==='compact_slab'){
+    return {
+      requirements:[
+        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'16.1 m',status:'pass'},
+        {name:'Core footprint',expected:'>= 20 m2',actual:'22.8 m2',status:'pass'},
+        {name:'Typed edge consistency',expected:'all units valid',actual:'all units valid',status:'pass'},
+        {name:'No residual areas',expected:'none',actual:'none',status:'pass'},
+      ],
+    };
+  }
   return {
-    floor_plate:{
-      id:'fp-dev-sample',
-      boundary:plateBoundary,
-      typology:'double_loaded_slab',
-      structural_grid:{
-        x_lines:[minX+(maxX-minX)*0.2,midX,minX+(maxX-minX)*0.8],
-        y_lines:[minY+h*0.35,minY+h*0.65],
-        column_positions:[],
+    requirements:[
+      {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'14.8 m',status:'pass'},
+      {name:'Core footprint',expected:'>= 20 m2',actual:'21.6 m2',status:'pass'},
+      {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.4 m',status:'pass'},
+      {name:'Unit mix compliance',expected:'2x1bed, 2x2bed',actual:'2x1bed, 2x2bed',status:'pass'},
+    ],
+  };
+}
+
+function buildFloorPlateFixture(fixtureId='sample'){
+  const fixtures={
+    sample:{
+      floor_plate:{
+        id:'fp-dev-sample',
+        typology:'double_loaded_slab',
+        boundary:[[0.1,0.15],[0.9,0.15],[0.9,0.85],[0.1,0.85]],
+        structural_grid:{x_lines:[0.22,0.5,0.78],y_lines:[0.39,0.61],column_positions:[]},
+        cores:[{id:'core-0',type:'stair_lift',polygon:[[0.45,0.44],[0.55,0.44],[0.55,0.56],[0.45,0.56]]}],
+        corridors:[{id:'corr-0',width_min:1.4,polygon:[[0.16,0.48],[0.84,0.48],[0.84,0.52],[0.16,0.52]]}],
+        units:[
+          {
+            id:'unit-0',
+            type:'2bed',
+            polygon:[[0.12,0.18],[0.44,0.18],[0.44,0.48],[0.12,0.48]],
+            typed_edges:[
+              {edge_index:0,type:'external'},
+              {edge_index:1,type:'shared_wall'},
+              {edge_index:2,type:'facing_corridor'},
+              {edge_index:3,type:'external'},
+            ],
+          },
+          {
+            id:'unit-1',
+            type:'1bed',
+            polygon:[[0.56,0.18],[0.88,0.18],[0.88,0.48],[0.56,0.48]],
+            typed_edges:[
+              {edge_index:0,type:'external'},
+              {edge_index:1,type:'external'},
+              {edge_index:2,type:'facing_corridor'},
+              {edge_index:3,type:'shared_wall'},
+            ],
+          },
+        ],
+        unresolved_regions:[],
       },
-      cores:[
-        {
-          id:'core-0',
-          type:'stair_lift',
-          polygon:[
-            [midX-0.05,minY+h*0.42],
-            [midX+0.05,minY+h*0.42],
-            [midX+0.05,minY+h*0.58],
-            [midX-0.05,minY+h*0.58],
-          ],
-        },
-      ],
-      corridors:[
-        {
-          id:'corr-0',
-          width_min:1.4,
-          polygon:[
-            [minX+0.06,minY+h*0.48],
-            [maxX-0.06,minY+h*0.48],
-            [maxX-0.06,minY+h*0.52],
-            [minX+0.06,minY+h*0.52],
-          ],
-        },
-      ],
-      units:[
-        {
-          id:'unit-0',
-          type:'2bed',
-          polygon:[[minX+0.02,minY+0.02],[midX-0.06,minY+0.02],[midX-0.06,minY+h*0.48],[minX+0.02,minY+h*0.48]],
-          typed_edges:[
-            {edge_index:0,type:'external'},
-            {edge_index:1,type:'shared_wall'},
-            {edge_index:2,type:'facing_corridor'},
-            {edge_index:3,type:'external'},
-          ],
-        },
-        {
-          id:'unit-1',
-          type:'1bed',
-          polygon:[[midX+0.06,minY+0.02],[maxX-0.02,minY+0.02],[maxX-0.02,minY+h*0.48],[midX+0.06,minY+h*0.48]],
-          typed_edges:[
-            {edge_index:0,type:'external'},
-            {edge_index:1,type:'external'},
-            {edge_index:2,type:'facing_corridor'},
-            {edge_index:3,type:'shared_wall'},
-          ],
-        },
-      ],
-      unresolved_regions:[],
+    },
+    compact_slab:{
+      floor_plate:{
+        id:'fp-dev-compact',
+        typology:'double_loaded_slab',
+        boundary:[[0.18,0.2],[0.82,0.2],[0.82,0.8],[0.18,0.8]],
+        structural_grid:{x_lines:[0.3,0.5,0.7],y_lines:[0.4,0.6],column_positions:[]},
+        cores:[{id:'core-0',type:'stair_lift',polygon:[[0.46,0.44],[0.54,0.44],[0.54,0.56],[0.46,0.56]]}],
+        corridors:[{id:'corr-0',width_min:1.5,polygon:[[0.23,0.48],[0.77,0.48],[0.77,0.52],[0.23,0.52]]}],
+        units:[
+          {
+            id:'unit-a',type:'2bed',polygon:[[0.2,0.22],[0.45,0.22],[0.45,0.48],[0.2,0.48]],
+            typed_edges:[
+              {edge_index:0,type:'external'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'external'},
+            ],
+          },
+          {
+            id:'unit-b',type:'1bed',polygon:[[0.55,0.22],[0.8,0.22],[0.8,0.48],[0.55,0.48]],
+            typed_edges:[
+              {edge_index:0,type:'external'},{edge_index:1,type:'external'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'shared_wall'},
+            ],
+          },
+          {
+            id:'unit-c',type:'2bed',polygon:[[0.2,0.52],[0.45,0.52],[0.45,0.78],[0.2,0.78]],
+            typed_edges:[
+              {edge_index:0,type:'facing_corridor'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'external'},{edge_index:3,type:'external'},
+            ],
+          },
+          {
+            id:'unit-d',type:'1bed',polygon:[[0.55,0.52],[0.8,0.52],[0.8,0.78],[0.55,0.78]],
+            typed_edges:[
+              {edge_index:0,type:'facing_corridor'},{edge_index:1,type:'external'},{edge_index:2,type:'external'},{edge_index:3,type:'shared_wall'},
+            ],
+          },
+        ],
+        unresolved_regions:[],
+      },
+    },
+    elongated_slab:{
+      floor_plate:{
+        id:'fp-dev-elongated',
+        typology:'double_loaded_slab',
+        boundary:[[0.06,0.28],[0.94,0.28],[0.94,0.72],[0.06,0.72]],
+        structural_grid:{x_lines:[0.18,0.32,0.5,0.68,0.82],y_lines:[0.44,0.56],column_positions:[]},
+        cores:[
+          {id:'core-0',type:'stair_lift',polygon:[[0.27,0.45],[0.33,0.45],[0.33,0.55],[0.27,0.55]]},
+          {id:'core-1',type:'stair_lift',polygon:[[0.67,0.45],[0.73,0.45],[0.73,0.55],[0.67,0.55]]},
+        ],
+        corridors:[{id:'corr-0',width_min:1.5,polygon:[[0.11,0.48],[0.89,0.48],[0.89,0.52],[0.11,0.52]]}],
+        units:[
+          {id:'unit-0',type:'1bed',polygon:[[0.08,0.3],[0.24,0.3],[0.24,0.48],[0.08,0.48]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'external'}]},
+          {id:'unit-1',type:'2bed',polygon:[[0.34,0.3],[0.48,0.3],[0.48,0.48],[0.34,0.48]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'shared_wall'}]},
+          {id:'unit-2',type:'2bed',polygon:[[0.52,0.3],[0.66,0.3],[0.66,0.48],[0.52,0.48]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'shared_wall'}]},
+          {id:'unit-3',type:'1bed',polygon:[[0.76,0.3],[0.92,0.3],[0.92,0.48],[0.76,0.48]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'external'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'shared_wall'}]},
+        ],
+        unresolved_regions:[],
+      },
+    },
+    near_failing_narrow:{
+      floor_plate:{
+        id:'fp-dev-narrow',
+        typology:'single_loaded',
+        boundary:[[0.12,0.34],[0.88,0.34],[0.88,0.66],[0.12,0.66]],
+        structural_grid:{x_lines:[0.26,0.44,0.62,0.8],y_lines:[0.44,0.56],column_positions:[]},
+        cores:[{id:'core-0',type:'stair_lift',polygon:[[0.47,0.42],[0.53,0.42],[0.53,0.58],[0.47,0.58]]}],
+        corridors:[{id:'corr-0',width_min:1.2,polygon:[[0.16,0.49],[0.84,0.49],[0.84,0.53],[0.16,0.53]]}],
+        units:[
+          {id:'unit-0',type:'1bed',polygon:[[0.14,0.36],[0.44,0.36],[0.44,0.49],[0.14,0.49]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'shared_wall'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'external'}]},
+          {id:'unit-1',type:'2bed',polygon:[[0.56,0.36],[0.86,0.36],[0.86,0.49],[0.56,0.49]],typed_edges:[{edge_index:0,type:'external'},{edge_index:1,type:'external'},{edge_index:2,type:'facing_corridor'},{edge_index:3,type:'shared_wall'}]},
+        ],
+        unresolved_regions:[[[0.44,0.36],[0.56,0.36],[0.56,0.49],[0.44,0.49]]],
+      },
     },
   };
+
+  return fixtures[fixtureId]||fixtures.sample;
+}
+
+function loadFixture(fixtureId){
+  floorPlateState=buildFloorPlateFixture(fixtureId);
+  devMode.activeFixture=fixtureId;
+  devMode.lastComplianceReport=makeMockComplianceReport(fixtureId);
+  devMode.lastToolOutput={
+    source:'fixture_loader',
+    fixtureId,
+    loadedAt:new Date().toISOString(),
+  };
+}
+
+function getDevBoundaryPolygon(){
+  if(closed&&boundary.length>=3)return boundary.map(({x,y})=>[x,y]);
+  if(floorPlateState?.floor_plate?.boundary?.length>=3)return floorPlateState.floor_plate.boundary;
+  if(floorPlateState?.boundary?.length>=3)return floorPlateState.boundary;
+  return buildFloorPlateFixture('sample').floor_plate.boundary;
+}
+
+function getDevUnitMix(){
+  const fromState=devMode.unitMix||{};
+  return {
+    bed1:Math.max(0,parseInt(fromState.bed1,10)||0),
+    bed2:Math.max(0,parseInt(fromState.bed2,10)||0),
+    bed3:Math.max(0,parseInt(fromState.bed3,10)||0),
+  };
+}
+
+function updateDevComplianceFromTool(toolResult){
+  if(Array.isArray(toolResult?.requirements)){
+    devMode.lastComplianceReport={requirements:toolResult.requirements};
+    return;
+  }
+  if(Array.isArray(toolResult?.constraint_violations)){
+    const violations=toolResult.constraint_violations;
+    devMode.lastComplianceReport={
+      requirements:[
+        {
+          name:'Typology feasibility',
+          expected:'no blocking violations',
+          actual:violations.length?'violations found':'pass',
+          status:violations.length?'fail':'pass',
+        },
+        ...violations.map((violation)=>({
+          name:'Constraint',
+          expected:'satisfied',
+          actual:violation,
+          status:'fail',
+        })),
+      ],
+    };
+    return;
+  }
+  devMode.lastComplianceReport=null;
+}
+
+function runDevStage1Tool(toolName){
+  const boundaryPolygon=getDevBoundaryPolygon();
+  const unitMix=getDevUnitMix();
+  let output;
+
+  if(toolName==='analyse_boundary'){
+    output=analyse_boundary(boundaryPolygon);
+  }else if(toolName==='evaluate_typology_fit'){
+    const typology=(document.getElementById('fp-dev-typology')?.value||'double_loaded_slab').trim();
+    output=evaluate_typology_fit(boundaryPolygon,typology,unitMix);
+  }else if(toolName==='propose_typology_options'){
+    output=propose_typology_options(boundaryPolygon,unitMix);
+  }else if(toolName==='check_typology_viability'){
+    const typology=(document.getElementById('fp-dev-typology')?.value||'double_loaded_slab').trim();
+    output=check_typology_viability(boundaryPolygon,{typology},unitMix);
+  }
+
+  devMode.lastToolOutput={
+    tool:toolName,
+    unitMix,
+    boundaryVertices:boundaryPolygon.length,
+    result:output,
+  };
+  updateDevComplianceFromTool(output);
+  syncDevModePanel();
+  render();
 }
 
 function setupDevModeUI(){
@@ -201,6 +373,7 @@ function setupDevModeUI(){
     .fp-dev-section-title { font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#b6babe; margin-bottom:6px; }
     .fp-dev-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
     .fp-dev-row:last-child { margin-bottom:0; }
+    .fp-dev-row-wrap { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
     .fp-dev-btn {
       border:1px solid #3a4155;
       border-radius:4px;
@@ -212,6 +385,26 @@ function setupDevModeUI(){
       cursor:pointer;
     }
     .fp-dev-btn:hover { border-color:#3b82f6; }
+    .fp-dev-input {
+      border:1px solid #3a4155;
+      border-radius:4px;
+      background:#111827;
+      color:#e2e8f0;
+      font-family:var(--mono);
+      font-size:10px;
+      padding:4px;
+      width:52px;
+    }
+    .fp-dev-select {
+      border:1px solid #3a4155;
+      border-radius:4px;
+      background:#111827;
+      color:#e2e8f0;
+      font-family:var(--mono);
+      font-size:10px;
+      padding:4px;
+      width:100%;
+    }
     .fp-dev-pre {
       white-space:pre-wrap;
       word-break:break-word;
@@ -244,15 +437,41 @@ function setupDevModeUI(){
         <label><input id="fp-dev-overlay" type="checkbox" checked> show floor plate overlay</label>
       </div>
       <div class="fp-dev-row">
+        <label><input id="fp-dev-show-ids" type="checkbox" checked> show element IDs</label>
+      </div>
+      <div class="fp-dev-row">
+        <label><input id="fp-dev-show-edges" type="checkbox"> show edge indices</label>
+      </div>
+      <div class="fp-dev-row-wrap">
+        <button id="fp-dev-fixture-compact" class="fp-dev-btn" type="button">fixture: compact slab</button>
+        <button id="fp-dev-fixture-elongated" class="fp-dev-btn" type="button">fixture: elongated slab</button>
+        <button id="fp-dev-fixture-narrow" class="fp-dev-btn" type="button">fixture: near-failing narrow</button>
+      </div>
+      <div class="fp-dev-row">
+        <label>1-bed</label><input id="fp-dev-mix-bed1" class="fp-dev-input" type="number" min="0" step="1" value="2">
+        <label>2-bed</label><input id="fp-dev-mix-bed2" class="fp-dev-input" type="number" min="0" step="1" value="2">
+        <label>3-bed</label><input id="fp-dev-mix-bed3" class="fp-dev-input" type="number" min="0" step="1" value="0">
+      </div>
+      <div class="fp-dev-row">
+        <select id="fp-dev-typology" class="fp-dev-select">
+          <option value="double_loaded_slab">double_loaded_slab</option>
+          <option value="single_loaded">single_loaded</option>
+          <option value="point_block">point_block</option>
+        </select>
+      </div>
+      <div class="fp-dev-row-wrap">
+        <button id="fp-dev-run-analyse" class="fp-dev-btn" type="button">run analyse_boundary</button>
+        <button id="fp-dev-run-evaluate" class="fp-dev-btn" type="button">run evaluate_typology_fit</button>
+        <button id="fp-dev-run-propose" class="fp-dev-btn" type="button">run propose_typology_options</button>
+        <button id="fp-dev-run-check" class="fp-dev-btn" type="button">run check_typology_viability</button>
+      </div>
+      <div class="fp-dev-row">
         <button id="fp-dev-seed" class="fp-dev-btn" type="button">seed sample floor plate</button>
         <button id="fp-dev-clear" class="fp-dev-btn" type="button">clear floor plate</button>
       </div>
       <div class="fp-dev-pre" id="fp-dev-tools">
-Stage 1: analyse_boundary, evaluate_typology_fit, propose_typology_options
-Stage 2: compute_structural_grid, propose_core_positions, plan_corridor
-Stage 3: compute_unit_bays, evaluate_party_wall_position, draw_party_wall
-
-Tool execution controls are Phase 2+ work.
+Run Stage 1 tools from this panel. Inputs use metres in outputs, while geometry
+is transformed internally from the normalized editor coordinate system.
       </div>
     </section>
 
@@ -275,10 +494,27 @@ Tool execution controls are Phase 2+ work.
 
   const hideBtn=document.getElementById('fp-dev-hide');
   const overlayToggle=document.getElementById('fp-dev-overlay');
+  const showIdsToggle=document.getElementById('fp-dev-show-ids');
+  const showEdgesToggle=document.getElementById('fp-dev-show-edges');
   const seedBtn=document.getElementById('fp-dev-seed');
   const clearBtn=document.getElementById('fp-dev-clear');
+  const compactBtn=document.getElementById('fp-dev-fixture-compact');
+  const elongatedBtn=document.getElementById('fp-dev-fixture-elongated');
+  const narrowBtn=document.getElementById('fp-dev-fixture-narrow');
+  const runAnalyseBtn=document.getElementById('fp-dev-run-analyse');
+  const runEvaluateBtn=document.getElementById('fp-dev-run-evaluate');
+  const runProposeBtn=document.getElementById('fp-dev-run-propose');
+  const runCheckBtn=document.getElementById('fp-dev-run-check');
+  const mixBed1El=document.getElementById('fp-dev-mix-bed1');
+  const mixBed2El=document.getElementById('fp-dev-mix-bed2');
+  const mixBed3El=document.getElementById('fp-dev-mix-bed3');
 
   if(overlayToggle)overlayToggle.checked=!!devMode.showFloorPlateOverlay;
+  if(showIdsToggle)showIdsToggle.checked=!!devMode.showElementIds;
+  if(showEdgesToggle)showEdgesToggle.checked=!!devMode.showEdgeIndices;
+  if(mixBed1El)mixBed1El.value=String(devMode.unitMix?.bed1??2);
+  if(mixBed2El)mixBed2El.value=String(devMode.unitMix?.bed2??2);
+  if(mixBed3El)mixBed3El.value=String(devMode.unitMix?.bed3??0);
   hideBtn?.addEventListener('click',()=>{
     devMode.panelVisible=false;
     syncDevModePanel();
@@ -287,12 +523,49 @@ Tool execution controls are Phase 2+ work.
     devMode.showFloorPlateOverlay=!!e.target.checked;
     render();
   });
+  showIdsToggle?.addEventListener('change',(e)=>{
+    devMode.showElementIds=!!e.target.checked;
+    render();
+  });
+  showEdgesToggle?.addEventListener('change',(e)=>{
+    devMode.showEdgeIndices=!!e.target.checked;
+    render();
+  });
+  [mixBed1El,mixBed2El,mixBed3El].forEach((el)=>{
+    el?.addEventListener('input',()=>{
+      devMode.unitMix={
+        bed1:Math.max(0,parseInt(mixBed1El?.value||'0',10)||0),
+        bed2:Math.max(0,parseInt(mixBed2El?.value||'0',10)||0),
+        bed3:Math.max(0,parseInt(mixBed3El?.value||'0',10)||0),
+      };
+      syncDevModePanel();
+    });
+  });
+  runAnalyseBtn?.addEventListener('click',()=>runDevStage1Tool('analyse_boundary'));
+  runEvaluateBtn?.addEventListener('click',()=>runDevStage1Tool('evaluate_typology_fit'));
+  runProposeBtn?.addEventListener('click',()=>runDevStage1Tool('propose_typology_options'));
+  runCheckBtn?.addEventListener('click',()=>runDevStage1Tool('check_typology_viability'));
+  compactBtn?.addEventListener('click',()=>{
+    loadFixture('compact_slab');
+    render();
+  });
+  elongatedBtn?.addEventListener('click',()=>{
+    loadFixture('elongated_slab');
+    render();
+  });
+  narrowBtn?.addEventListener('click',()=>{
+    loadFixture('near_failing_narrow');
+    render();
+  });
   seedBtn?.addEventListener('click',()=>{
-    floorPlateState=buildMockFloorPlateState();
+    loadFixture('sample');
     render();
   });
   clearBtn?.addEventListener('click',()=>{
     floorPlateState=null;
+    devMode.activeFixture=null;
+    devMode.lastComplianceReport=null;
+    devMode.lastToolOutput=null;
     render();
   });
 
@@ -305,11 +578,20 @@ Tool execution controls are Phase 2+ work.
 
     panelEl.classList.toggle('show',!!devMode.enabled&&!!devMode.panelVisible);
     if(overlayEl)overlayEl.checked=!!devMode.showFloorPlateOverlay;
+    if(showIdsToggle)showIdsToggle.checked=!!devMode.showElementIds;
+    if(showEdgesToggle)showEdgesToggle.checked=!!devMode.showEdgeIndices;
+    if(mixBed1El)mixBed1El.value=String(devMode.unitMix?.bed1??0);
+    if(mixBed2El)mixBed2El.value=String(devMode.unitMix?.bed2??0);
+    if(mixBed3El)mixBed3El.value=String(devMode.unitMix?.bed3??0);
 
     const summary={
       devModeEnabled:!!devMode.enabled,
       panelVisible:!!devMode.panelVisible,
       overlayEnabled:!!devMode.showFloorPlateOverlay,
+      showElementIds:!!devMode.showElementIds,
+      showEdgeIndices:!!devMode.showEdgeIndices,
+      unitMix:getDevUnitMix(),
+      activeFixture:devMode.activeFixture||null,
       floorPlateLoaded:!!floorPlateState,
       floorPlateId:floorPlateState?.floor_plate?.id||floorPlateState?.id||null,
       unitCount:(floorPlateState?.floor_plate?.units||floorPlateState?.units||[]).length,

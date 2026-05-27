@@ -58,7 +58,7 @@ export function createCanvasRenderer({
     drawScaleGrid(ctx,cW,cH);
 
     if(devMode?.enabled&&devMode?.showFloorPlateOverlay&&floorPlateState){
-      renderFloorPlate(ctx,floorPlateState,cW,cH);
+      renderFloorPlate(ctx,floorPlateState,cW,cH,devMode);
       drawScaleBar(ctx,cW,cH);
       return;
     }
@@ -207,10 +207,12 @@ export function createCanvasRenderer({
     drawScaleBar(ctx,cW,cH);
   }
 
-  function renderFloorPlate(c,state,W,H){
+  function renderFloorPlate(c,state,W,H,devMode={}){
     const floorPlate=state?.floor_plate||state;
     const boundary=floorPlate?.boundary;
     if(!Array.isArray(boundary)||boundary.length<3)return;
+    const showElementIds=devMode?.showElementIds!==false;
+    const showEdgeIndices=!!devMode?.showEdgeIndices;
 
     const pad=0.08;
     const xs=boundary.map(([x])=>x);
@@ -273,15 +275,24 @@ export function createCanvasRenderer({
 
     (floorPlate.corridors||[]).forEach((corridor)=>{
       drawPoly(corridor.polygon,{fill:'rgba(250,204,21,0.28)',stroke:'rgba(202,138,4,0.95)',lineWidth:2});
+      if(showElementIds){
+        const [cx,cy]=t(centroid(corridor.polygon));
+        c.fillStyle='#92400e';
+        c.font='9px monospace';
+        c.textAlign='center';
+        c.fillText(`Corridor ${corridor.id||''}`.trim(),cx,cy-3);
+      }
     });
 
     (floorPlate.cores||[]).forEach((core)=>{
       drawPoly(core.polygon,{fill:'rgba(148,163,184,0.36)',stroke:'#475569',lineWidth:2});
       const [cx,cy]=t(centroid(core.polygon));
-      c.fillStyle='#334155';
-      c.font='10px monospace';
-      c.textAlign='center';
-      c.fillText('Core',cx,cy+3);
+      if(showElementIds){
+        c.fillStyle='#334155';
+        c.font='9px monospace';
+        c.textAlign='center';
+        c.fillText(`Core ${core.id||''}`.trim(),cx,cy+3);
+      }
     });
 
     const EDGE_COLORS={
@@ -309,6 +320,15 @@ export function createCanvasRenderer({
           c.lineWidth=3;
           c.setLineDash([]);
           c.stroke();
+
+          if(showEdgeIndices){
+            const mx=(x1+x2)/2;
+            const my=(y1+y2)/2;
+            c.fillStyle='rgba(15,23,42,0.88)';
+            c.font='9px monospace';
+            c.textAlign='center';
+            c.fillText(`e${edgeIndex}`,mx,my-4);
+          }
         });
       }
 
@@ -317,7 +337,8 @@ export function createCanvasRenderer({
       c.font='10px monospace';
       c.textAlign='center';
       const labelType=unit.type||'unit';
-      c.fillText(labelType,ux,uy-2);
+      const unitLabel=showElementIds?`${unit.id||'unit'} (${labelType})`:labelType;
+      c.fillText(unitLabel,ux,uy-2);
       const area=polygonArea(poly);
       c.fillStyle='#0f766e';
       c.fillText(`${area.toFixed(1)} m2`,ux,uy+10);
