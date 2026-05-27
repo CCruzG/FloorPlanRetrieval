@@ -8,6 +8,10 @@ __pycache__/
 dist/
 build/
 
+# Node / Vite
+node_modules/
+npm-debug.log*
+
 # Index (large binary — rebuild locally with export_index.py)
 browser_files/index.pkl
 my_index.bin

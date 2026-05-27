@@ -1,0 +1,73 @@
+class RequestValidationError(ValueError):
+    pass
+
+
+def parse_boolish(value):
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def ensure_boundary(boundary, min_points=3):
+    if not boundary or len(boundary) < min_points:
+        raise RequestValidationError(f"boundary must have at least {min_points} vertices")
+    return boundary
+
+
+def parse_retrieve_request(body):
+    boundary = ensure_boundary(body.get("boundary"), min_points=3)
+    return {
+        "boundary": boundary,
+        "entrance_point": body.get("entrance_point"),
+        "requirements": body.get("requirements"),
+        "topn": int(body.get("topn", 5)),
+        "shape_w": float(body.get("shape_w", 1.0)),
+        "ent_w": float(body.get("ent_w", 2.0)),
+        "room_w": float(body.get("room_w", 1.0)),
+    }
+
+
+def parse_fit_request(body):
+    fp = body.get("fp")
+    boundary = body.get("boundary")
+    if not fp:
+        raise RequestValidationError("missing or invalid fp/boundary")
+    ensure_boundary(boundary, min_points=3)
+    bdry_xy = [[v[0], v[1]] for v in boundary]
+    return {"fp": fp, "boundary": bdry_xy}
+
+
+def parse_render_request(body):
+    backend = str(body.get("backend", "openai")).strip().lower()
+    prompt = str(body.get("prompt", "")).strip()
+    depth_data_url = body.get("depth_data_url")
+    if not prompt:
+        raise RequestValidationError("missing prompt")
+    if not depth_data_url or not isinstance(depth_data_url, str):
+        raise RequestValidationError("missing depth_data_url")
+
+    return {
+        "backend": backend,
+        "params": {
+            "prompt": prompt,
+            "depth_data_url": depth_data_url,
+            "building_mask_data_url": body.get("building_mask_data_url"),
+            "normal_data_url": body.get("normal_data_url"),
+            "silhouette_data_url": body.get("silhouette_data_url"),
+            "opacity_mask_data_url": body.get("opacity_mask_data_url"),
+            "segmentation_data_url": body.get("segmentation_data_url"),
+            "depth_invert": parse_boolish(body.get("depth_invert", False)),
+            "comfy_url": body.get("comfy_url"),
+            "workflow_override": body.get("workflow_override"),
+            "openai_model": body.get("openai_model"),
+            "openai_quality": body.get("openai_quality"),
+            "openai_width": body.get("openai_width"),
+            "openai_height": body.get("openai_height"),
+            "width": body.get("width"),
+            "height": body.get("height"),
+        },
+    }
+
+
+def parse_comfy_health_request(body):
+    return str(body.get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")

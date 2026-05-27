@@ -37,6 +37,22 @@ python server.py
 
 Then open **http://127.0.0.1:5000** in your browser.
 
+For frontend-only development with Vite's dev server:
+
+```bash
+npm install
+npm run dev
+```
+
+The Flask server still provides the retrieval, fit, render, and static asset endpoints used by the app.
+
+If you want to use the OpenAI render backend, set the key in the server environment before starting Flask:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+python server.py
+```
+
 To expose the server on the local network (e.g. for a colleague on the same Wi-Fi):
 
 ```bash
@@ -54,7 +70,14 @@ Then open **http://&lt;your-machine-ip&gt;:5000** from another device.
 | `--data_dir` | `test_data` | Directory containing floor plan JSON files |
 | `--index_bin` | `browser_files/index.bin` | Pre-built descriptor index (float32 binary) |
 | `--index_names` | `browser_files/index_names.json` | Index name list |
+| `--allow-remote-comfy` | off | Allow `comfy_url` values outside `localhost` / `127.0.0.1` |
 | `--debug` | off | Enable Flask debug mode |
+
+### Render backend notes
+
+- OpenAI rendering now reads `OPENAI_API_KEY` from the server environment only. The browser does not send the key to `/render`.
+- ComfyUI URLs are restricted to `localhost`, `127.0.0.1`, or `::1` by default. Use `--allow-remote-comfy` if you explicitly want to allow a remote ComfyUI host.
+- The browser loads non-secret runtime defaults from `GET /config` (render backend, default ComfyUI URL, default workflow filename, OpenAI model/quality, and descriptor metadata), so these values are centralized server-side.
 
 ---
 
@@ -248,8 +271,15 @@ Each edge object has:
 ## Project structure
 
 ```
-retrieval_tool.html      Browser UI (single file, no build step)
-server.py                Flask server — serves the UI and runs retrieval
+index.html               Browser entry HTML for the Vite app
+src/                     Frontend modules (main, retrieval, geometry, descriptors, state)
+server.py                Flask app and thin route handlers
+index_store.py           Index loading and startup store construction
+retrieval.py             Retrieval query execution and result shaping
+fitting.py               Fit wrapper around fit_rooms.py
+render_backend.py        OpenAI/Comfy render orchestration
+comfy_client.py          Stdlib HTTP helpers for Comfy/OpenAI transport
+request_parsing.py       Route request parsing and validation helpers
 geo_ent_num_retrieval.py Rotation/reflection-aware retrieval with 63-dim descriptors
 build_index_ent.py       Builds browser_files/index.bin from a data directory
 sem_geo_retrieval.py     Legacy shape+semantic descriptor and index building

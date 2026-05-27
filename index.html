@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Floor Plan Retrieval</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0f1117;
+  --surface:  #181c27;
+  --surface2: #1e2436;
+  --border:   #2a2f3f;
+  --border2:  #3a4155;
+  --text:     #e2e8f0;
+  --muted:    #b6babe;
+  --accent:   #3b82f6;
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --amber:    #f59e0b;
+  --mono:     'JetBrains Mono','Fira Mono','Courier New',monospace;
+}
+body { background:var(--bg); color:var(--text); font-family:var(--mono); font-size:12px; height:100vh; display:flex; flex-direction:column; overflow:hidden; user-select:none; }
+
+#header { height:40px; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 16px; gap:20px; flex-shrink:0; }
+#header h1 { font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
+#hdr-status { font-size:11px; color:var(--muted); margin-left:auto; }
+#hdr-status.ok   { color:var(--green); }
+#hdr-status.warn { color:var(--amber); }
+#hdr-status.err  { color:var(--red); }
+
+#body { display:flex; flex:1; overflow:hidden; }
+
+#viewer-shell { flex:1; display:flex; flex-direction:column; min-width:0; }
+#view-tabs { height:34px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; padding:0 10px; background:var(--surface); }
+.view-tab { border:1px solid var(--border2); background:transparent; color:var(--muted); border-radius:4px; padding:5px 10px; font-family:var(--mono); font-size:11px; cursor:pointer; transition:all .12s; }
+.view-tab:hover { color:var(--text); border-color:var(--accent); }
+.view-tab.active { color:#fff; border-color:var(--accent); background:rgba(59,130,246,.22); }
+.view-panel { flex:1; min-height:0; position:relative; }
+#panel-2d { display:flex; }
+#panel-3d { display:none; flex-direction:column; background:#f0f0f0; }
+
+#viewer-3d-toolbar { height:36px; border-bottom:1px solid #d6d6d6; display:flex; align-items:center; gap:8px; padding:0 10px; color:#444; background:#fafafa; }
+#viewer-3d-status { font-size:11px; color:#666; }
+#viewer-3d { flex:1; min-height:0; position:relative; }
+#viewer-3d-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:12px; pointer-events:none; }
+#capture-panel { position:absolute; left:10px; top:46px; width:220px; background:rgba(255,255,255,0.92); border:1px solid #d1d5db; border-radius:8px; padding:8px; display:none; backdrop-filter:blur(3px); }
+#capture-panel.show { display:block; }
+#capture-panel.collapsed #capture-body { display:none; }
+#capture-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:6px; }
+#capture-switch { margin-bottom:6px; }
+#capture-view-select {
+  width:100%;
+  border:1px solid #cbd5e1;
+  border-radius:5px;
+  background:#fff;
+  color:#4b5563;
+  font-family:var(--mono);
+  font-size:10px;
+  padding:5px 6px;
+}
+#btn-download-capture {
+  width:100%;
+  margin-bottom:6px;
+}
+#capture-active {
+  border:1px solid #d1d5db;
+  border-radius:6px;
+  background:#f8fafc;
+  overflow:hidden;
+}
+#capture-active-img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+#capture-active-label { font-size:10px; color:#4b5563; text-align:center; padding:4px; border-top:1px solid #e5e7eb; background:#fff; }
+#opacity-legend {
+  margin-top:6px;
+  border:1px solid #d1d5db;
+  border-radius:6px;
+  padding:5px;
+  background:#fff;
+  font-size:9px;
+  color:#4b5563;
+  line-height:1.4;
+}
+#opacity-legend.hidden { display:none; }
+.opacity-legend-row { display:flex; align-items:center; gap:5px; margin-bottom:2px; }
+.opacity-legend-row:last-child { margin-bottom:0; }
+.opacity-legend-swatch { width:9px; height:9px; border-radius:2px; border:1px solid rgba(0,0,0,0.25); flex-shrink:0; }
+.opacity-legend-name { min-width:46px; color:#374151; }
+.opacity-legend-color { min-width:42px; color:#6b7280; }
+.opacity-legend-material {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:4px;
+  padding:2px 4px;
+  font-family:var(--mono);
+  font-size:9px;
+  color:#374151;
+  background:#fff;
+}
+
+#render-panel {
+  position:absolute;
+  right:10px;
+  top:46px;
+  width:360px;
+  max-height:calc(100% - 56px);
+  overflow-y:auto;
+  overflow-x:hidden;
+  background:rgba(255,255,255,0.95);
+  border:1px solid #d1d5db;
+  border-radius:10px;
+  padding:10px;
+  backdrop-filter:blur(3px);
+}
+#render-panel.collapsed #render-body { display:none; }
+#render-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:8px; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.panel-collapse-btn {
+  border:1px solid #cbd5e1;
+  border-radius:5px;
+  background:#fff;
+  color:#374151;
+  font-family:var(--mono);
+  font-size:10px;
+  line-height:1;
+  padding:3px 6px;
+  cursor:pointer;
+}
+.panel-collapse-btn:hover { border-color:#3b82f6; color:#1d4ed8; }
+.render-row { display:flex; gap:6px; margin-bottom:7px; }
+.render-row label { width:70px; font-size:10px; color:#4b5563; padding-top:6px; }
+.render-row select, .render-row textarea {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:#111827;
+  background:#fff;
+}
+.render-row input {
+  flex:1;
+  min-width:0;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:#111827;
+  background:#fff;
+}
+.render-row textarea { resize:vertical; min-height:56px; }
+#render-prompt-preview {
+  width:100%;
+  min-height:130px;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:#374151;
+  background:#f8fafc;
+  resize:vertical;
+}
+#python-grid-resolution {
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+#python-grid-resolution span {
+  font-size:10px;
+  color:#4b5563;
+}
+#backend-switch { display:flex; gap:8px; font-size:10px; color:#374151; padding-top:4px; }
+#backend-switch label { width:auto; padding-top:0; display:flex; align-items:center; gap:4px; cursor:pointer; }
+#comfy-row { align-items:flex-start; }
+#comfy-tools { display:flex; flex-direction:column; gap:6px; width:100%; }
+#comfy-inline { display:flex; gap:6px; }
+#comfy-status { font-size:10px; color:#4b5563; line-height:1.3; }
+#workflow-file { font-size:10px; }
+#workflow-name { font-size:10px; color:#4b5563; line-height:1.3; word-break:break-word; }
+#btn-check-comfy, #btn-clear-workflow {
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  background:#fff;
+  color:#374151;
+  font-family:var(--mono);
+  font-size:10px;
+  padding:6px;
+  cursor:pointer;
+}
+#btn-check-comfy:hover, #btn-clear-workflow:hover { border-color:#3b82f6; color:#1d4ed8; }
+#btn-generate-render {
+  width:100%;
+  margin-top:3px;
+  border:1px solid #3b82f6;
+  background:#3b82f6;
+  color:#fff;
+  border-radius:7px;
+  padding:8px;
+  font-family:var(--mono);
+  font-size:11px;
+  cursor:pointer;
+}
+#btn-generate-render:disabled { opacity:0.5; cursor:default; }
+#render-result { margin-top:8px; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; background:#f8fafc; display:none; }
+#render-result.show { display:block; }
+#render-result img { width:100%; display:block; }
+#render-result-meta { border-top:1px solid #e5e7eb; background:#fff; color:#4b5563; font-size:10px; padding:6px; line-height:1.4; }
+
+#sidebar { width:196px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.ss { padding:10px 12px; border-bottom:1px solid var(--border); }
+.sl { font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+
+.dz { border:1px dashed var(--border2); border-radius:4px; padding:6px 8px; cursor:pointer; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:5px; transition:border-color .12s,background .12s; }
+.dz:hover,.dz.over { border-color:var(--accent); background:rgba(59,130,246,.07); color:var(--text); }
+.dz input { display:none; }
+.dz-tag { font-size:11px; font-weight:500; color:var(--muted); flex-shrink:0; width:28px; }
+.dz-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.field { display:flex; flex-direction:column; gap:3px; margin-bottom:8px; }
+.field label { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; }
+.field label span { color:var(--text); font-weight:500; }
+input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+
+.run-btn { width:100%; padding:7px; background:var(--accent); border:none; border-radius:4px; color:#fff; font-family:var(--mono); font-size:13px; font-weight:500; cursor:pointer; letter-spacing:0.05em; transition:opacity .15s; margin-top:2px; }
+.run-btn:hover { opacity:0.85; }
+.run-btn:disabled { opacity:0.3; cursor:default; }
+
+.clear-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:12px; cursor:pointer; margin-top:6px; transition:all .12s; }
+.clear-btn:hover { border-color:var(--red); color:var(--red); }
+
+.stat { display:flex; justify-content:space-between; padding:2px 0; font-size:12px; border-bottom:1px solid var(--border); }
+.stat:last-child { border:none; }
+.stat-k { color:var(--muted); }
+.stat-v { color:var(--text); font-weight:500; }
+
+.hint { font-size:12px; color:var(--muted); line-height:1.7; }
+.hint kbd { background:var(--surface2); border:1px solid var(--border2); border-radius:3px; padding:0 3px; font-family:var(--mono); font-size:11px; color:var(--text); }
+
+#canvas-wrap { flex:1; display:flex; align-items:center; justify-content:center; background:var(--bg); position:relative; overflow:hidden; }
+#main-canvas { display:block; cursor:crosshair; border-radius:4px; }
+#btn-generate-3d { position:absolute; top:10px; right:10px; z-index:12; border:1px solid var(--border2); background:rgba(24,28,39,0.92); color:var(--text); border-radius:4px; padding:6px 8px; font-family:var(--mono); font-size:10px; letter-spacing:0.04em; cursor:pointer; }
+#btn-generate-3d:hover { border-color:var(--accent); color:#fff; }
+#canvas-hint { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); pointer-events:none; white-space:nowrap; }
+#coord-disp { position:absolute; top:10px; left:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
+#shift-ind { position:absolute; bottom:12px; right:12px; font-size:10px; color:var(--amber); pointer-events:none; display:none; }
+#canvas-palette { position:absolute; bottom:36px; left:50%; transform:translateX(-50%); display:flex; gap:12px; background:rgba(20,23,28,0.88); border:1px solid var(--border2); border-radius:6px; padding:5px 12px; pointer-events:all; z-index:10; backdrop-filter:blur(4px); }
+#canvas-palette label { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text); cursor:pointer; user-select:none; white-space:nowrap; }
+#canvas-palette input[type=checkbox] { cursor:pointer; accent-color:var(--accent); margin:0; }
+
+#right-panel { width:216px; flex-shrink:0; border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+#right-header { padding:10px 12px; border-bottom:1px solid var(--border); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; }
+#results-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+#results-empty { font-size:10px; color:var(--muted); text-align:center; padding:24px 8px; }
+
+.result-card { background:var(--surface); border:1px solid var(--border); border-radius:5px; overflow:hidden; cursor:pointer; transition:border-color .12s; flex-shrink:0; }
+.result-card:hover { border-color:var(--border2); }
+.result-card.selected { border:1.5px solid var(--accent); }
+.card-thumb { width:100%; aspect-ratio:1; display:block; }
+.card-meta { padding:6px 8px; }
+.card-title { font-size:10px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card-dist { font-size:9px; color:var(--muted); margin-top:2px; }
+.card-rooms { font-size:9px; color:var(--muted); margin-top:2px; line-height:1.5; }
+
+.legend-row { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:10px; color:var(--text); }
+.legend-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
+.legend-swatch.door { border-color:rgba(194,65,12,0.6); }
+.legend-swatch.window { border-color:rgba(6,182,212,0.6); }
+
+/* entrance mode toggle */
+.mode-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; margin-top:4px; transition:all .12s; }
+.mode-btn:hover { border-color:var(--amber); color:var(--amber); }
+.mode-btn.active { background:rgba(245,158,11,0.15); border-color:var(--amber); color:var(--amber); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>floor plan retrieval</h1>
+  <span id="hdr-status">load index to begin</span>
+</div>
+
+<div id="body">
+
+  <div id="sidebar">
+    <div class="ss">
+      <div class="sl">index</div>
+      <div class="dz" id="dz-bin">
+        <input type="file" id="fi-bin" accept=".bin">
+        <span class="dz-tag">BIN</span><span class="dz-name" id="lbl-bin">index.bin</span>
+      </div>
+      <div class="dz" id="dz-nms">
+        <input type="file" id="fi-nms" accept=".json">
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-nms">index_names.json</span>
+      </div>
+      <div class="dz" id="dz-pls">
+        <input type="file" id="fi-pls" accept=".json" multiple>
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-pls">plan files (multi)</span>
+      </div>
+      <div id="idx-st" style="font-size:10px;color:var(--muted);padding:2px 0">—</div>
+      <button class="clear-btn" id="btn-clear-plan-cache" style="margin-top:4px">clear plan cache</button>
+    </div>
+
+    <div class="ss">
+      <div class="sl">draw</div>
+      <div class="hint">
+        <kbd>click</kbd> add vertex<br>
+        <kbd>shift</kbd> lock H / V axis<br>
+        <kbd>enter</kbd> or <kbd>dbl-click</kbd> close<br>
+        <kbd>esc</kbd> clear
+      </div>
+      <button class="clear-btn" id="btn-clear-boundary">clear boundary</button>
+      <button class="clear-btn" id="btn-save-boundary" style="margin-top:4px">save boundary…</button>
+      <div id="entrance-controls" style="display:none;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <div class="sl" style="margin-bottom:4px">entrance</div>
+        <button class="mode-btn" id="btn-entrance-mode">
+          &#x1F6AA; place entrance
+        </button>
+        <button class="clear-btn" id="btn-clear-entrance" style="margin-top:3px;display:none">
+          clear entrance
+        </button>
+        <div id="entrance-info" style="font-size:9px;color:var(--muted);margin-top:3px;display:none"></div>
+      </div>
+    </div>
+
+    <div class="ss" id="lib-section">
+      <div class="sl">boundary library</div>
+      <div id="lib-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
+      <button class="clear-btn" id="btn-export-library" style="width:100%">export library JSON</button>
+      <label class="clear-btn" style="width:100%;text-align:center;cursor:pointer;margin-top:4px">
+        import library JSON<input type="file" id="fi-import-library" accept=".json" style="display:none">
+      </label>
+    </div>
+
+    <div class="ss">
+      <div class="sl">requirements</div>
+      <div class="field">
+        <label>bedrooms <span id="v-bed">2</span></label>
+        <input id="rng-bedrooms" type="range" min="0" max="6" value="2" step="1">
+      </div>
+      <div class="field">
+        <label>bathrooms <span id="v-bath">1</span></label>
+        <input id="rng-bathrooms" type="range" min="0" max="4" value="1" step="1">
+      </div>
+    </div>
+
+    <div class="ss">
+      <div class="sl">parameters</div>
+      <div class="field">
+        <label>results <span id="v-topn">5</span></label>
+        <input id="rng-topn" type="range" min="1" max="20" value="5" step="1">
+      </div>
+      <div class="field">
+        <label>shape weight <span id="v-sw">1.0</span></label>
+        <input id="rng-shape-weight" type="range" min="0" max="2" value="1.0" step="0.1">
+      </div>
+      <div class="field">
+        <label>entrance weight <span id="v-entw">2.0</span></label>
+        <input id="rng-entrance-weight" type="range" min="0" max="4" value="2.0" step="0.1">
+      </div>
+      <div class="field">
+        <label>room weight <span id="v-rmw">1.0</span></label>
+        <input id="rng-room-weight" type="range" min="0" max="2" value="1.0" step="0.1">
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-graph">
+        show room graph</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-fit">
+        fit rooms into boundary</label>
+      </div>
+      <button class="run-btn" id="run-btn" disabled>retrieve</button>
+    </div>
+
+    <div class="ss">
+      <div class="sl">stats</div>
+      <div class="stat"><span class="stat-k">index</span><span class="stat-v" id="s-idx">—</span></div>
+      <div class="stat"><span class="stat-k">plans loaded</span><span class="stat-v" id="s-pls">0</span></div>
+      <div class="stat"><span class="stat-k">boundary verts</span><span class="stat-v" id="s-bv">—</span></div>
+      <div class="stat"><span class="stat-k">entrance</span><span class="stat-v" id="s-ent">—</span></div>
+      <div class="stat"><span class="stat-k">scale</span><span class="stat-v">1 unit = 18 m</span></div>
+    </div>
+    <div class="ss" id="legend">
+      <div class="sl">legend</div>
+    </div>
+  </div>
+
+  <div id="viewer-shell">
+    <div id="view-tabs">
+      <button class="view-tab active" id="tab-2d">2D Plan</button>
+      <button class="view-tab" id="tab-3d">3D View</button>
+    </div>
+
+    <div id="panel-2d" class="view-panel">
+      <div id="canvas-wrap">
+        <canvas id="main-canvas"></canvas>
+        <button id="btn-generate-3d">Generate 3D</button>
+        <div id="coord-disp"></div>
+        <div id="canvas-hint">draw a boundary polygon to begin</div>
+        <div id="shift-ind">SHIFT LOCK</div>
+        <div id="canvas-palette">
+          <label><input type="checkbox" id="chk-show-bdry" checked> plan boundary</label>
+          <label><input type="checkbox" id="chk-show-win" checked> windows</label>
+          <label><input type="checkbox" id="chk-show-idoors" checked> int. doors</label>
+          <label><input type="checkbox" id="chk-show-common" checked> common area</label>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-3d" class="view-panel">
+      <div id="viewer-3d-toolbar">
+        <button class="clear-btn" id="btn-rebuild-scene" style="margin:0;width:auto;padding:5px 8px">Rebuild Scene</button>
+        <button class="clear-btn" id="btn-capture-maps" style="margin:0;width:auto;padding:5px 8px">Capture Maps</button>
+        <span id="viewer-3d-status">Switch to 3D to initialize viewer.</span>
+      </div>
+      <div id="viewer-3d"></div>
+      <div id="render-panel">
+        <div class="panel-head">
+          <div id="render-title">Render Controls</div>
+          <button class="panel-collapse-btn" id="btn-collapse-render">-</button>
+        </div>
+        <div id="render-body">
+        <div class="render-row">
+          <label for="render-style">Style</label>
+          <select id="render-style">
+            <option value="photorealistic" selected>photorealistic</option>
+            <option value="architectural sketch">architectural sketch</option>
+            <option value="conceptual massing">conceptual massing</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-view">View</label>
+          <select id="render-view">
+            <option value="exterior" selected>exterior</option>
+            <option value="street perspective">street perspective</option>
+            <option value="aerial three-quarter">aerial three-quarter</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-light">Lighting</label>
+          <select id="render-light">
+            <option value="golden hour" selected>golden hour</option>
+            <option value="overcast">overcast</option>
+            <option value="night">night</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-material">Material</label>
+          <select id="render-material">
+            <option value="timber" selected>timber</option>
+            <option value="concrete">concrete</option>
+            <option value="brick">brick</option>
+            <option value="glass">glass</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-prompt">Prompt</label>
+          <textarea id="render-prompt" placeholder="Add details: facade rhythm, glazing ratio, landscaping, people scale, camera mood..."></textarea>
+        </div>
+        <div class="render-row">
+          <label for="render-prompt-preview">Preview</label>
+          <textarea id="render-prompt-preview" readonly spellcheck="false" aria-label="Structured prompt preview"></textarea>
+        </div>
+        <div class="render-row">
+          <label>Backend</label>
+          <div id="backend-switch">
+            <label><input type="radio" name="render-backend" value="openai"> OpenAI (cloud)</label>
+            <label><input type="radio" name="render-backend" value="comfy" checked> ComfyUI (local)</label>
+          </div>
+        </div>
+        <div class="render-row" id="comfy-row" style="display:none;">
+          <label for="render-comfy-url">ComfyUI</label>
+          <div id="comfy-tools">
+            <input id="render-comfy-url" type="text" value="http://127.0.0.1:8188" spellcheck="false">
+            <div id="comfy-inline">
+              <button id="btn-check-comfy" type="button">Check</button>
+              <input id="workflow-file" type="file" accept=".json">
+              <button id="btn-clear-workflow" type="button">Clear Workflow</button>
+            </div>
+            <label style="width:auto;padding-top:0;display:flex;align-items:center;gap:6px;">
+              <input id="render-comfy-invert" type="checkbox"> invert depth before upload
+            </label>
+            <div id="workflow-name">Using repo default: comfyui-sdxl-depth-multi-workflow.json</div>
+            <div id="comfy-status">Use Check to validate local ComfyUI.</div>
+          </div>
+        </div>
+        <div class="render-row" id="openai-row-api-key">
+          <label for="render-openai-key">OpenAI Key</label>
+          <input id="render-openai-key" type="password" placeholder="set OPENAI_API_KEY on server" autocomplete="off" spellcheck="false" disabled>
+        </div>
+        <div class="render-row" id="openai-row-model">
+          <label for="render-openai-model">OpenAI Model</label>
+          <input id="render-openai-model" type="text" value="gpt-image-1" spellcheck="false">
+        </div>
+        <div class="render-row" id="openai-row-quality">
+          <label for="render-openai-quality">Quality</label>
+          <select id="render-openai-quality">
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="high">high</option>
+            <option value="auto">auto</option>
+          </select>
+        </div>
+        <div class="render-row" id="python-row-resolution">
+          <label>Resolution</label>
+          <div id="python-grid-resolution">
+            <input id="py-width" type="number" min="256" max="1536" step="64" value="512" placeholder="width">
+            <span>x</span>
+            <input id="py-height" type="number" min="256" max="1536" step="64" value="512" placeholder="height">
+          </div>
+        </div>
+        <button id="btn-generate-render">Generate Render</button>
+        <div id="render-result">
+          <img id="render-result-img" alt="Generated render output">
+          <div id="render-result-meta"></div>
+        </div>
+        </div>
+      </div>
+      <div id="capture-panel">
+        <div class="panel-head" style="margin-bottom:6px;">
+          <div id="capture-title" style="margin-bottom:0;">Latest Capture</div>
+          <button class="panel-collapse-btn" id="btn-collapse-capture">-</button>
+        </div>
+        <div id="capture-body">
+          <div id="capture-switch">
+            <select id="capture-view-select">
+              <option value="preview">Preview</option>
+              <option value="depth">Depth</option>
+              <option value="normal">Normal</option>
+              <option value="silhouette">Silhouette</option>
+              <option value="opacity">Opacity</option>
+            </select>
+          </div>
+          <button id="btn-download-capture" class="clear-btn" type="button">Download Capture Bundle</button>
+          <div id="capture-active">
+            <img id="capture-active-img" alt="Captured image">
+            <div id="capture-active-label">Preview</div>
+          </div>
+          <div id="opacity-legend" class="hidden">
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#787878"></span>
+              <span class="opacity-legend-name">walls</span>
+              <span class="opacity-legend-color">#787878</span>
+              <input id="opacity-mat-walls" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#08ff33"></span>
+              <span class="opacity-legend-name">doors</span>
+              <span class="opacity-legend-color">#08ff33</span>
+              <input id="opacity-mat-doors" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#e6e6e6"></span>
+              <span class="opacity-legend-name">windows</span>
+              <span class="opacity-legend-color">#e6e6e6</span>
+              <input id="opacity-mat-windows" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#503232"></span>
+              <span class="opacity-legend-name">slabs</span>
+              <span class="opacity-legend-color">#503232</span>
+              <input id="opacity-mat-slabs" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+            <div class="opacity-legend-row">
+              <span class="opacity-legend-swatch" style="background:#ffb806"></span>
+              <span class="opacity-legend-name">parapets</span>
+              <span class="opacity-legend-color">#ffb806</span>
+              <input id="opacity-mat-parapets" class="opacity-legend-material" type="text" spellcheck="false" placeholder="optional material">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="viewer-3d-empty">Select a retrieved plan, then click Generate 3D.</div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div id="right-header">
+      <span>alternatives</span>
+      <span id="result-count" style="color:var(--muted);font-size:9px"></span>
+    </div>
+    <div id="results-list">
+      <div id="results-empty">run retrieval to see results</div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
