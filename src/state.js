@@ -82,5 +82,14 @@ export function createInitialState(){
         materialOverrides:{...DEFAULT_RENDER_PROMPT_CONFIG.materialOverrides},
       },
     },
+    // Floor plate harness state is separate from retrieval `results` state.
+    floorPlateState:null,
+    devMode:{
+      enabled:false,
+      panelVisible:false,
+      showFloorPlateOverlay:true,
+      lastComplianceReport:null,
+      lastToolOutput:null,
+    },
   };
 }

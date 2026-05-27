@@ -47,6 +47,8 @@ export function createCanvasRenderer({
       cW,
       cH,
       params,
+      floorPlateState,
+      devMode,
     }=getState();
 
     ctx.clearRect(0,0,cW,cH);
@@ -54,6 +56,12 @@ export function createCanvasRenderer({
     ctx.fillRect(0,0,cW,cH);
 
     drawScaleGrid(ctx,cW,cH);
+
+    if(devMode?.enabled&&devMode?.showFloorPlateOverlay&&floorPlateState){
+      renderFloorPlate(ctx,floorPlateState,cW,cH);
+      drawScaleBar(ctx,cW,cH);
+      return;
+    }
 
     if(selected!==null&&results[selected]?.fp){
       const selRot=results[selected].rot||0;
@@ -197,6 +205,138 @@ export function createCanvasRenderer({
     }
 
     drawScaleBar(ctx,cW,cH);
+  }
+
+  function renderFloorPlate(c,state,W,H){
+    const floorPlate=state?.floor_plate||state;
+    const boundary=floorPlate?.boundary;
+    if(!Array.isArray(boundary)||boundary.length<3)return;
+
+    const pad=0.08;
+    const xs=boundary.map(([x])=>x);
+    const ys=boundary.map(([,y])=>y);
+    const minX=Math.min(...xs),maxX=Math.max(...xs);
+    const minY=Math.min(...ys),maxY=Math.max(...ys);
+    const spanX=Math.max(maxX-minX,1e-6);
+    const spanY=Math.max(maxY-minY,1e-6);
+    const usableW=W*(1-2*pad);
+    const usableH=H*(1-2*pad);
+    const scale=Math.min(usableW/spanX,usableH/spanY);
+    const xOffset=(W-scale*spanX)/2-minX*scale;
+    const yOffset=(H-scale*spanY)/2-minY*scale;
+    const t=([x,y])=>[x*scale+xOffset,y*scale+yOffset];
+    const centroid=(poly)=>{
+      const n=poly.length;
+      if(!n)return[0,0];
+      let sx=0,sy=0;
+      poly.forEach(([x,y])=>{sx+=x;sy+=y;});
+      return[sx/n,sy/n];
+    };
+    const drawPoly=(poly,{fill=null,stroke='#111',lineWidth=1.5,dash=[]}={})=>{
+      if(!Array.isArray(poly)||poly.length<3)return;
+      c.beginPath();
+      poly.forEach((pt,i)=>{
+        const [cx,cy]=t(pt);
+        i===0?c.moveTo(cx,cy):c.lineTo(cx,cy);
+      });
+      c.closePath();
+      if(fill){
+        c.fillStyle=fill;
+        c.fill();
+      }
+      c.strokeStyle=stroke;
+      c.lineWidth=lineWidth;
+      c.setLineDash(dash);
+      c.stroke();
+      c.setLineDash([]);
+    };
+
+    // Structural grid first so all program geometry remains legible above it.
+    const grid=floorPlate.structural_grid||{};
+    c.save();
+    c.strokeStyle='rgba(30,64,175,0.28)';
+    c.lineWidth=1;
+    c.setLineDash([5,5]);
+    (grid.x_lines||[]).forEach((x)=>{
+      const [x1,y1]=t([x,minY]);
+      const [x2,y2]=t([x,maxY]);
+      c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+    });
+    (grid.y_lines||[]).forEach((y)=>{
+      const [x1,y1]=t([minX,y]);
+      const [x2,y2]=t([maxX,y]);
+      c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+    });
+    c.restore();
+
+    drawPoly(boundary,{fill:'rgba(59,130,246,0.05)',stroke:'#1f2937',lineWidth:2});
+
+    (floorPlate.corridors||[]).forEach((corridor)=>{
+      drawPoly(corridor.polygon,{fill:'rgba(250,204,21,0.28)',stroke:'rgba(202,138,4,0.95)',lineWidth:2});
+    });
+
+    (floorPlate.cores||[]).forEach((core)=>{
+      drawPoly(core.polygon,{fill:'rgba(148,163,184,0.36)',stroke:'#475569',lineWidth:2});
+      const [cx,cy]=t(centroid(core.polygon));
+      c.fillStyle='#334155';
+      c.font='10px monospace';
+      c.textAlign='center';
+      c.fillText('Core',cx,cy+3);
+    });
+
+    const EDGE_COLORS={
+      external:'#2563eb',
+      shared_wall:'#64748b',
+      facing_corridor:'#eab308',
+    };
+    (floorPlate.units||[]).forEach((unit)=>{
+      const poly=unit.polygon;
+      drawPoly(poly,{fill:'rgba(16,185,129,0.12)',stroke:'rgba(5,150,105,0.9)',lineWidth:1.5});
+
+      if(Array.isArray(unit.typed_edges)){
+        unit.typed_edges.forEach((typedEdge)=>{
+          const edgeIndex=typedEdge.edge_index;
+          if(!Array.isArray(poly)||!poly.length||typeof edgeIndex!=='number')return;
+          const from=poly[edgeIndex];
+          const to=poly[(edgeIndex+1)%poly.length];
+          if(!from||!to)return;
+          const [x1,y1]=t(from);
+          const [x2,y2]=t(to);
+          c.beginPath();
+          c.moveTo(x1,y1);
+          c.lineTo(x2,y2);
+          c.strokeStyle=EDGE_COLORS[typedEdge.type]||'#0f172a';
+          c.lineWidth=3;
+          c.setLineDash([]);
+          c.stroke();
+        });
+      }
+
+      const [ux,uy]=t(centroid(poly));
+      c.fillStyle='#065f46';
+      c.font='10px monospace';
+      c.textAlign='center';
+      const labelType=unit.type||'unit';
+      c.fillText(labelType,ux,uy-2);
+      const area=polygonArea(poly);
+      c.fillStyle='#0f766e';
+      c.fillText(`${area.toFixed(1)} m2`,ux,uy+10);
+    });
+
+    (floorPlate.unresolved_regions||[]).forEach((region)=>{
+      drawPoly(region,{fill:'rgba(239,68,68,0.22)',stroke:'rgba(185,28,28,0.9)',lineWidth:1.5,dash:[4,3]});
+    });
+  }
+
+  function polygonArea(poly){
+    if(!Array.isArray(poly)||poly.length<3)return 0;
+    let sum=0;
+    for(let i=0;i<poly.length;i++){
+      const [x1,y1]=poly[i];
+      const [x2,y2]=poly[(i+1)%poly.length];
+      sum+=x1*y2-x2*y1;
+    }
+    return Math.abs(sum)*0.5;
   }
 
   function drawScaleGrid(c,W,H){
@@ -451,6 +591,7 @@ export function createCanvasRenderer({
     drawDoorsWindows,
     drawFP,
     drawGraph,
+    renderFloorPlate,
     render,
     updateCursor,
   };

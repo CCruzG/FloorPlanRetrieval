@@ -64,7 +64,11 @@ async function fetchWithCache(url){
 
 // state
 const {db,cache,viewer3D,renderCaptureState,renderRequestState}=initialState;
-let {req,params,boundary,closed,entrance,entranceMode,entranceSnap,mouse,shiftDown,snapFirst,results,selected,fitMode,fittedCache,showPlanBdry,showWindows,showDoors,showCommonArea,selectedRoom,hoveredRoom,hoveredEntrance,dragState,displacementArrows,cW,cH,activeTab}=initialState;
+const {devMode}=initialState;
+let {req,params,boundary,closed,entrance,entranceMode,entranceSnap,mouse,shiftDown,snapFirst,results,selected,fitMode,fittedCache,showPlanBdry,showWindows,showDoors,showCommonArea,selectedRoom,hoveredRoom,hoveredEntrance,dragState,displacementArrows,cW,cH,activeTab,floorPlateState}=initialState;
+
+devMode.enabled=new URLSearchParams(window.location.search).get('dev')==='true';
+devMode.panelVisible=devMode.enabled;
 
 function applyBoundaryEditorState(patch){
   if(Object.prototype.hasOwnProperty.call(patch,'boundary'))boundary=patch.boundary;
@@ -84,6 +88,273 @@ function applyBoundaryEditorState(patch){
 
 const canvas=document.getElementById('main-canvas');
 const ctx=canvas.getContext('2d');
+let syncDevModePanel=()=>{};
+let devModeSetupDone=false;
+
+function buildMockFloorPlateState(){
+  const defaultBoundary=[[0.1,0.15],[0.9,0.15],[0.9,0.85],[0.1,0.85]];
+  const plateBoundary=(closed&&boundary.length>=3)
+    ? boundary.map(({x,y})=>[x,y])
+    : defaultBoundary;
+  const minX=Math.min(...plateBoundary.map(([x])=>x));
+  const maxX=Math.max(...plateBoundary.map(([x])=>x));
+  const minY=Math.min(...plateBoundary.map(([,y])=>y));
+  const maxY=Math.max(...plateBoundary.map(([,y])=>y));
+  const midX=(minX+maxX)/2;
+  const midY=(minY+maxY)/2;
+  const h=(maxY-minY);
+
+  return {
+    floor_plate:{
+      id:'fp-dev-sample',
+      boundary:plateBoundary,
+      typology:'double_loaded_slab',
+      structural_grid:{
+        x_lines:[minX+(maxX-minX)*0.2,midX,minX+(maxX-minX)*0.8],
+        y_lines:[minY+h*0.35,minY+h*0.65],
+        column_positions:[],
+      },
+      cores:[
+        {
+          id:'core-0',
+          type:'stair_lift',
+          polygon:[
+            [midX-0.05,minY+h*0.42],
+            [midX+0.05,minY+h*0.42],
+            [midX+0.05,minY+h*0.58],
+            [midX-0.05,minY+h*0.58],
+          ],
+        },
+      ],
+      corridors:[
+        {
+          id:'corr-0',
+          width_min:1.4,
+          polygon:[
+            [minX+0.06,minY+h*0.48],
+            [maxX-0.06,minY+h*0.48],
+            [maxX-0.06,minY+h*0.52],
+            [minX+0.06,minY+h*0.52],
+          ],
+        },
+      ],
+      units:[
+        {
+          id:'unit-0',
+          type:'2bed',
+          polygon:[[minX+0.02,minY+0.02],[midX-0.06,minY+0.02],[midX-0.06,minY+h*0.48],[minX+0.02,minY+h*0.48]],
+          typed_edges:[
+            {edge_index:0,type:'external'},
+            {edge_index:1,type:'shared_wall'},
+            {edge_index:2,type:'facing_corridor'},
+            {edge_index:3,type:'external'},
+          ],
+        },
+        {
+          id:'unit-1',
+          type:'1bed',
+          polygon:[[midX+0.06,minY+0.02],[maxX-0.02,minY+0.02],[maxX-0.02,minY+h*0.48],[midX+0.06,minY+h*0.48]],
+          typed_edges:[
+            {edge_index:0,type:'external'},
+            {edge_index:1,type:'external'},
+            {edge_index:2,type:'facing_corridor'},
+            {edge_index:3,type:'shared_wall'},
+          ],
+        },
+      ],
+      unresolved_regions:[],
+    },
+  };
+}
+
+function setupDevModeUI(){
+  if(devModeSetupDone)return;
+  devModeSetupDone=true;
+
+  const wrap=document.getElementById('canvas-wrap');
+  if(!wrap)return;
+
+  const style=document.createElement('style');
+  style.textContent=`
+    #fp-dev-panel {
+      position:absolute;
+      top:10px;
+      left:10px;
+      width:320px;
+      max-height:calc(100% - 20px);
+      overflow:auto;
+      border:1px solid #3a4155;
+      border-radius:8px;
+      background:rgba(15,17,23,0.94);
+      color:#e2e8f0;
+      font-family:var(--mono);
+      font-size:10px;
+      z-index:15;
+      display:none;
+      padding:8px;
+      backdrop-filter:blur(4px);
+    }
+    #fp-dev-panel.show { display:block; }
+    .fp-dev-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .fp-dev-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#93c5fd; }
+    .fp-dev-section { border:1px solid #2a2f3f; border-radius:6px; padding:6px; margin-bottom:8px; background:rgba(30,36,54,0.35); }
+    .fp-dev-section-title { font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#b6babe; margin-bottom:6px; }
+    .fp-dev-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+    .fp-dev-row:last-child { margin-bottom:0; }
+    .fp-dev-btn {
+      border:1px solid #3a4155;
+      border-radius:4px;
+      background:#1e2436;
+      color:#e2e8f0;
+      font-family:var(--mono);
+      font-size:10px;
+      padding:4px 6px;
+      cursor:pointer;
+    }
+    .fp-dev-btn:hover { border-color:#3b82f6; }
+    .fp-dev-pre {
+      white-space:pre-wrap;
+      word-break:break-word;
+      border:1px solid #2a2f3f;
+      border-radius:4px;
+      background:rgba(15,17,23,0.8);
+      color:#cbd5e1;
+      padding:6px;
+      max-height:180px;
+      overflow:auto;
+      line-height:1.35;
+    }
+    #fp-dev-compliance-table { width:100%; border-collapse:collapse; }
+    #fp-dev-compliance-table th, #fp-dev-compliance-table td { border-bottom:1px solid #2a2f3f; padding:3px 2px; text-align:left; }
+    #fp-dev-compliance-table th { color:#94a3b8; font-weight:500; }
+  `;
+  document.head.appendChild(style);
+
+  const panel=document.createElement('aside');
+  panel.id='fp-dev-panel';
+  panel.innerHTML=`
+    <div class="fp-dev-head">
+      <div class="fp-dev-title">Floor Plate Dev Mode</div>
+      <button id="fp-dev-hide" class="fp-dev-btn" type="button">hide</button>
+    </div>
+
+    <section class="fp-dev-section">
+      <div class="fp-dev-section-title">Tool Call Panel</div>
+      <div class="fp-dev-row">
+        <label><input id="fp-dev-overlay" type="checkbox" checked> show floor plate overlay</label>
+      </div>
+      <div class="fp-dev-row">
+        <button id="fp-dev-seed" class="fp-dev-btn" type="button">seed sample floor plate</button>
+        <button id="fp-dev-clear" class="fp-dev-btn" type="button">clear floor plate</button>
+      </div>
+      <div class="fp-dev-pre" id="fp-dev-tools">
+Stage 1: analyse_boundary, evaluate_typology_fit, propose_typology_options
+Stage 2: compute_structural_grid, propose_core_positions, plan_corridor
+Stage 3: compute_unit_bays, evaluate_party_wall_position, draw_party_wall
+
+Tool execution controls are Phase 2+ work.
+      </div>
+    </section>
+
+    <section class="fp-dev-section">
+      <div class="fp-dev-section-title">State Inspector</div>
+      <div class="fp-dev-pre" id="fp-dev-state"></div>
+    </section>
+
+    <section class="fp-dev-section" style="margin-bottom:0">
+      <div class="fp-dev-section-title">Compliance Log</div>
+      <table id="fp-dev-compliance-table">
+        <thead>
+          <tr><th>Requirement</th><th>Expected</th><th>Actual</th><th>Status</th></tr>
+        </thead>
+        <tbody id="fp-dev-compliance-body"></tbody>
+      </table>
+    </section>
+  `;
+  wrap.appendChild(panel);
+
+  const hideBtn=document.getElementById('fp-dev-hide');
+  const overlayToggle=document.getElementById('fp-dev-overlay');
+  const seedBtn=document.getElementById('fp-dev-seed');
+  const clearBtn=document.getElementById('fp-dev-clear');
+
+  if(overlayToggle)overlayToggle.checked=!!devMode.showFloorPlateOverlay;
+  hideBtn?.addEventListener('click',()=>{
+    devMode.panelVisible=false;
+    syncDevModePanel();
+  });
+  overlayToggle?.addEventListener('change',(e)=>{
+    devMode.showFloorPlateOverlay=!!e.target.checked;
+    render();
+  });
+  seedBtn?.addEventListener('click',()=>{
+    floorPlateState=buildMockFloorPlateState();
+    render();
+  });
+  clearBtn?.addEventListener('click',()=>{
+    floorPlateState=null;
+    render();
+  });
+
+  syncDevModePanel=()=>{
+    const stateEl=document.getElementById('fp-dev-state');
+    const bodyEl=document.getElementById('fp-dev-compliance-body');
+    const panelEl=document.getElementById('fp-dev-panel');
+    const overlayEl=document.getElementById('fp-dev-overlay');
+    if(!stateEl||!bodyEl||!panelEl)return;
+
+    panelEl.classList.toggle('show',!!devMode.enabled&&!!devMode.panelVisible);
+    if(overlayEl)overlayEl.checked=!!devMode.showFloorPlateOverlay;
+
+    const summary={
+      devModeEnabled:!!devMode.enabled,
+      panelVisible:!!devMode.panelVisible,
+      overlayEnabled:!!devMode.showFloorPlateOverlay,
+      floorPlateLoaded:!!floorPlateState,
+      floorPlateId:floorPlateState?.floor_plate?.id||floorPlateState?.id||null,
+      unitCount:(floorPlateState?.floor_plate?.units||floorPlateState?.units||[]).length,
+      stageHints:{
+        hasGrid:!!(floorPlateState?.floor_plate?.structural_grid||floorPlateState?.structural_grid),
+        hasCore:((floorPlateState?.floor_plate?.cores||floorPlateState?.cores||[]).length>0),
+        hasCorridor:((floorPlateState?.floor_plate?.corridors||floorPlateState?.corridors||[]).length>0),
+      },
+      lastToolOutput:devMode.lastToolOutput||null,
+    };
+
+    let stateText=JSON.stringify(summary,null,2);
+    if(floorPlateState){
+      const serialized=JSON.stringify(floorPlateState,null,2);
+      stateText+=`\n\nFloorPlateState\n${serialized.slice(0,4000)}${serialized.length>4000?'\n...truncated':''}`;
+    }
+    stateEl.textContent=stateText;
+
+    const report=devMode.lastComplianceReport;
+    const rows=Array.isArray(report?.requirements)
+      ? report.requirements
+      : [];
+    bodyEl.innerHTML='';
+    if(!rows.length){
+      const row=document.createElement('tr');
+      row.innerHTML='<td colspan="4" style="color:#94a3b8">No compliance checks run yet.</td>';
+      bodyEl.appendChild(row);
+      return;
+    }
+    rows.forEach((item)=>{
+      const tr=document.createElement('tr');
+      const status=item.status||'unknown';
+      const color=status==='pass'?'#22c55e':(status==='blocked'?'#f59e0b':'#ef4444');
+      tr.innerHTML=`
+        <td>${item.name||'requirement'}</td>
+        <td>${item.expected??'-'}</td>
+        <td>${item.actual??'-'}</td>
+        <td style="color:${color}">${status}</td>
+      `;
+      bodyEl.appendChild(tr);
+    });
+  };
+
+  syncDevModePanel();
+}
 
 function n2c(nx,ny){
   return geometryN2C(nx,ny,{cW,cH});
@@ -234,6 +505,7 @@ let updateCapturePanel=()=>{};
 let drawDoorsWindows;
 let drawFP;
 let drawGraph;
+let renderFloorPlate;
 let render=()=>{};
 let updateCursor=()=>{};
 
@@ -369,6 +641,7 @@ function getActiveFPState(){
   drawDoorsWindows,
   drawFP,
   drawGraph,
+  renderFloorPlate,
   render,
   updateCursor,
 } = createCanvasRenderer({
@@ -399,6 +672,8 @@ function getActiveFPState(){
     cW,
     cH,
     params,
+    floorPlateState,
+    devMode,
   }),
   getActiveFPState,
   n2c,
@@ -406,6 +681,12 @@ function getActiveFPState(){
   snapToEdge,
   planToCanvas,
 }));
+
+const baseRender=render;
+render=()=>{
+  baseRender();
+  syncDevModePanel();
+};
 
 // ── mouse ─────────────────────────────────────────────────────────────────
 canvas.addEventListener('mousedown',e=>{
@@ -576,6 +857,14 @@ canvas.addEventListener('dblclick',e=>{
 });
 
 document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='d'){
+    e.preventDefault();
+    devMode.enabled=!devMode.enabled;
+    devMode.panelVisible=devMode.enabled;
+    syncDevModePanel();
+    render();
+    return;
+  }
   if(e.target&&e.target.matches&&e.target.matches('input, textarea, select'))return;
   if(e.key==='Escape')clearBoundary();
   if(e.key==='Enter'&&boundary.length>=3&&!closed)closeBoundary();
@@ -833,6 +1122,7 @@ window.addEventListener('DOMContentLoaded',async ()=>{
 })();
 
 function wirePhase1UI(){
+  setupDevModeUI();
   const on=(id,eventName,handler)=>{
     const el=document.getElementById(id);
     if(el)el.addEventListener(eventName,handler);
