@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from geo_ent_num_retrieval import (
+from .geo_ent_num_retrieval import (
     shape_desc,
     entrance_desc_from_point,
     retrieve as geo_retrieve,

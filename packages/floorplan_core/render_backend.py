@@ -6,13 +6,15 @@ import os
 import time
 import uuid
 from io import BytesIO
+from pathlib import Path
 from urllib import parse as urlparse
 
 import numpy as np
 
-from comfy_client import http_get_bytes, http_get_json, http_post_json, http_post_multipart
+from .comfy_client import http_get_bytes, http_get_json, http_post_json, http_post_multipart
 
 DEFAULT_COMFY_WORKFLOW_FILENAME = "comfyui-sdxl-depth-multi-workflow.json"
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
 def validate_comfy_url(comfy_url, allow_remote_comfy=False):
@@ -82,11 +84,16 @@ def _load_comfy_workflow(workflow_override, base_dir):
     if isinstance(workflow_override, dict) and workflow_override:
         return copy.deepcopy(workflow_override)
 
+    base_dir = Path(base_dir) if base_dir is not None else PACKAGE_ROOT
     wf_path = base_dir / DEFAULT_COMFY_WORKFLOW_FILENAME
+    if not wf_path.exists():
+        fallback = PACKAGE_ROOT / "configs" / "workflows" / DEFAULT_COMFY_WORKFLOW_FILENAME
+        if fallback.exists():
+            wf_path = fallback
     if not wf_path.exists():
         raise FileNotFoundError(
             f"workflow file not found: {wf_path.name}. "
-            "Add it to the repo root or send workflow JSON in request body."
+            "Add it to configs/workflows or send workflow JSON in request body."
         )
     with open(wf_path) as fh:
         return json.load(fh)

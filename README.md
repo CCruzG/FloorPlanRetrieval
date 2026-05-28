@@ -26,13 +26,29 @@ source .venv/bin/activate
 pip install flask numpy matplotlib shapely
 ```
 
+## Repository Architecture
+
+The repository uses a monorepo-style layout with clear ownership boundaries:
+
+- `apps/api/` for the HTTP server surface
+- `apps/web/` for the browser application
+- `packages/floorplan_core/` for reusable Python domain logic
+- `tools/` for offline/dev scripts
+- `data/` for fixtures, indexes, and generated outputs
+- `configs/` for workflow/config assets
+- `docs/` for architecture and developer documentation
+
+The canonical migration plan is documented in [docs/architecture/repository-architecture.md](/home/camilo/Projects/02_Retrieval_v02/docs/architecture/repository-architecture.md).
+
+The canonical API entrypoint is `apps/api/server.py`.
+
 ---
 
 ## Running the server
 
 ```bash
 source .venv/bin/activate
-python server.py
+python apps/api/server.py
 ```
 
 Then open **http://127.0.0.1:5000** in your browser.
@@ -40,9 +56,11 @@ Then open **http://127.0.0.1:5000** in your browser.
 For frontend-only development with Vite's dev server:
 
 ```bash
-npm install
-npm run dev
+npm --prefix apps/web install
+npm --prefix apps/web run dev
 ```
+
+Auxiliary utility pages are kept under `apps/web/legacy` while `apps/web` remains the canonical frontend workspace.
 
 The Flask server still provides the retrieval, fit, render, and static asset endpoints used by the app.
 
@@ -50,13 +68,13 @@ If you want to use the OpenAI render backend, set the key in the server environm
 
 ```bash
 export OPENAI_API_KEY="sk-..."
-python server.py
+python apps/api/server.py
 ```
 
 To expose the server on the local network (e.g. for a colleague on the same Wi-Fi):
 
 ```bash
-python server.py --host 0.0.0.0
+python apps/api/server.py --host 0.0.0.0
 ```
 
 Then open **http://&lt;your-machine-ip&gt;:5000** from another device.
@@ -67,9 +85,9 @@ Then open **http://&lt;your-machine-ip&gt;:5000** from another device.
 |---|---|---|
 | `--host` | `127.0.0.1` | Bind address (`0.0.0.0` for network access) |
 | `--port` | `5000` | Port number |
-| `--data_dir` | `test_data` | Directory containing floor plan JSON files |
-| `--index_bin` | `browser_files/index.bin` | Pre-built descriptor index (float32 binary) |
-| `--index_names` | `browser_files/index_names.json` | Index name list |
+| `--data_dir` | `data/fixtures/plans/test_data` | Directory containing floor plan JSON files |
+| `--index_bin` | `data/index/browser/index.bin` | Pre-built descriptor index (float32 binary) |
+| `--index_names` | `data/index/browser/index_names.json` | Index name list |
 | `--allow-remote-comfy` | off | Allow `comfy_url` values outside `localhost` / `127.0.0.1` |
 | `--debug` | off | Enable Flask debug mode |
 
@@ -163,10 +181,10 @@ To rebuild the index from a different dataset:
 
 ```bash
 source .venv/bin/activate
-python build_index_ent.py --data_dir test_data --out_dir browser_files
+python tools/build_index_ent.py --data_dir data/fixtures/plans/test_data --out_dir data/index/browser
 ```
 
-This writes `browser_files/index.bin` (float32 binary, plans × 63) and `browser_files/index_names.json`.
+This writes `data/index/browser/index.bin` (float32 binary, plans × 63) and `data/index/browser/index_names.json`.
 
 ### Retrieval weights
 
@@ -271,23 +289,17 @@ Each edge object has:
 ## Project structure
 
 ```
-index.html               Browser entry HTML for the Vite app
-src/                     Frontend modules (main, retrieval, geometry, descriptors, state)
-server.py                Flask app and thin route handlers
-index_store.py           Index loading and startup store construction
-retrieval.py             Retrieval query execution and result shaping
-fitting.py               Fit wrapper around fit_rooms.py
-render_backend.py        OpenAI/Comfy render orchestration
-comfy_client.py          Stdlib HTTP helpers for Comfy/OpenAI transport
-request_parsing.py       Route request parsing and validation helpers
-geo_ent_num_retrieval.py Rotation/reflection-aware retrieval with 63-dim descriptors
-build_index_ent.py       Builds browser_files/index.bin from a data directory
-sem_geo_retrieval.py     Legacy shape+semantic descriptor and index building
-export_index.py          Converts legacy .pkl index to browser-readable .bin + .json
-explore_index.py         CLI tool for inspecting index contents
-adapt.py                 Geometric adaptation (not used in current retrieval flow)
-browser_files/           Pre-built index (index.bin, index_names.json)
-test_data/               Sample floor plan JSON files (schema v2.1.0)
-adapted/                 Example adapted plans
+apps/web/                Canonical frontend app (Vite HTML and src modules)
+apps/web/legacy/         Auxiliary utility pages (retrieval tool and index explorer)
+apps/api/                Canonical Flask API entrypoint(s)
+packages/floorplan_core/ Canonical Python domain logic (retrieval, fitting, rendering)
+tools/                   Canonical offline CLI tools (build/export/explore/test harnesses)
+data/index/browser/      Pre-built browser index assets
+data/fixtures/plans/test_data/  Sample floor plan JSON files (schema v2.1.0)
+data/outputs/adapted/    Example adapted plans
+data/outputs/boundaries/ Exported boundary libraries
+data/outputs/images/     Generated example images
+docs/architecture/       Architecture and migration docs
+docs/dev/                Dev design notes, prompts, and reports
 ```
 

@@ -4,6 +4,8 @@ import {
   RCOLS,
   SNAP_PX,
 } from './constants.js';
+
+const CANVAS_PAD = 0.07;
 import {
   bdryCenter,
   c2n as geometryC2N,
@@ -53,6 +55,8 @@ import {
   analyse_boundary,
   check_typology_viability,
   evaluate_typology_fit,
+  evaluate_floor_plate_requirements,
+  get_requirement_check_catalog,
   propose_typology_options,
 } from './floor-plate-tools.js';
 import { createInitialState, DEFAULT_RENDER_PROMPT_CONFIG } from './state.js';
@@ -94,52 +98,13 @@ function applyBoundaryEditorState(patch){
 
 const canvas=document.getElementById('main-canvas');
 const ctx=canvas.getContext('2d');
+let viewport={zoom:1.0,panX:0,panY:0};
+let panDrag=null;
 let syncDevModePanel=()=>{};
 let devModeSetupDone=false;
 
 function buildMockFloorPlateState(){
   return buildFloorPlateFixture('sample');
-}
-
-function makeMockComplianceReport(fixtureId){
-  if(fixtureId==='near_failing_narrow'){
-    return {
-      requirements:[
-        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'12.9 m',status:'fail'},
-        {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.2 m',status:'pass'},
-        {name:'Travel distance',expected:'<= 30 m',actual:'34.4 m',status:'blocked'},
-        {name:'Unit mix compliance',expected:'2x1bed, 2x2bed',actual:'2x1bed, 1x2bed',status:'fail'},
-      ],
-    };
-  }
-  if(fixtureId==='elongated_slab'){
-    return {
-      requirements:[
-        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'15.2 m',status:'pass'},
-        {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.5 m',status:'pass'},
-        {name:'Travel distance',expected:'<= 30 m',actual:'28.3 m',status:'pass'},
-        {name:'Unit mix compliance',expected:'3x1bed, 3x2bed',actual:'3x1bed, 3x2bed',status:'pass'},
-      ],
-    };
-  }
-  if(fixtureId==='compact_slab'){
-    return {
-      requirements:[
-        {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'16.1 m',status:'pass'},
-        {name:'Core footprint',expected:'>= 20 m2',actual:'22.8 m2',status:'pass'},
-        {name:'Typed edge consistency',expected:'all units valid',actual:'all units valid',status:'pass'},
-        {name:'No residual areas',expected:'none',actual:'none',status:'pass'},
-      ],
-    };
-  }
-  return {
-    requirements:[
-      {name:'Minimum clear depth',expected:'>= 14.0 m',actual:'14.8 m',status:'pass'},
-      {name:'Core footprint',expected:'>= 20 m2',actual:'21.6 m2',status:'pass'},
-      {name:'Corridor minimum width',expected:'>= 1.2 m',actual:'1.4 m',status:'pass'},
-      {name:'Unit mix compliance',expected:'2x1bed, 2x2bed',actual:'2x1bed, 2x2bed',status:'pass'},
-    ],
-  };
 }
 
 function buildFloorPlateFixture(fixtureId='sample'){
@@ -259,12 +224,12 @@ function buildFloorPlateFixture(fixtureId='sample'){
 function loadFixture(fixtureId){
   floorPlateState=buildFloorPlateFixture(fixtureId);
   devMode.activeFixture=fixtureId;
-  devMode.lastComplianceReport=makeMockComplianceReport(fixtureId);
   devMode.lastToolOutput={
     source:'fixture_loader',
     fixtureId,
     loadedAt:new Date().toISOString(),
   };
+  runRequirementsCompliance();
 }
 
 function getDevBoundaryPolygon(){
@@ -283,32 +248,106 @@ function getDevUnitMix(){
   };
 }
 
-function updateDevComplianceFromTool(toolResult){
-  if(Array.isArray(toolResult?.requirements)){
-    devMode.lastComplianceReport={requirements:toolResult.requirements};
-    return;
-  }
-  if(Array.isArray(toolResult?.constraint_violations)){
-    const violations=toolResult.constraint_violations;
-    devMode.lastComplianceReport={
-      requirements:[
-        {
-          name:'Typology feasibility',
-          expected:'no blocking violations',
-          actual:violations.length?'violations found':'pass',
-          status:violations.length?'fail':'pass',
-        },
-        ...violations.map((violation)=>({
-          name:'Constraint',
-          expected:'satisfied',
-          actual:violation,
-          status:'fail',
-        })),
-      ],
+function defaultDevRequirements(){
+  const catalog=get_requirement_check_catalog();
+  return catalog.map((item)=>({
+    id:item.id,
+    label:item.label,
+    unit:item.unit,
+    value:item.defaultValue,
+    enabled:item.id!=='min_unit_area_m2',
+  }));
+}
+
+function getRequirementMeta(requirementId){
+  const catalog=get_requirement_check_catalog();
+  return catalog.find((item)=>item.id===requirementId)||null;
+}
+
+function normalizeDevRequirements(requirements){
+  const fallback=defaultDevRequirements();
+  if(!Array.isArray(requirements)||!requirements.length)return fallback;
+  return requirements.map((item,index)=>{
+    const base=fallback.find((candidate)=>candidate.id===item?.id)||fallback[index]||fallback[0];
+    const valueRaw=parseFloat(item?.value);
+    return {
+      id:base.id,
+      label:base.label,
+      unit:base.unit,
+      value:Number.isFinite(valueRaw)?Math.max(0,valueRaw):base.value,
+      enabled:item?.enabled!==false,
     };
-    return;
-  }
-  devMode.lastComplianceReport=null;
+  });
+}
+
+function ensureDevModeDefaults(){
+  devMode.floorPlateLayers={
+    boundary:devMode.floorPlateLayers?.boundary!==false,
+    cores:devMode.floorPlateLayers?.cores!==false,
+    commonAreas:devMode.floorPlateLayers?.commonAreas!==false,
+    unitBoundaries:devMode.floorPlateLayers?.unitBoundaries!==false,
+    grid:devMode.floorPlateLayers?.grid!==false,
+  };
+  devMode.requirements=normalizeDevRequirements(devMode.requirements);
+}
+
+function runRequirementsCompliance(){
+  ensureDevModeDefaults();
+  const plate=floorPlateState||{floor_plate:{boundary:getDevBoundaryPolygon()}};
+  const report=evaluate_floor_plate_requirements(plate,devMode.requirements);
+  devMode.lastComplianceReport=report;
+  return report;
+}
+
+function runSingleRequirementCompliance(requirementId){
+  ensureDevModeDefaults();
+  const requirement=devMode.requirements.find((item)=>item.id===requirementId);
+  if(!requirement)return null;
+  const plate=floorPlateState||{floor_plate:{boundary:getDevBoundaryPolygon()}};
+  const single=evaluate_floor_plate_requirements(plate,[requirement]);
+  const result=single.requirements?.[0];
+  if(!result)return null;
+
+  const existing=Array.isArray(devMode.lastComplianceReport?.requirements)
+    ? devMode.lastComplianceReport.requirements
+    : [];
+  const byId=new Map(existing.map((row)=>[row.id,row]));
+  byId.set(requirementId,result);
+
+  const rows=devMode.requirements.map((reqItem)=>{
+    const known=byId.get(reqItem.id);
+    if(known)return known;
+    if(reqItem.enabled===false){
+      return {
+        id:reqItem.id,
+        name:reqItem.label,
+        expected:'disabled',
+        actual:'disabled',
+        status:'disabled',
+      };
+    }
+    return {
+      id:reqItem.id,
+      name:reqItem.label,
+      expected:'not run yet',
+      actual:'not run yet',
+      status:'blocked',
+    };
+  });
+
+  const enabledRows=rows.filter((row)=>row.status!=='disabled');
+  devMode.lastComplianceReport={
+    pass:enabledRows.every((row)=>row.status==='pass'),
+    summary:{
+      enabled:enabledRows.length,
+      pass:enabledRows.filter((row)=>row.status==='pass').length,
+      fail:enabledRows.filter((row)=>row.status==='fail').length,
+      blocked:enabledRows.filter((row)=>row.status==='blocked').length,
+      disabled:rows.length-enabledRows.length,
+    },
+    requirements:rows,
+  };
+  return result;
 }
 
 function runDevStage1Tool(toolName){
@@ -334,7 +373,7 @@ function runDevStage1Tool(toolName){
     boundaryVertices:boundaryPolygon.length,
     result:output,
   };
-  updateDevComplianceFromTool(output);
+  runRequirementsCompliance();
   syncDevModePanel();
   render();
 }
@@ -342,6 +381,8 @@ function runDevStage1Tool(toolName){
 function setupDevModeUI(){
   if(devModeSetupDone)return;
   devModeSetupDone=true;
+  ensureDevModeDefaults();
+  if(!devMode.activeDevTab)devMode.activeDevTab='tools';
 
   const wrap=document.getElementById('canvas-wrap');
   if(!wrap)return;
@@ -371,9 +412,24 @@ function setupDevModeUI(){
     .fp-dev-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#93c5fd; }
     .fp-dev-section { border:1px solid #2a2f3f; border-radius:6px; padding:6px; margin-bottom:8px; background:rgba(30,36,54,0.35); }
     .fp-dev-section-title { font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#b6babe; margin-bottom:6px; }
+    .fp-dev-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin-bottom:8px; }
+    .fp-dev-tab {
+      border:1px solid #3a4155;
+      border-radius:4px;
+      background:#0f172a;
+      color:#94a3b8;
+      font-family:var(--mono);
+      font-size:10px;
+      padding:4px 6px;
+      cursor:pointer;
+    }
+    .fp-dev-tab.active { border-color:#2563eb; color:#dbeafe; background:#1e293b; }
+    .fp-dev-pane { display:none; }
+    .fp-dev-pane.active { display:block; }
     .fp-dev-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
     .fp-dev-row:last-child { margin-bottom:0; }
     .fp-dev-row-wrap { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+    .fp-dev-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
     .fp-dev-btn {
       border:1px solid #3a4155;
       border-radius:4px;
@@ -417,6 +473,28 @@ function setupDevModeUI(){
       overflow:auto;
       line-height:1.35;
     }
+    .fp-dev-req-row {
+      display:grid;
+      grid-template-columns:auto 1fr auto auto auto auto;
+      gap:6px;
+      align-items:center;
+      border-bottom:1px solid #2a2f3f;
+      padding:5px 0;
+    }
+    .fp-dev-req-row:last-child { border-bottom:none; }
+    .fp-dev-req-label { color:#d1d5db; }
+    .fp-dev-req-unit { color:#94a3b8; min-width:20px; text-align:right; }
+    .fp-dev-mini-btn {
+      border:1px solid #3a4155;
+      border-radius:4px;
+      background:#0f172a;
+      color:#cbd5e1;
+      font-family:var(--mono);
+      font-size:9px;
+      padding:2px 5px;
+      cursor:pointer;
+    }
+    .fp-dev-mini-btn:hover { border-color:#3b82f6; color:#eff6ff; }
     #fp-dev-compliance-table { width:100%; border-collapse:collapse; }
     #fp-dev-compliance-table th, #fp-dev-compliance-table td { border-bottom:1px solid #2a2f3f; padding:3px 2px; text-align:left; }
     #fp-dev-compliance-table th { color:#94a3b8; font-weight:500; }
@@ -431,7 +509,14 @@ function setupDevModeUI(){
       <button id="fp-dev-hide" class="fp-dev-btn" type="button">hide</button>
     </div>
 
-    <section class="fp-dev-section">
+    <nav class="fp-dev-tabs" id="fp-dev-tabs">
+      <button type="button" class="fp-dev-tab active" data-tab="tools">tools</button>
+      <button type="button" class="fp-dev-tab" data-tab="requirements">requirements</button>
+      <button type="button" class="fp-dev-tab" data-tab="compliance">compliance</button>
+      <button type="button" class="fp-dev-tab" data-tab="state">state</button>
+    </nav>
+
+    <section class="fp-dev-section fp-dev-pane active" data-pane="tools">
       <div class="fp-dev-section-title">Tool Call Panel</div>
       <div class="fp-dev-row">
         <label><input id="fp-dev-overlay" type="checkbox" checked> show floor plate overlay</label>
@@ -441,6 +526,16 @@ function setupDevModeUI(){
       </div>
       <div class="fp-dev-row">
         <label><input id="fp-dev-show-edges" type="checkbox"> show edge indices</label>
+      </div>
+      <div class="fp-dev-section-title" style="margin-top:8px">Layer Isolation</div>
+      <div class="fp-dev-grid2">
+        <label><input id="fp-dev-layer-boundary" type="checkbox" checked> boundary</label>
+        <label><input id="fp-dev-layer-cores" type="checkbox" checked> core(s)</label>
+        <label><input id="fp-dev-layer-common" type="checkbox" checked> common area(s)</label>
+        <label><input id="fp-dev-layer-units" type="checkbox" checked> unit boundaries</label>
+      </div>
+      <div class="fp-dev-row" style="margin-top:6px">
+        <label><input id="fp-dev-layer-grid" type="checkbox" checked> structural grid</label>
       </div>
       <div class="fp-dev-row-wrap">
         <button id="fp-dev-fixture-compact" class="fp-dev-btn" type="button">fixture: compact slab</button>
@@ -475,13 +570,24 @@ is transformed internally from the normalized editor coordinate system.
       </div>
     </section>
 
-    <section class="fp-dev-section">
-      <div class="fp-dev-section-title">State Inspector</div>
-      <div class="fp-dev-pre" id="fp-dev-state"></div>
+    <section class="fp-dev-section fp-dev-pane" data-pane="requirements">
+      <div class="fp-dev-section-title">Requirement Controls</div>
+      <div class="fp-dev-pre" style="margin-bottom:6px;max-height:none">
+Each requirement can be toggled on/off and its threshold edited.
+All checks are evaluated against the current floor plate state.
+      </div>
+      <div id="fp-dev-req-list"></div>
+      <div class="fp-dev-row" style="margin-top:8px">
+        <button id="fp-dev-run-req-checks" class="fp-dev-btn" type="button">run all requirement checks</button>
+      </div>
+      <div id="fp-dev-req-info" class="fp-dev-pre" style="margin-top:6px;max-height:none;color:#bfdbfe">
+Select a requirement info button to view how its check is measured.
+      </div>
     </section>
 
-    <section class="fp-dev-section" style="margin-bottom:0">
+    <section class="fp-dev-section fp-dev-pane" data-pane="compliance">
       <div class="fp-dev-section-title">Compliance Log</div>
+      <div id="fp-dev-compliance-summary" class="fp-dev-pre" style="margin-bottom:6px;max-height:none"></div>
       <table id="fp-dev-compliance-table">
         <thead>
           <tr><th>Requirement</th><th>Expected</th><th>Actual</th><th>Status</th></tr>
@@ -489,13 +595,24 @@ is transformed internally from the normalized editor coordinate system.
         <tbody id="fp-dev-compliance-body"></tbody>
       </table>
     </section>
+
+    <section class="fp-dev-section fp-dev-pane" data-pane="state" style="margin-bottom:0">
+      <div class="fp-dev-section-title">State Inspector</div>
+      <div class="fp-dev-pre" id="fp-dev-state"></div>
+    </section>
   `;
   wrap.appendChild(panel);
 
   const hideBtn=document.getElementById('fp-dev-hide');
+  const tabsEl=document.getElementById('fp-dev-tabs');
   const overlayToggle=document.getElementById('fp-dev-overlay');
   const showIdsToggle=document.getElementById('fp-dev-show-ids');
   const showEdgesToggle=document.getElementById('fp-dev-show-edges');
+  const layerBoundaryToggle=document.getElementById('fp-dev-layer-boundary');
+  const layerCoresToggle=document.getElementById('fp-dev-layer-cores');
+  const layerCommonToggle=document.getElementById('fp-dev-layer-common');
+  const layerUnitsToggle=document.getElementById('fp-dev-layer-units');
+  const layerGridToggle=document.getElementById('fp-dev-layer-grid');
   const seedBtn=document.getElementById('fp-dev-seed');
   const clearBtn=document.getElementById('fp-dev-clear');
   const compactBtn=document.getElementById('fp-dev-fixture-compact');
@@ -505,16 +622,43 @@ is transformed internally from the normalized editor coordinate system.
   const runEvaluateBtn=document.getElementById('fp-dev-run-evaluate');
   const runProposeBtn=document.getElementById('fp-dev-run-propose');
   const runCheckBtn=document.getElementById('fp-dev-run-check');
+  const runReqChecksBtn=document.getElementById('fp-dev-run-req-checks');
+  const reqListEl=document.getElementById('fp-dev-req-list');
+  const reqInfoEl=document.getElementById('fp-dev-req-info');
   const mixBed1El=document.getElementById('fp-dev-mix-bed1');
   const mixBed2El=document.getElementById('fp-dev-mix-bed2');
   const mixBed3El=document.getElementById('fp-dev-mix-bed3');
 
+  const setDevPanelTab=(tabId)=>{
+    devMode.activeDevTab=tabId;
+    document.querySelectorAll('#fp-dev-tabs .fp-dev-tab').forEach((btn)=>{
+      btn.classList.toggle('active',btn.dataset.tab===tabId);
+    });
+    document.querySelectorAll('#fp-dev-panel .fp-dev-pane').forEach((pane)=>{
+      pane.classList.toggle('active',pane.dataset.pane===tabId);
+    });
+  };
+
   if(overlayToggle)overlayToggle.checked=!!devMode.showFloorPlateOverlay;
   if(showIdsToggle)showIdsToggle.checked=!!devMode.showElementIds;
   if(showEdgesToggle)showEdgesToggle.checked=!!devMode.showEdgeIndices;
+  if(layerBoundaryToggle)layerBoundaryToggle.checked=devMode.floorPlateLayers.boundary!==false;
+  if(layerCoresToggle)layerCoresToggle.checked=devMode.floorPlateLayers.cores!==false;
+  if(layerCommonToggle)layerCommonToggle.checked=devMode.floorPlateLayers.commonAreas!==false;
+  if(layerUnitsToggle)layerUnitsToggle.checked=devMode.floorPlateLayers.unitBoundaries!==false;
+  if(layerGridToggle)layerGridToggle.checked=devMode.floorPlateLayers.grid!==false;
   if(mixBed1El)mixBed1El.value=String(devMode.unitMix?.bed1??2);
   if(mixBed2El)mixBed2El.value=String(devMode.unitMix?.bed2??2);
   if(mixBed3El)mixBed3El.value=String(devMode.unitMix?.bed3??0);
+
+  tabsEl?.addEventListener('click',(event)=>{
+    const target=event.target;
+    if(!(target instanceof HTMLElement))return;
+    const tabId=target.dataset.tab;
+    if(!tabId)return;
+    setDevPanelTab(tabId);
+  });
+
   hideBtn?.addEventListener('click',()=>{
     devMode.panelVisible=false;
     syncDevModePanel();
@@ -531,6 +675,26 @@ is transformed internally from the normalized editor coordinate system.
     devMode.showEdgeIndices=!!e.target.checked;
     render();
   });
+  layerBoundaryToggle?.addEventListener('change',(e)=>{
+    devMode.floorPlateLayers.boundary=!!e.target.checked;
+    render();
+  });
+  layerCoresToggle?.addEventListener('change',(e)=>{
+    devMode.floorPlateLayers.cores=!!e.target.checked;
+    render();
+  });
+  layerCommonToggle?.addEventListener('change',(e)=>{
+    devMode.floorPlateLayers.commonAreas=!!e.target.checked;
+    render();
+  });
+  layerUnitsToggle?.addEventListener('change',(e)=>{
+    devMode.floorPlateLayers.unitBoundaries=!!e.target.checked;
+    render();
+  });
+  layerGridToggle?.addEventListener('change',(e)=>{
+    devMode.floorPlateLayers.grid=!!e.target.checked;
+    render();
+  });
   [mixBed1El,mixBed2El,mixBed3El].forEach((el)=>{
     el?.addEventListener('input',()=>{
       devMode.unitMix={
@@ -545,44 +709,147 @@ is transformed internally from the normalized editor coordinate system.
   runEvaluateBtn?.addEventListener('click',()=>runDevStage1Tool('evaluate_typology_fit'));
   runProposeBtn?.addEventListener('click',()=>runDevStage1Tool('propose_typology_options'));
   runCheckBtn?.addEventListener('click',()=>runDevStage1Tool('check_typology_viability'));
+  runReqChecksBtn?.addEventListener('click',()=>{
+    runRequirementsCompliance();
+    setDevPanelTab('compliance');
+    syncDevModePanel();
+  });
+
+  reqListEl?.addEventListener('change',(event)=>{
+    const target=event.target;
+    if(!(target instanceof HTMLInputElement))return;
+    const row=target.closest('.fp-dev-req-row');
+    const indexRaw=row?.getAttribute('data-index')||'';
+    const index=parseInt(indexRaw,10);
+    if(!Number.isInteger(index)||!devMode.requirements[index])return;
+    if(target.dataset.role==='enabled'){
+      devMode.requirements[index].enabled=!!target.checked;
+      runRequirementsCompliance();
+      syncDevModePanel();
+    }
+  });
+  reqListEl?.addEventListener('click',(event)=>{
+    const target=event.target;
+    if(!(target instanceof HTMLElement))return;
+    const role=target.dataset.role;
+    if(role!=='run'&&role!=='info')return;
+    const row=target.closest('.fp-dev-req-row');
+    const indexRaw=row?.getAttribute('data-index')||'';
+    const index=parseInt(indexRaw,10);
+    if(!Number.isInteger(index)||!devMode.requirements[index])return;
+    const requirement=devMode.requirements[index];
+
+    if(role==='run'){
+      runSingleRequirementCompliance(requirement.id);
+      setDevPanelTab('compliance');
+      syncDevModePanel();
+      return;
+    }
+
+    const meta=getRequirementMeta(requirement.id);
+    devMode.activeRequirementInfo=requirement.id;
+    if(reqInfoEl){
+      if(meta){
+        reqInfoEl.textContent=`${meta.label}\n\nWhat it checks: ${meta.description}\nHow it is measured: ${meta.measurement}`;
+      }else{
+        reqInfoEl.textContent='No documentation available for this requirement.';
+      }
+    }
+  });
+  reqListEl?.addEventListener('input',(event)=>{
+    const target=event.target;
+    if(!(target instanceof HTMLInputElement))return;
+    if(target.dataset.role!=='value')return;
+    const row=target.closest('.fp-dev-req-row');
+    const indexRaw=row?.getAttribute('data-index')||'';
+    const index=parseInt(indexRaw,10);
+    if(!Number.isInteger(index)||!devMode.requirements[index])return;
+    const parsed=parseFloat(target.value);
+    devMode.requirements[index].value=Number.isFinite(parsed)?Math.max(0,parsed):0;
+    runRequirementsCompliance();
+    syncDevModePanel();
+  });
+
   compactBtn?.addEventListener('click',()=>{
     loadFixture('compact_slab');
+    syncDevModePanel();
     render();
   });
   elongatedBtn?.addEventListener('click',()=>{
     loadFixture('elongated_slab');
+    syncDevModePanel();
     render();
   });
   narrowBtn?.addEventListener('click',()=>{
     loadFixture('near_failing_narrow');
+    syncDevModePanel();
     render();
   });
   seedBtn?.addEventListener('click',()=>{
     loadFixture('sample');
+    syncDevModePanel();
     render();
   });
   clearBtn?.addEventListener('click',()=>{
     floorPlateState=null;
     devMode.activeFixture=null;
-    devMode.lastComplianceReport=null;
+    runRequirementsCompliance();
     devMode.lastToolOutput=null;
+    syncDevModePanel();
     render();
   });
 
   syncDevModePanel=()=>{
     const stateEl=document.getElementById('fp-dev-state');
     const bodyEl=document.getElementById('fp-dev-compliance-body');
+    const summaryEl=document.getElementById('fp-dev-compliance-summary');
     const panelEl=document.getElementById('fp-dev-panel');
     const overlayEl=document.getElementById('fp-dev-overlay');
     if(!stateEl||!bodyEl||!panelEl)return;
+
+    ensureDevModeDefaults();
 
     panelEl.classList.toggle('show',!!devMode.enabled&&!!devMode.panelVisible);
     if(overlayEl)overlayEl.checked=!!devMode.showFloorPlateOverlay;
     if(showIdsToggle)showIdsToggle.checked=!!devMode.showElementIds;
     if(showEdgesToggle)showEdgesToggle.checked=!!devMode.showEdgeIndices;
+    if(layerBoundaryToggle)layerBoundaryToggle.checked=devMode.floorPlateLayers.boundary!==false;
+    if(layerCoresToggle)layerCoresToggle.checked=devMode.floorPlateLayers.cores!==false;
+    if(layerCommonToggle)layerCommonToggle.checked=devMode.floorPlateLayers.commonAreas!==false;
+    if(layerUnitsToggle)layerUnitsToggle.checked=devMode.floorPlateLayers.unitBoundaries!==false;
+    if(layerGridToggle)layerGridToggle.checked=devMode.floorPlateLayers.grid!==false;
     if(mixBed1El)mixBed1El.value=String(devMode.unitMix?.bed1??0);
     if(mixBed2El)mixBed2El.value=String(devMode.unitMix?.bed2??0);
     if(mixBed3El)mixBed3El.value=String(devMode.unitMix?.bed3??0);
+
+    if(reqListEl){
+      reqListEl.innerHTML=devMode.requirements.map((requirement,index)=>{
+        const isBoolean=requirement.unit==='bool';
+        const disabled=isBoolean?'disabled':'';
+        const step=requirement.unit==='m'?'0.1':'1';
+        return `
+          <div class="fp-dev-req-row" data-index="${index}">
+            <input type="checkbox" data-role="enabled" ${requirement.enabled?'checked':''}>
+            <div class="fp-dev-req-label">${requirement.label}</div>
+            <input class="fp-dev-input" data-role="value" type="number" min="0" step="${step}" value="${requirement.value}" ${disabled}>
+            <div class="fp-dev-req-unit">${requirement.unit}</div>
+            <button class="fp-dev-mini-btn" data-role="run" type="button">run</button>
+            <button class="fp-dev-mini-btn" data-role="info" type="button">i</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    if(reqInfoEl){
+      const meta=getRequirementMeta(devMode.activeRequirementInfo);
+      if(meta){
+        reqInfoEl.textContent=`${meta.label}\n\nWhat it checks: ${meta.description}\nHow it is measured: ${meta.measurement}`;
+      }else{
+        reqInfoEl.textContent='Select a requirement info button to view how its check is measured.';
+      }
+    }
+
+    setDevPanelTab(devMode.activeDevTab||'tools');
 
     const summary={
       devModeEnabled:!!devMode.enabled,
@@ -590,7 +857,9 @@ is transformed internally from the normalized editor coordinate system.
       overlayEnabled:!!devMode.showFloorPlateOverlay,
       showElementIds:!!devMode.showElementIds,
       showEdgeIndices:!!devMode.showEdgeIndices,
+      floorPlateLayers:devMode.floorPlateLayers,
       unitMix:getDevUnitMix(),
+      requirements:devMode.requirements,
       activeFixture:devMode.activeFixture||null,
       floorPlateLoaded:!!floorPlateState,
       floorPlateId:floorPlateState?.floor_plate?.id||floorPlateState?.id||null,
@@ -610,10 +879,14 @@ is transformed internally from the normalized editor coordinate system.
     }
     stateEl.textContent=stateText;
 
-    const report=devMode.lastComplianceReport;
+    const report=devMode.lastComplianceReport||runRequirementsCompliance();
     const rows=Array.isArray(report?.requirements)
       ? report.requirements
       : [];
+    if(summaryEl){
+      const stats=report?.summary||{};
+      summaryEl.textContent=`enabled: ${stats.enabled??0} | pass: ${stats.pass??0} | fail: ${stats.fail??0} | blocked: ${stats.blocked??0} | disabled: ${stats.disabled??0}`;
+    }
     bodyEl.innerHTML='';
     if(!rows.length){
       const row=document.createElement('tr');
@@ -624,7 +897,11 @@ is transformed internally from the normalized editor coordinate system.
     rows.forEach((item)=>{
       const tr=document.createElement('tr');
       const status=item.status||'unknown';
-      const color=status==='pass'?'#22c55e':(status==='blocked'?'#f59e0b':'#ef4444');
+      const color=status==='pass'
+        ?'#22c55e'
+        :(status==='blocked'
+          ?'#f59e0b'
+          :(status==='disabled'?'#94a3b8':'#ef4444'));
       tr.innerHTML=`
         <td>${item.name||'requirement'}</td>
         <td>${item.expected??'-'}</td>
@@ -635,31 +912,73 @@ is transformed internally from the normalized editor coordinate system.
     });
   };
 
+  runRequirementsCompliance();
   syncDevModePanel();
 }
 
+// ── coordinate helpers ────────────────────────────────────────────────────
+// Base scale: normalised [0,1] → centred logical canvas pixels
+function _baseScale(){return Math.min(cW,cH)*(1-2*CANVAS_PAD);}
+function _baseOx(s){return(cW-s)/2;}
+function _baseOy(s){return(cH-s)/2;}
+
+// Normalised → logical canvas pixels (no viewport; ctx transform handles viewport)
 function n2c(nx,ny){
-  return geometryN2C(nx,ny,{cW,cH});
+  const s=_baseScale(),ox=_baseOx(s),oy=_baseOy(s);
+  return[ox+nx*s,oy+ny*s];
 }
 
-function c2n(cx,cy){
-  return geometryC2N(cx,cy,{cW,cH});
+// Viewport inverse: CSS canvas pixels → logical canvas pixels
+function cssToLogical(cx,cy){
+  return[
+    (cx-viewport.panX-cW/2)/viewport.zoom+cW/2,
+    (cy-viewport.panY-cH/2)/viewport.zoom+cH/2,
+  ];
 }
 
+// Logical canvas pixels → normalised
+function c2n(lx,ly){
+  const s=_baseScale(),ox=_baseOx(s),oy=_baseOy(s);
+  return[(lx-ox)/s,(ly-oy)/s];
+}
+
+// Screen pixel distance between two normalised points
 function pdist(a,b){
-  return geometryPDist(a,b,{cW,cH});
+  const s=_baseScale();
+  return Math.hypot((a.x-b.x)*s*viewport.zoom,(a.y-b.y)*s*viewport.zoom);
 }
 
 function planToCanvas(px,py,fpBdry,rot,offset,mirror){
-  return geometryPlanToCanvas(px,py,fpBdry,rot,offset,mirror,{cW,cH});
+  const s=_baseScale(),ox=_baseOx(s),oy=_baseOy(s);
+  const cen=(rot||mirror)?bdryCenter(fpBdry):null;
+  let x=px,y=py;
+  if(mirror)x=2*cen[0]-x;
+  if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
+  return[(x+offset[0])*s+ox,(y+offset[1])*s+oy];
 }
 
-function canvasToPlan(cx,cy,fpBdry,rot,offset,mirror){
-  return geometryCanvasToPlan(cx,cy,fpBdry,rot,offset,mirror,{cW,cH});
+function canvasToPlan(lx,ly,fpBdry,rot,offset,mirror){
+  const s=_baseScale(),ox=_baseOx(s),oy=_baseOy(s);
+  const cen=(rot||mirror)?bdryCenter(fpBdry):null;
+  let x=(lx-ox)/s-offset[0];
+  let y=(ly-oy)/s-offset[1];
+  if(rot)[x,y]=rotatePtAround([x,y],-rot,cen);
+  if(mirror)x=2*cen[0]-x;
+  return[x,y];
 }
 
+// Axis-snap in normalised space; snap threshold is in screen pixels
 function projSnap(nx,ny){
-  return geometryProjSnap(nx,ny,{boundary,closed,cW,cH});
+  const s=_baseScale();
+  const thresh=SNAP_PX/(s*viewport.zoom);
+  if(!boundary.length||closed)return{x:nx,y:ny};
+  let sx=nx,sy=ny,bestX=Infinity,bestY=Infinity;
+  boundary.forEach(({x,y})=>{
+    const dx=Math.abs(nx-x),dy=Math.abs(ny-y);
+    if(dx<thresh&&dx<bestX){bestX=dx;sx=x;}
+    if(dy<thresh&&dy<bestY){bestY=dy;sy=y;}
+  });
+  return{x:sx,y:sy};
 }
 
 function snapToEdge(nx,ny,normVerts){
@@ -678,11 +997,11 @@ function resize(){
   }
   const wrap=document.getElementById('canvas-wrap');
   if(!wrap||wrap.clientWidth<40||wrap.clientHeight<40)return;
-  const S=Math.min(wrap.clientWidth-32,wrap.clientHeight-32);
-  cW=S;cH=S;
+  cW=wrap.clientWidth-8;
+  cH=wrap.clientHeight-8;
   const dpr=window.devicePixelRatio||1;
-  canvas.width=S*dpr;canvas.height=S*dpr;
-  canvas.style.width=S+'px';canvas.style.height=S+'px';
+  canvas.width=cW*dpr;canvas.height=cH*dpr;
+  canvas.style.width=cW+'px';canvas.style.height=cH+'px';
   ctx.setTransform(1,0,0,1,0,0);
   ctx.scale(dpr,dpr);
   render();
@@ -956,6 +1275,7 @@ function getActiveFPState(){
     params,
     floorPlateState,
     devMode,
+    viewport,
   }),
   getActiveFPState,
   n2c,
@@ -972,9 +1292,17 @@ render=()=>{
 
 // ── mouse ─────────────────────────────────────────────────────────────────
 canvas.addEventListener('mousedown',e=>{
+  // Middle button: start pan
+  if(e.button===1){
+    e.preventDefault();
+    panDrag={startX:e.clientX,startY:e.clientY,startPanX:viewport.panX,startPanY:viewport.panY};
+    canvas.style.cursor='grab';
+    return;
+  }
   if(!closed||selected===null||entranceMode)return;
   const r=canvas.getBoundingClientRect();
-  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  const rawX=(e.clientX-r.left)*(cW/r.width),rawY=(e.clientY-r.top)*(cH/r.height);
+  const [cx,cy]=cssToLogical(rawX,rawY);
   const s=getActiveFPState();
   // entrance drag takes priority
   if(s&&hitTestEntrance(cx,cy)){
@@ -1005,7 +1333,12 @@ canvas.addEventListener('mousedown',e=>{
   }
 });
 
-document.addEventListener('mouseup',()=>{
+document.addEventListener('mouseup',e=>{
+  if(e.button===1&&panDrag){
+    panDrag=null;
+    canvas.style.cursor=closed?'default':'crosshair';
+    return;
+  }
   if(dragState){
     // record displacement arrow if the object actually moved
     const s=getActiveFPState();
@@ -1030,8 +1363,16 @@ document.addEventListener('mouseup',()=>{
 });
 
 canvas.addEventListener('mousemove',e=>{
+  // Pan with middle button
+  if(panDrag){
+    viewport.panX=panDrag.startPanX+(e.clientX-panDrag.startX);
+    viewport.panY=panDrag.startPanY+(e.clientY-panDrag.startY);
+    render();
+    return;
+  }
   const r=canvas.getBoundingClientRect();
-  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  const rawX=(e.clientX-r.left)*(cW/r.width),rawY=(e.clientY-r.top)*(cH/r.height);
+  const [cx,cy]=cssToLogical(rawX,rawY);
   const[nx,ny]=c2n(cx,cy);
   mouse={x:nx,y:ny};
   shiftDown=e.shiftKey;
@@ -1098,7 +1439,8 @@ canvas.addEventListener('mouseleave',()=>{
 
 canvas.addEventListener('click',e=>{
   const r=canvas.getBoundingClientRect();
-  const cx=(e.clientX-r.left)*(cW/r.width),cy=(e.clientY-r.top)*(cH/r.height);
+  const rawX=(e.clientX-r.left)*(cW/r.width),rawY=(e.clientY-r.top)*(cH/r.height);
+  const [cx,cy]=cssToLogical(rawX,rawY);
   let[nx,ny]=c2n(cx,cy);
 
   // entrance placement mode
@@ -1138,6 +1480,23 @@ canvas.addEventListener('dblclick',e=>{
   e.preventDefault();closeBoundary();
 });
 
+// ── zoom (scroll wheel) ───────────────────────────────────────────────────
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*(cW/r.width);
+  const cy=(e.clientY-r.top)*(cH/r.height);
+  const factor=e.deltaY<0?1.12:1/1.12;
+  const newZoom=Math.max(0.15,Math.min(20,viewport.zoom*factor));
+  // Zoom about the cursor: keep the logical point under the cursor fixed
+  const logX=(cx-viewport.panX-cW/2)/viewport.zoom+cW/2;
+  const logY=(cy-viewport.panY-cH/2)/viewport.zoom+cH/2;
+  viewport.panX=cx-(logX-cW/2)*newZoom-cW/2;
+  viewport.panY=cy-(logY-cH/2)*newZoom-cH/2;
+  viewport.zoom=newZoom;
+  render();
+},{passive:false});
+
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='d'){
     e.preventDefault();
@@ -1151,6 +1510,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape')clearBoundary();
   if(e.key==='Enter'&&boundary.length>=3&&!closed)closeBoundary();
   if(e.key==='Shift')shiftDown=true;
+  if(e.key==='z'||e.key==='Z'){viewport.zoom=1;viewport.panX=0;viewport.panY=0;render();}
 });
 document.addEventListener('keyup',e=>{
   if(e.key==='Shift'){shiftDown=false;document.getElementById('shift-ind').style.display='none';render();}

@@ -16,9 +16,9 @@ Outputs
 
 Usage
 ─────
-  python build_index_ent.py --data_dir test_data --out_dir browser_files
-  python build_index_ent.py --data_dir test_data --out_dir browser_files \\
-                            --name_json browser_files/index_names.json
+    python tools/build_index_ent.py --data_dir data/fixtures/plans/test_data --out_dir data/index/browser
+    python tools/build_index_ent.py --data_dir data/fixtures/plans/test_data --out_dir data/index/browser \
+                                                        --name_json data/index/browser/index_names.json
 """
 
 import argparse
@@ -29,7 +29,11 @@ from pathlib import Path
 
 import numpy as np
 
-from geo_ent_num_retrieval import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from packages.floorplan_core.geo_ent_num_retrieval import (
     shape_desc, entrance_desc, room_count_desc,
     frontdoor_center,
     N_FREQS, ENT_DIM, ROOM_DIM,
@@ -96,10 +100,10 @@ def build(data_dir: Path, name_json=None):
 def main():
     parser = argparse.ArgumentParser(
         description="Build entrance-aware retrieval index for the browser tool.")
-    parser.add_argument('--data_dir',  default='test_data',
-                        help='Directory containing plan JSON files (default: test_data)')
-    parser.add_argument('--out_dir',   default='browser_files',
-                        help='Output directory (default: browser_files)')
+    parser.add_argument('--data_dir',  default='data/fixtures/plans/test_data',
+                        help='Directory containing plan JSON files (default: data/fixtures/plans/test_data)')
+    parser.add_argument('--out_dir',   default='data/index/browser',
+                        help='Output directory (default: data/index/browser)')
     parser.add_argument('--name_json', default=None,
                         help='Optional existing index_names.json to preserve ordering')
     args = parser.parse_args()
@@ -125,7 +129,7 @@ def main():
     print(f"\nExported:")
     print(f"  {bin_path}   ({bin_path.stat().st_size / 1e6:.2f} MB)")
     print(f"  {names_path} ({names_path.stat().st_size / 1e3:.1f} KB)")
-    print(f"\nPlace these files alongside retrieval_tool.html (or in browser_files/)")
+    print("\nIndex files written to the configured out_dir (default: data/index/browser/)")
     print(f"and load them in the browser. Descriptor dim = {dim}.")
 
 

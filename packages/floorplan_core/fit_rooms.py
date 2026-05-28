@@ -37,7 +37,19 @@ import numpy as np
 
 # ── room processing order ─────────────────────────────────────────────────────
 
-ROOM_TYPES = json.loads((Path(__file__).parent / 'room_types.json').read_text())
+def _load_room_types():
+    candidates = [
+        Path(__file__).parent / 'room_types.json',
+        Path(__file__).resolve().parents[2] / 'configs' / 'room_types.json',
+        Path(__file__).resolve().parents[2] / 'room_types.json',
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return json.loads(candidate.read_text())
+    raise FileNotFoundError('room_types.json not found in package, configs, or repository root')
+
+
+ROOM_TYPES = _load_room_types()
 ROOM_TYPE_IDS_BY_NAME = {
     entry['name']: entry['id']
     for entry in ROOM_TYPES.get('types', [])

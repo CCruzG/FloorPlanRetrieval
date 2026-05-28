@@ -6,33 +6,38 @@ each point representing one floor plan. Points are coloured by a chosen
 metadata attribute (bedrooms, rooms, boundary area, aspect ratio).
 
 Usage:
-    python explore_index.py
-    python explore_index.py --index_bin browser_files/index.bin \
-                             --index_names browser_files/index_names.json \
-                             --data_dir test_data \
+    python tools/explore_index.py
+    python tools/explore_index.py --index_bin data/index/browser/index.bin \
+                             --index_names data/index/browser/index_names.json \
+                             --data_dir data/fixtures/plans/test_data \
                              --out index_explorer.html
 """
 
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 # ── args ─────────────────────────────────────────────────────────────────────
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--index_bin",   default="browser_files/index.bin")
-parser.add_argument("--index_names", default="browser_files/index_names.json")
-parser.add_argument("--data_dir",    default="test_data")
+parser.add_argument("--index_bin",   default="data/index/browser/index.bin")
+parser.add_argument("--index_names", default="data/index/browser/index_names.json")
+parser.add_argument("--data_dir",    default="data/fixtures/plans/test_data")
 parser.add_argument("--out",         default="index_explorer.html")
 parser.add_argument("--tsne_perp",   type=int, default=30,
                     help="t-SNE perplexity (default 30)")
 parser.add_argument("--umap_nn",     type=int, default=15,
                     help="UMAP n_neighbors (default 15)")
 parser.add_argument("--seed",        type=int, default=42)
-parser.add_argument("--library",     default="boundary_library.json",
+parser.add_argument("--library",     default="data/outputs/boundaries/boundary_library.json",
                     help="Boundary library JSON exported from the browser tool")
 args = parser.parse_args()
 
@@ -123,7 +128,7 @@ except ImportError:
 
 # ── load + project library boundaries ───────────────────────────────────────
 
-from sem_geo_retrieval import combined_desc, requirements_sem_hint
+from tools.legacy.sem_geo_retrieval import combined_desc, requirements_sem_hint
 
 def _desc_from_vertices(vertices, requirements=None, shape_w=1.0, sem_w=0.5):
     """Compute a combined descriptor from raw {x,y} boundary vertices."""
@@ -140,9 +145,15 @@ lib_xy_pca  = []
 lib_xy_tsne = []
 lib_xy_umap = []
 
-if os.path.exists(args.library):
-    print(f"Loading boundary library: {args.library}")
-    lib = json.load(open(args.library))
+library_path = Path(args.library)
+if not library_path.exists():
+    legacy_library_path = ROOT / "boundary_library.json"
+    if legacy_library_path.exists():
+        library_path = legacy_library_path
+
+if library_path.exists():
+    print(f"Loading boundary library: {library_path}")
+    lib = json.load(open(library_path))
     for entry in lib:
         try:
             req = entry.get("requirements")
@@ -167,7 +178,7 @@ if os.path.exists(args.library):
         lib_xy_umap = np.array(lib_xy_umap) if xy_umap is not None else None
         print(f"  projected {len(lib_entries)} library boundaries")
 else:
-    print(f"No library file found at {args.library} — skipping overlay")
+    print(f"No library file found at {library_path} — skipping overlay")
 
 
 def make_lib_scatter(xy, names):

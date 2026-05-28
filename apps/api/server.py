@@ -1,5 +1,5 @@
 """
-server.py — Flask server connecting the browser floor plan tool to the
+apps/api/server.py — Flask server connecting the browser floor plan tool to the
 Python retrieval and adaptation pipeline.
 
 Pipeline stage context:  retrieve → fit → render → present
@@ -21,28 +21,43 @@ import sys
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
-from geo_ent_num_retrieval import (
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from packages.floorplan_core.geo_ent_num_retrieval import (
     N_FREQS, N_SAMP, ENT_DIM, ROOM_DIM,
 )
-from fitting import FittingError, fit_rooms_in_boundary
-from index_store import build_index_store, ensure_manifest
-from request_parsing import (
+from packages.floorplan_core.fitting import FittingError, fit_rooms_in_boundary
+from packages.floorplan_core.index_store import build_index_store, ensure_manifest
+from packages.floorplan_core.request_parsing import (
     RequestValidationError,
     parse_comfy_health_request,
     parse_fit_request,
     parse_render_request,
     parse_retrieve_request,
 )
-from render_backend import DEFAULT_COMFY_WORKFLOW_FILENAME, check_comfy_health, render
-from retrieval import RetrievalError, run_retrieval
+from packages.floorplan_core.render_backend import DEFAULT_COMFY_WORKFLOW_FILENAME, check_comfy_health, render
+from packages.floorplan_core.retrieval import RetrievalError, run_retrieval
 
 SHAPE_DIM = N_FREQS                              # 48
 TOTAL_DIM = SHAPE_DIM + ENT_DIM + ROOM_DIM      # 63
 
 # ── globals (populated at startup) ───────────────────────────────────────────
-BASE_DIR = Path(__file__).parent.resolve()
+WEB_DIR = REPO_ROOT / "apps" / "web"
+WEB_UTILITY_DIR = WEB_DIR / "legacy"
+DATA_INDEX_DIR = REPO_ROOT / "data" / "index" / "browser"
+DATA_MANIFEST_FILE = REPO_ROOT / "data" / "index" / "manifest.json"
+CONFIG_WORKFLOWS_DIR = REPO_ROOT / "configs" / "workflows"
+ROOM_TYPES_FILE = REPO_ROOT / "configs" / "room_types.json"
+DATA_FIXTURES_TEST_DIR = REPO_ROOT / "data" / "fixtures" / "plans" / "test_data"
 INDEX_STORE = None
 ALLOWED_STATIC_EXTS = {".html", ".js", ".json", ".bin", ".png", ".css"}
+WORKFLOW_STATIC_FILES = {
+    "comfyui-flux-depth-workflow.json",
+    "comfyui-sdxl-depth-multi-workflow.json",
+}
+UTILITY_WEB_FILES = {"retrieval_tool.html", "index_explorer.html"}
 ALLOW_REMOTE_COMFY = False
 DEFAULT_RENDER_BACKEND = "comfy"
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
@@ -89,28 +104,56 @@ def client_config():
 
 @app.route("/")
 def index():
-    return send_from_directory(BASE_DIR, "index.html")
+    if (WEB_DIR / "index.html").exists():
+        return send_from_directory(WEB_DIR, "index.html")
+    return send_from_directory(REPO_ROOT, "index.html")
 
 
 @app.route("/<path:filename>")
 def static_files(filename):
-    """Serve any file from the project directory.
-
-    Falls back to browser_files/ for index.bin and index_names.json so that
-    the browser auto-load works when those files live in that subdirectory.
+    """Serve static files from explicit safe locations.
     """
     suffix = Path(filename).suffix.lower()
     if suffix not in ALLOWED_STATIC_EXTS:
         return jsonify({"error": f"disallowed file type: {suffix or '(none)'}"}), 404
 
-    full = BASE_DIR / filename
-    if full.exists():
-        return send_from_directory(BASE_DIR, filename)
+    web_full = WEB_DIR / filename
+    if web_full.exists():
+        return send_from_directory(WEB_DIR, filename)
 
-    # Fallback: try browser_files/
-    alt = BASE_DIR / "browser_files" / Path(filename).name
-    if alt.exists():
-        return send_from_directory(BASE_DIR / "browser_files", Path(filename).name)
+    # Utility pages are served from apps/web/legacy while keeping stable URLs.
+    if filename in UTILITY_WEB_FILES:
+        utility_file = WEB_UTILITY_DIR / filename
+        if utility_file.exists():
+            return send_from_directory(WEB_UTILITY_DIR, filename)
+
+    # Index alias: prefer data-owned index path.
+    if filename in {"index.bin", "index_names.json"}:
+        idx_path = DATA_INDEX_DIR / filename
+        if idx_path.exists():
+            return send_from_directory(DATA_INDEX_DIR, filename)
+
+    # Manifest is served from its canonical data-owned path.
+    if filename == "manifest.json":
+        if DATA_MANIFEST_FILE.exists():
+            return send_from_directory(DATA_MANIFEST_FILE.parent, DATA_MANIFEST_FILE.name)
+
+    # Dataset alias: /test_data/<file>.json -> data/fixtures/plans/test_data/<file>.json
+    if filename.startswith("test_data/"):
+        rel = filename[len("test_data/"):]
+        preferred = DATA_FIXTURES_TEST_DIR / rel
+        if preferred.exists():
+            return send_from_directory(DATA_FIXTURES_TEST_DIR, rel)
+
+    # Workflow config alias: keep URL compatibility while files live in configs/workflows.
+    if filename in WORKFLOW_STATIC_FILES:
+        wf_path = CONFIG_WORKFLOWS_DIR / filename
+        if wf_path.exists():
+            return send_from_directory(CONFIG_WORKFLOWS_DIR, filename)
+
+    # Compatibility alias: keep URL stable while room type config lives in configs/.
+    if filename == "room_types.json" and ROOM_TYPES_FILE.exists():
+        return send_from_directory(ROOM_TYPES_FILE.parent, ROOM_TYPES_FILE.name)
 
     return jsonify({"error": f"file not found: {filename}"}), 404
 
@@ -231,7 +274,7 @@ def render_image():
         image_data_url, meta = render(
             backend=backend,
             params=parsed["params"],
-            base_dir=BASE_DIR,
+            base_dir=REPO_ROOT,
             logger=logger,
             allow_remote_comfy=ALLOW_REMOTE_COMFY,
         )
@@ -284,13 +327,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--host",          default="127.0.0.1")
     parser.add_argument("--port",          type=int, default=5000)
-    parser.add_argument("--data_dir",      default="test_data",
+    parser.add_argument("--data_dir",      default="data/fixtures/plans/test_data",
                         help="Directory containing plan JSON files")
-    parser.add_argument("--index_bin",     default="browser_files/index.bin",
+    parser.add_argument("--index_bin",     default="data/index/browser/index.bin",
                         help="Path to precomputed descriptor matrix (.bin)")
-    parser.add_argument("--index_names",   default="browser_files/index_names.json",
+    parser.add_argument("--index_names",   default="data/index/browser/index_names.json",
                         help="Path to index names JSON")
-    parser.add_argument("--manifest",      default="manifest.json",
+    parser.add_argument("--manifest",      default="data/index/manifest.json",
                         help="Path to manifest JSON (auto-generated if missing)")
     parser.add_argument("--allow-remote-comfy", action="store_true",
                         help="Allow comfy_url values that are not localhost/127.0.0.1")
@@ -317,7 +360,7 @@ if __name__ == "__main__":
             print(f"  index:  {n} plans, dim {INDEX_STORE.dim}  "
                   f"[entrance-aware: shape:{SHAPE_DIM} + ent:{ENT_DIM} + rooms:{ROOM_DIM}]")
         else:
-            print(f"  index:  {n} plans, dim {INDEX_STORE.dim}  [legacy format - entrance ignored]")
+            print(f"  index:  {n} plans, dim {INDEX_STORE.dim}  [entrance component unavailable]")
     except FileNotFoundError as exc:
         print(f"  ERROR loading index: {exc}", file=sys.stderr)
         print("  Hint: use --index_bin and --index_names to specify paths.",

@@ -25,8 +25,8 @@ At startup the server loads two files built offline by `build_index_ent.py`:
 
 | File | Contents |
 |---|---|
-| `browser_files/index.bin` | Float32 binary matrix, shape **(N × 63)** — one 63-dim descriptor per plan |
-| `browser_files/index_names.json` | Ordered list of plan names, length N |
+| `data/index/browser/index.bin` | Float32 binary matrix, shape **(N × 63)** — one 63-dim descriptor per plan |
+| `data/index/browser/index_names.json` | Ordered list of plan names, length N |
 
 All N floor plan JSON files from the dataset are also loaded into memory (`plan_cache`) so they can be returned without disk I/O after retrieval.
 
@@ -186,7 +186,7 @@ Plans are ranked by $D^{(i)}$ in ascending order and the top-$N$ results are ret
 The index is built offline by `build_index_ent.py`:
 
 ```bash
-python build_index_ent.py --data_dir test_data --out_dir browser_files
+python tools/build_index_ent.py --data_dir data/fixtures/plans/test_data --out_dir data/index/browser
 ```
 
 For each valid plan JSON file:

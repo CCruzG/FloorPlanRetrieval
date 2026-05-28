@@ -1,4 +1,4 @@
-from fit_rooms import fit_plan
+from .fit_rooms import fit_plan
 
 
 class FittingError(Exception):

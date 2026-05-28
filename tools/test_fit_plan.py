@@ -3,8 +3,8 @@ test_fit_plan.py — Test harness for fit_plan.py
 
 Usage
 -----
-    python test_fit_plan.py                      # run TC-01 (requires test_data/)
-    python test_fit_plan.py --plan test_data/207.json
+    python tools/test_fit_plan.py                      # run TC-01 (requires data/fixtures/plans/test_data/)
+    python tools/test_fit_plan.py --plan data/fixtures/plans/test_data/207.json
 """
 
 import argparse
@@ -14,7 +14,16 @@ from pathlib import Path
 
 from shapely.geometry import Polygon
 
-from fit_plan import fit_plan, MIN_DIMS, NORM, EPSILON
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from packages.floorplan_core.fit_plan import fit_plan, NORM, EPSILON
+
+try:
+    from packages.floorplan_core.fit_plan import MIN_DIMS  # backward compatibility with previous API
+except ImportError:
+    MIN_DIMS = {}
 
 
 def _run_invariants(result, target_boundary):
@@ -208,7 +217,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run fit_plan test cases")
     parser.add_argument("--plan", default=None,
                         help="Path to source plan JSON. "
-                             "If omitted, looks for test_data/207.json")
+                            "If omitted, looks for data/fixtures/plans/test_data/207.json")
     parser.add_argument("--tc", default="01,02,05",
                         help="Comma-separated test cases to run (01,02,05)")
     args = parser.parse_args()
@@ -217,13 +226,16 @@ def main():
     if args.plan:
         plan_path = args.plan
     else:
-        candidates = sorted(Path("test_data").glob("*.json"))
+        preferred_dir = Path("data/fixtures/plans/test_data")
+        legacy_dir = Path("test_data")
+        active_dir = preferred_dir if preferred_dir.exists() else legacy_dir
+        candidates = sorted(active_dir.glob("*.json"))
         if not candidates:
-            print("No plan files found in test_data/. "
+            print("No plan files found in data/fixtures/plans/test_data/ "
                   "Pass --plan <path> to specify one.")
             sys.exit(1)
         # prefer 207.json if available, else first file
-        preferred = Path("test_data/207.json")
+        preferred = active_dir / "207.json"
         plan_path = str(preferred if preferred.exists() else candidates[0])
 
     print(f"Using plan: {plan_path}")

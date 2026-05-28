@@ -3,7 +3,7 @@ export_index.py
 Converts a precomputed retrieval index (.pkl) to browser-readable format.
 
 Usage:
-    python export_index.py --index index.pkl --out_dir ./browser_index
+    python tools/export_index.py --index index.pkl --out_dir ./browser_index
 
 Outputs:
     index.bin        — raw float32 descriptor matrix, shape (N, dim)

@@ -49,17 +49,29 @@ export function createCanvasRenderer({
       params,
       floorPlateState,
       devMode,
+      viewport,
     }=getState();
+
+    const vpZoom=viewport?.zoom??1;
+    const vpPanX=viewport?.panX??0;
+    const vpPanY=viewport?.panY??0;
 
     ctx.clearRect(0,0,cW,cH);
     ctx.fillStyle='#e8eaed';
     ctx.fillRect(0,0,cW,cH);
 
+    // Apply viewport transform for all world-space drawing
+    ctx.save();
+    ctx.translate(cW/2+vpPanX,cH/2+vpPanY);
+    ctx.scale(vpZoom,vpZoom);
+    ctx.translate(-cW/2,-cH/2);
+
     drawScaleGrid(ctx,cW,cH);
 
     if(devMode?.enabled&&devMode?.showFloorPlateOverlay&&floorPlateState){
       renderFloorPlate(ctx,floorPlateState,cW,cH,devMode);
-      drawScaleBar(ctx,cW,cH);
+      ctx.restore();
+      drawScaleBar(ctx,cW,cH,vpZoom);
       return;
     }
 
@@ -115,10 +127,10 @@ export function createCanvasRenderer({
         const [vx,vy]=n2c(x,y);
         const nearH=g&&Math.abs(gy-y)<0.004;
         ctx.strokeStyle=nearH?'rgba(251,146,60,0.85)':'rgba(100,116,139,0.35)';
-        ctx.beginPath();ctx.moveTo(0,vy);ctx.lineTo(cW,vy);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(-99999,vy);ctx.lineTo(99999,vy);ctx.stroke();
         const nearV=g&&Math.abs(gx-x)<0.004;
         ctx.strokeStyle=nearV?'rgba(251,146,60,0.85)':'rgba(100,116,139,0.35)';
-        ctx.beginPath();ctx.moveTo(vx,0);ctx.lineTo(vx,cH);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(vx,-99999);ctx.lineTo(vx,99999);ctx.stroke();
       });
       ctx.restore();
     }
@@ -204,7 +216,9 @@ export function createCanvasRenderer({
       }
     }
 
-    drawScaleBar(ctx,cW,cH);
+    // Restore ctx from viewport transform, then draw screen-space overlays
+    ctx.restore();
+    drawScaleBar(ctx,cW,cH,vpZoom);
   }
 
   function renderFloorPlate(c,state,W,H,devMode={}){
@@ -213,6 +227,12 @@ export function createCanvasRenderer({
     if(!Array.isArray(boundary)||boundary.length<3)return;
     const showElementIds=devMode?.showElementIds!==false;
     const showEdgeIndices=!!devMode?.showEdgeIndices;
+    const layers=devMode?.floorPlateLayers||{};
+    const showBoundary=layers.boundary!==false;
+    const showCores=layers.cores!==false;
+    const showCommonAreas=layers.commonAreas!==false;
+    const showUnitBoundaries=layers.unitBoundaries!==false;
+    const showGrid=layers.grid!==false;
 
     const pad=0.08;
     const xs=boundary.map(([x])=>x);
@@ -255,98 +275,110 @@ export function createCanvasRenderer({
 
     // Structural grid first so all program geometry remains legible above it.
     const grid=floorPlate.structural_grid||{};
-    c.save();
-    c.strokeStyle='rgba(30,64,175,0.28)';
-    c.lineWidth=1;
-    c.setLineDash([5,5]);
-    (grid.x_lines||[]).forEach((x)=>{
-      const [x1,y1]=t([x,minY]);
-      const [x2,y2]=t([x,maxY]);
-      c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
-    });
-    (grid.y_lines||[]).forEach((y)=>{
-      const [x1,y1]=t([minX,y]);
-      const [x2,y2]=t([maxX,y]);
-      c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
-    });
-    c.restore();
+    if(showGrid){
+      c.save();
+      c.strokeStyle='rgba(30,64,175,0.28)';
+      c.lineWidth=1;
+      c.setLineDash([5,5]);
+      (grid.x_lines||[]).forEach((x)=>{
+        const [x1,y1]=t([x,minY]);
+        const [x2,y2]=t([x,maxY]);
+        c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+      });
+      (grid.y_lines||[]).forEach((y)=>{
+        const [x1,y1]=t([minX,y]);
+        const [x2,y2]=t([maxX,y]);
+        c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+      });
+      c.restore();
+    }
 
-    drawPoly(boundary,{fill:'rgba(59,130,246,0.05)',stroke:'#1f2937',lineWidth:2});
+    if(showBoundary){
+      drawPoly(boundary,{fill:'rgba(59,130,246,0.05)',stroke:'#1f2937',lineWidth:2});
+    }
 
-    (floorPlate.corridors||[]).forEach((corridor)=>{
-      drawPoly(corridor.polygon,{fill:'rgba(250,204,21,0.28)',stroke:'rgba(202,138,4,0.95)',lineWidth:2});
-      if(showElementIds){
-        const [cx,cy]=t(centroid(corridor.polygon));
-        c.fillStyle='#92400e';
-        c.font='9px monospace';
-        c.textAlign='center';
-        c.fillText(`Corridor ${corridor.id||''}`.trim(),cx,cy-3);
-      }
-    });
+    if(showCommonAreas){
+      (floorPlate.corridors||[]).forEach((corridor)=>{
+        drawPoly(corridor.polygon,{fill:'rgba(250,204,21,0.28)',stroke:'rgba(202,138,4,0.95)',lineWidth:2});
+        if(showElementIds){
+          const [cx,cy]=t(centroid(corridor.polygon));
+          c.fillStyle='#92400e';
+          c.font='9px monospace';
+          c.textAlign='center';
+          c.fillText(`Corridor ${corridor.id||''}`.trim(),cx,cy-3);
+        }
+      });
+    }
 
-    (floorPlate.cores||[]).forEach((core)=>{
-      drawPoly(core.polygon,{fill:'rgba(148,163,184,0.36)',stroke:'#475569',lineWidth:2});
-      const [cx,cy]=t(centroid(core.polygon));
-      if(showElementIds){
-        c.fillStyle='#334155';
-        c.font='9px monospace';
-        c.textAlign='center';
-        c.fillText(`Core ${core.id||''}`.trim(),cx,cy+3);
-      }
-    });
+    if(showCores){
+      (floorPlate.cores||[]).forEach((core)=>{
+        drawPoly(core.polygon,{fill:'rgba(148,163,184,0.36)',stroke:'#475569',lineWidth:2});
+        const [cx,cy]=t(centroid(core.polygon));
+        if(showElementIds){
+          c.fillStyle='#334155';
+          c.font='9px monospace';
+          c.textAlign='center';
+          c.fillText(`Core ${core.id||''}`.trim(),cx,cy+3);
+        }
+      });
+    }
 
     const EDGE_COLORS={
       external:'#2563eb',
       shared_wall:'#64748b',
       facing_corridor:'#eab308',
     };
-    (floorPlate.units||[]).forEach((unit)=>{
-      const poly=unit.polygon;
-      drawPoly(poly,{fill:'rgba(16,185,129,0.12)',stroke:'rgba(5,150,105,0.9)',lineWidth:1.5});
+    if(showUnitBoundaries){
+      (floorPlate.units||[]).forEach((unit)=>{
+        const poly=unit.polygon;
+        drawPoly(poly,{fill:'rgba(16,185,129,0.12)',stroke:'rgba(5,150,105,0.9)',lineWidth:1.5});
 
-      if(Array.isArray(unit.typed_edges)){
-        unit.typed_edges.forEach((typedEdge)=>{
-          const edgeIndex=typedEdge.edge_index;
-          if(!Array.isArray(poly)||!poly.length||typeof edgeIndex!=='number')return;
-          const from=poly[edgeIndex];
-          const to=poly[(edgeIndex+1)%poly.length];
-          if(!from||!to)return;
-          const [x1,y1]=t(from);
-          const [x2,y2]=t(to);
-          c.beginPath();
-          c.moveTo(x1,y1);
-          c.lineTo(x2,y2);
-          c.strokeStyle=EDGE_COLORS[typedEdge.type]||'#0f172a';
-          c.lineWidth=3;
-          c.setLineDash([]);
-          c.stroke();
+        if(Array.isArray(unit.typed_edges)){
+          unit.typed_edges.forEach((typedEdge)=>{
+            const edgeIndex=typedEdge.edge_index;
+            if(!Array.isArray(poly)||!poly.length||typeof edgeIndex!=='number')return;
+            const from=poly[edgeIndex];
+            const to=poly[(edgeIndex+1)%poly.length];
+            if(!from||!to)return;
+            const [x1,y1]=t(from);
+            const [x2,y2]=t(to);
+            c.beginPath();
+            c.moveTo(x1,y1);
+            c.lineTo(x2,y2);
+            c.strokeStyle=EDGE_COLORS[typedEdge.type]||'#0f172a';
+            c.lineWidth=3;
+            c.setLineDash([]);
+            c.stroke();
 
-          if(showEdgeIndices){
-            const mx=(x1+x2)/2;
-            const my=(y1+y2)/2;
-            c.fillStyle='rgba(15,23,42,0.88)';
-            c.font='9px monospace';
-            c.textAlign='center';
-            c.fillText(`e${edgeIndex}`,mx,my-4);
-          }
-        });
-      }
+            if(showEdgeIndices){
+              const mx=(x1+x2)/2;
+              const my=(y1+y2)/2;
+              c.fillStyle='rgba(15,23,42,0.88)';
+              c.font='9px monospace';
+              c.textAlign='center';
+              c.fillText(`e${edgeIndex}`,mx,my-4);
+            }
+          });
+        }
 
-      const [ux,uy]=t(centroid(poly));
-      c.fillStyle='#065f46';
-      c.font='10px monospace';
-      c.textAlign='center';
-      const labelType=unit.type||'unit';
-      const unitLabel=showElementIds?`${unit.id||'unit'} (${labelType})`:labelType;
-      c.fillText(unitLabel,ux,uy-2);
-      const area=polygonArea(poly);
-      c.fillStyle='#0f766e';
-      c.fillText(`${area.toFixed(1)} m2`,ux,uy+10);
-    });
+        const [ux,uy]=t(centroid(poly));
+        c.fillStyle='#065f46';
+        c.font='10px monospace';
+        c.textAlign='center';
+        const labelType=unit.type||'unit';
+        const unitLabel=showElementIds?`${unit.id||'unit'} (${labelType})`:labelType;
+        c.fillText(unitLabel,ux,uy-2);
+        const area=polygonArea(poly);
+        c.fillStyle='#0f766e';
+        c.fillText(`${area.toFixed(1)} m2`,ux,uy+10);
+      });
+    }
 
-    (floorPlate.unresolved_regions||[]).forEach((region)=>{
-      drawPoly(region,{fill:'rgba(239,68,68,0.22)',stroke:'rgba(185,28,28,0.9)',lineWidth:1.5,dash:[4,3]});
-    });
+    if(showCommonAreas){
+      (floorPlate.unresolved_regions||[]).forEach((region)=>{
+        drawPoly(region,{fill:'rgba(239,68,68,0.22)',stroke:'rgba(185,28,28,0.9)',lineWidth:1.5,dash:[4,3]});
+      });
+    }
   }
 
   function polygonArea(poly){
@@ -363,32 +395,49 @@ export function createCanvasRenderer({
   function drawScaleGrid(c,W,H){
     const gridM=3;
     const step=gridM/METRES_PER_UNIT;
-    c.save();c.strokeStyle='rgba(0,0,0,0.07)';c.lineWidth=1;c.setLineDash([]);
-    for(let x=0;x<=1+step;x+=step){
+    c.save();c.strokeStyle='rgba(0,0,0,0.07)';c.lineWidth=0.5;c.setLineDash([]);
+    // Draw extra range so grid covers canvas when panned or zoomed out
+    for(let x=-5;x<=6;x+=step){
       const [px]=n2c(x,0);
-      c.beginPath();c.moveTo(px,0);c.lineTo(px,H);c.stroke();
+      c.beginPath();c.moveTo(px,-99999);c.lineTo(px,99999);c.stroke();
     }
-    for(let y=0;y<=1+step;y+=step){
+    for(let y=-5;y<=6;y+=step){
       const [,py]=n2c(0,y);
-      c.beginPath();c.moveTo(0,py);c.lineTo(W,py);c.stroke();
+      c.beginPath();c.moveTo(-99999,py);c.lineTo(99999,py);c.stroke();
     }
     c.restore();
   }
 
-  function drawScaleBar(c,W,H){
-    const sc=W*(1-2*0.07);
-    const barM=5;
-    const barPx=sc*barM/METRES_PER_UNIT;
-    const ox=0.07*W+4,oy=H-0.07*H-6;
+  function drawScaleBar(c,W,H,zoom=1){
+    // Base logical scale: how many logical pixels per normalised unit
+    const sc=Math.min(W,H)*(1-2*0.07);
+    // At current zoom: sc*zoom screen pixels per normalised unit = 18 m
+    // Pick a nice round bar length that targets ~80 screen pixels
+    const targetPx=80;
+    const metresPerScreenPx=METRES_PER_UNIT/(sc*zoom);
+    const barMetresExact=targetPx*metresPerScreenPx;
+    // Round to a nice number
+    const mag=Math.pow(10,Math.floor(Math.log10(Math.max(barMetresExact,0.01))));
+    let barM=mag;
+    for(const m of[1,2,2.5,5,10]){if(m*mag<=barMetresExact*1.8)barM=m*mag;}
+    const barPx=barM*(sc*zoom)/METRES_PER_UNIT;
+    const ox=16,oy=H-20;
     const tickH=5;
     c.save();
     c.strokeStyle='rgba(0,0,0,0.55)';c.lineWidth=1.5;c.setLineDash([]);
     c.beginPath();c.moveTo(ox,oy);c.lineTo(ox+barPx,oy);c.stroke();
     c.beginPath();c.moveTo(ox,oy-tickH);c.lineTo(ox,oy+tickH);c.stroke();
     c.beginPath();c.moveTo(ox+barPx,oy-tickH);c.lineTo(ox+barPx,oy+tickH);c.stroke();
-    c.fillStyle='rgba(0,0,0,0.6)';c.font=`${Math.round(W*0.016)}px monospace`;
+    c.fillStyle='rgba(0,0,0,0.6)';c.font='10px monospace';
     c.textAlign='center';
-    c.fillText(`${barM} m`,ox+barPx/2,oy-tickH-2);
+    const label=barM>=1000?`${barM/1000} km`:`${barM} m`;
+    c.fillText(label,ox+barPx/2,oy-tickH-3);
+    // Zoom level indicator when not at 1:1
+    if(Math.abs(zoom-1)>0.01){
+      c.textAlign='left';
+      c.fillStyle='rgba(0,0,0,0.35)';
+      c.fillText(`${zoom.toFixed(2)}×`,ox,oy+tickH+12);
+    }
     c.restore();
   }
 
@@ -428,8 +477,8 @@ export function createCanvasRenderer({
     const bdry=fp.boundary||[];
     if(!bdry.length)return;
     const pad=0.07;
-    const sc=W*(1-2*pad);
-    const ox=pad*W,oy=pad*H;
+    const sc=Math.min(W,H)*(1-2*pad);
+    const ox=(W-sc)/2,oy=(H-sc)/2;
     const cen=(rot||mirror)?bdryCenter(bdry):null;
     const showBdry=opts.showBdry??true;
     const showCommon=opts.showCommon??true;
@@ -494,7 +543,7 @@ export function createCanvasRenderer({
     const showWin=opts.showWin??true;
     const showIntDoors=opts.showIntDoors??true;
     const pad=0.07;
-    const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+    const sc=Math.min(W,H)*(1-2*pad),ox=(W-sc)/2,oy=(H-sc)/2;
     const cen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
     const t=([x,y])=>{
       if(mirror)x=2*cen[0]-x;
@@ -526,7 +575,7 @@ export function createCanvasRenderer({
     const rooms=fp.rooms||[],edges=fp.edges||[];
     if(!rooms.length)return;
     const pad=0.07;
-    const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+    const sc=Math.min(W,H)*(1-2*pad),ox=(W-sc)/2,oy=(H-sc)/2;
     const rotCen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
     const t=([x,y])=>{
       if(mirror)x=2*rotCen[0]-x;
@@ -591,7 +640,7 @@ export function createCanvasRenderer({
     const rooms=fp.rooms||[];
     if(!rooms.some((room)=>room.fit_offset))return;
     const pad=0.07;
-    const sc=W*(1-2*pad),ox=pad*W,oy=pad*H;
+    const sc=Math.min(W,H)*(1-2*pad),ox=(W-sc)/2,oy=(H-sc)/2;
     const cen=(rot||mirror)?bdryCenter(fp.boundary||[]):null;
     const t=([x,y])=>{
       if(mirror)x=2*cen[0]-x;
