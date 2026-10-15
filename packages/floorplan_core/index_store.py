@@ -7,7 +7,7 @@ import numpy as np
 
 @dataclass
 class IndexStore:
-    descs: np.ndarray
+    descs: np.ndarray | None
     shapes: np.ndarray | None
     ents: np.ndarray | None
     rooms: np.ndarray | None
@@ -42,6 +42,29 @@ def build_index_store(
         rooms=rooms,
         names=names,
         dim=dim,
+        plan_cache=plan_cache,
+    )
+
+
+def build_index_store_from_npz(*, npz_path, data_dir, logger):
+    """Load the canonical .npz index (typed arrays, complex64 shape descriptors)
+    into an IndexStore. This is the canonical retrieval index format — see
+    retrieval-prototype/geo_ent_num_retrieval.py's load_index()/build_index().
+    Unlike the flat-.bin format, shapes/ents/rooms are always present here
+    (there is no flattened `descs` fallback array), so `descs` is left None;
+    run_retrieval()'s split-array path is the only one this format supports.
+    """
+    from .geo_ent_num_retrieval import load_index as load_npz_index
+
+    names, shapes, ents, rooms = load_npz_index(npz_path)
+    plan_cache = load_plans(data_dir, logger=logger)
+    return IndexStore(
+        descs=None,
+        shapes=shapes,
+        ents=ents,
+        rooms=rooms,
+        names=names,
+        dim=shapes.shape[1] + ents.shape[1] + rooms.shape[1],
         plan_cache=plan_cache,
     )
 

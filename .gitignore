@@ -27,5 +27,18 @@ adapted/
 test_result.png
 test_result_aug.png
 
+# /fit_schema debug renders (phase2.fit_rooms_to_boundary writes one per call)
+data/outputs/fit_pipeline/
+
 # Prompt/scratch files
 *_prompt.md
+
+# Large derived indexes (kept as registered artefacts, not in git history)
+data/index/*.npz
+# Local MCP server config (machine-specific path)
+.mcp.json
+# Scratch notebooks, debug renders, loose test images
+refs/
+data/refine_debug/
+image.png
+test_s1_*.png

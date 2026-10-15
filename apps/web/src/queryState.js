@@ -34,6 +34,9 @@ export function createBoundaryClearedState(){
     entrance:null,
     entranceMode:false,
     entranceSnap:null,
+    edgeTypes:[],
+    edgeTypeMode:false,
+    hoveredEdge:null,
   };
 }
 
@@ -45,6 +48,9 @@ export function createLoadedBoundaryState(entry){
     snapFirst:false,
     selected:null,
     results:[],
+    edgeTypes:Array.isArray(entry.edgeTypes)?entry.edgeTypes.slice():[],
+    edgeTypeMode:false,
+    hoveredEdge:null,
   };
 }
 

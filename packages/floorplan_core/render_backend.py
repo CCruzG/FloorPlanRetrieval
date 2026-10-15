@@ -53,6 +53,8 @@ def render(backend, params, base_dir, logger, allow_remote_comfy=False):
             silhouette_data_url=params.get("silhouette_data_url"),
             opacity_mask_data_url=params.get("opacity_mask_data_url"),
             segmentation_data_url=params.get("segmentation_data_url"),
+            width=int(params.get("width") or params.get("openai_width") or 1024),
+            height=int(params.get("height") or params.get("openai_height") or 1024),
             depth_invert=bool(params.get("depth_invert", False)),
             workflow_override=params.get("workflow_override"),
             base_dir=base_dir,
@@ -64,7 +66,9 @@ def render(backend, params, base_dir, logger, allow_remote_comfy=False):
 
     return _render_with_openai(
         prompt=params["prompt"],
+        preview_data_url=params.get("preview_data_url"),
         depth_data_url=params["depth_data_url"],
+        api_key=params.get("openai_api_key"),
         model=str(params.get("openai_model") or "gpt-image-1"),
         quality=str(params.get("openai_quality") or "medium"),
         width=int(params.get("openai_width") or params.get("width") or 1024),
@@ -467,6 +471,44 @@ def _inject_prompt_and_depth(
     return workflow
 
 
+def _apply_workflow_image_size(workflow, width, height):
+    if not isinstance(workflow, dict):
+        return workflow
+
+    try:
+        target_width = max(256, int(width))
+    except Exception:
+        target_width = 1024
+    try:
+        target_height = max(256, int(height))
+    except Exception:
+        target_height = 1024
+
+    if isinstance(workflow.get("prompt"), dict):
+        workflow_nodes = workflow["prompt"]
+    elif isinstance(workflow.get("workflow"), dict):
+        workflow_nodes = workflow["workflow"]
+    else:
+        workflow_nodes = workflow
+
+    if not isinstance(workflow_nodes, dict):
+        return workflow
+
+    for node in workflow_nodes.values():
+        if not isinstance(node, dict):
+            continue
+        cls = str(node.get("class_type") or node.get("type") or "").strip().lower()
+        if cls not in {"imagescale", "emptylatentimage"}:
+            continue
+        inputs = node.setdefault("inputs", {})
+        if "width" in inputs:
+            inputs["width"] = target_width
+        if "height" in inputs:
+            inputs["height"] = target_height
+
+    return workflow
+
+
 def _pick_openai_image_size(width, height):
     choices = [(1024, 1024), (1024, 1536), (1536, 1024)]
     tw = max(256, int(width))
@@ -494,31 +536,36 @@ def _extract_openai_image_data_url(resp_json):
 def _render_with_openai(
     prompt,
     depth_data_url,
+    preview_data_url=None,
     model="gpt-image-1",
     quality="medium",
     width=1024,
     height=1024,
+    api_key=None,
 ):
-    api_key = str(os.getenv("OPENAI_API_KEY") or "").strip()
+    api_key = str(api_key or os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
-        raise RuntimeError("missing OpenAI API key (set OPENAI_API_KEY in the server environment)")
+        raise RuntimeError("missing OpenAI API key (enter it in the UI or set OPENAI_API_KEY on the server)")
 
     base_url = "https://api.openai.com/v1/images"
     size = _pick_openai_image_size(width, height)
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-    }
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     clean_quality = str(quality or "medium").strip().lower()
     if clean_quality not in {"low", "medium", "high", "auto"}:
         clean_quality = "medium"
 
+    # Prefer the colour preview render as reference — it carries the camera angle,
+    # massing and composition. Fall back to depth if no preview is available.
+    reference_data_url = preview_data_url or depth_data_url
+    reference_filename = "preview.png" if preview_data_url else "depth.png"
+
     used_endpoint = "generations"
-    used_depth_reference = False
+    used_reference = False
     first_error = None
 
     try:
-        depth_png = _decode_data_url_png(depth_data_url)
+        ref_png = _decode_data_url_png(reference_data_url)
         fields = {
             "model": model,
             "prompt": prompt,
@@ -527,9 +574,9 @@ def _render_with_openai(
         }
         files = {
             "image": {
-                "filename": "depth.png",
+                "filename": reference_filename,
                 "content_type": "image/png",
-                "content": depth_png,
+                "content": ref_png,
             }
         }
         _, payload = http_post_multipart(
@@ -541,7 +588,7 @@ def _render_with_openai(
         )
         out_data_url = _extract_openai_image_data_url(payload)
         used_endpoint = "edits"
-        used_depth_reference = True
+        used_reference = True
     except Exception as exc:
         first_error = str(exc)
         payload = {
@@ -566,7 +613,8 @@ def _render_with_openai(
         "requested_width": int(width),
         "requested_height": int(height),
         "endpoint": used_endpoint,
-        "used_depth_reference": bool(used_depth_reference),
+        "used_reference": bool(used_reference),
+        "reference_type": reference_filename.replace(".png", "") if used_reference else None,
         "edits_error": first_error,
     }
     return out_data_url, meta
@@ -581,6 +629,8 @@ def _render_with_comfy_local(
     silhouette_data_url=None,
     opacity_mask_data_url=None,
     segmentation_data_url=None,
+    width=1024,
+    height=1024,
     depth_invert=False,
     workflow_override=None,
     base_dir=None,
@@ -657,6 +707,7 @@ def _render_with_comfy_local(
 
     workflow_fallback_used = False
     wf = _load_comfy_workflow(workflow_override, base_dir=base_dir)
+    wf = _apply_workflow_image_size(wf, width, height)
     try:
         wf = _inject_prompt_and_depth(
             wf,
@@ -677,6 +728,7 @@ def _render_with_comfy_local(
                 )
             workflow_fallback_used = True
             wf = _load_comfy_workflow(None, base_dir=base_dir)
+            wf = _apply_workflow_image_size(wf, width, height)
             wf = _inject_prompt_and_depth(
                 wf,
                 prompt,
@@ -768,6 +820,8 @@ def _render_with_comfy_local(
     meta = {
         "comfy_url": comfy_url,
         "prompt_id": prompt_id,
+        "requested_width": int(width),
+        "requested_height": int(height),
         "mask_uploaded": bool(uploaded_mask_name),
         "normal_uploaded": bool(uploaded_normal_name),
         "silhouette_uploaded": bool(uploaded_silhouette_name),

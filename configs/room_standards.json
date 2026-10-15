@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "by_type_id": {
+    "1": { "name": "MasterRoom", "min_edge_mm": 3000, "min_area_m2": 10.0, "max_elongation": 1.5 },
+    "5": { "name": "ChildRoom",  "min_edge_mm": 2700, "min_area_m2": 9.0,  "max_elongation": 1.5 },
+    "7": { "name": "SecondRoom", "min_edge_mm": 2700, "min_area_m2": 9.0,  "max_elongation": 1.5 },
+    "8": { "name": "GuestRoom",  "min_edge_mm": 2700, "min_area_m2": 9.0,  "max_elongation": 1.5 },
+    "3": { "name": "Bathroom",   "min_edge_mm": 1500, "min_area_m2": 4.0,  "max_elongation": 2.0 },
+    "2": { "name": "Kitchen",    "min_edge_mm": 2000, "min_area_m2": 6.0,  "max_elongation": 2.5 }
+  }
+}

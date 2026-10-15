@@ -1,4 +1,5 @@
 import { METRES_PER_UNIT } from './constants.js';
+import { generate_offset_regions } from './offset-subdivision.js';
 
 const MIN_AREA_BY_TYPE_M2={
   bed1:45,
@@ -279,6 +280,20 @@ export function check_typology_viability(boundary,typology_option,unit_mix={}){
     violations:report.constraint_violations||[],
     report,
   };
+}
+
+export function generate_offset_subdivision_regions(boundary_polygon=[],options={}){
+  const depthMinRaw=parseFloat(options?.depth_range?.min);
+  const depthMaxRaw=parseFloat(options?.depth_range?.max);
+  const depthRaw=parseFloat(options?.depth_m);
+  const minCorridorRaw=parseFloat(options?.min_corridor_width_m);
+  const depthRange=Number.isFinite(depthMinRaw)&&Number.isFinite(depthMaxRaw)
+    ?{min:Math.max(0.1,depthMinRaw),max:Math.max(0.1,depthMaxRaw)}
+    :(Number.isFinite(depthRaw)&&depthRaw>0
+      ?{min:depthRaw,max:depthRaw}
+      :{min:5,max:9});
+  const minCorridorWidthM=Number.isFinite(minCorridorRaw)&&minCorridorRaw>0?minCorridorRaw:1.2;
+  return generate_offset_regions(boundary_polygon,depthRange,minCorridorWidthM);
 }
 
 function getFloorPlate(floorPlateState){

@@ -43,11 +43,17 @@ export function bdryCenter(bdry){
   return [cx/(6*area),cy/(6*area)];
 }
 
+// Mirror is a y-flip about the centroid (not x-flip) — matches
+// geo_ent_num_retrieval.retrieve()'s actual convention (conj() = angle
+// negation = reflection about a horizontal line through the centroid).
+// See 2026-08-11 finding: x-flip and y-flip disagree on which side the
+// entrance ends up, so mirrored-match thumbnails were showing a different
+// plan than the one actually scored.
 export function planToCanvas(px,py,fpBdry,rot,offset,mirror,{cW,cH,pad=PAD}){
   const sc=cW*(1-2*pad),ox=pad*cW,oy=pad*cH;
   const cen=(rot||mirror)?bdryCenter(fpBdry):null;
   let x=px,y=py;
-  if(mirror)x=2*cen[0]-x;
+  if(mirror)y=2*cen[1]-y;
   if(rot)[x,y]=rotatePtAround([x,y],rot,cen);
   return [(x+offset[0])*sc+ox,(y+offset[1])*sc+oy];
 }
@@ -58,7 +64,7 @@ export function canvasToPlan(cx,cy,fpBdry,rot,offset,mirror,{cW,cH,pad=PAD}){
   let x=(cx-ox)/sc-offset[0];
   let y=(cy-oy)/sc-offset[1];
   if(rot)[x,y]=rotatePtAround([x,y],-rot,cen);
-  if(mirror)x=2*cen[0]-x;
+  if(mirror)y=2*cen[1]-y;
   return [x,y];
 }
 

@@ -42,9 +42,34 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 #viewer-3d-toolbar { height:36px; border-bottom:1px solid #d6d6d6; display:flex; align-items:center; gap:8px; padding:0 10px; color:#444; background:#fafafa; }
 #viewer-3d-status { font-size:11px; color:#666; }
 #viewer-3d { flex:1; min-height:0; position:relative; }
+#capture-frame-guide {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:2;
+}
+#capture-frame-box {
+  position:absolute;
+  border:1px dashed rgba(34,197,94,0.9);
+  box-shadow:0 0 0 9999px rgba(15,23,42,0.18), inset 0 0 0 1px rgba(255,255,255,0.35);
+  border-radius:2px;
+}
+#capture-frame-label {
+  position:absolute;
+  left:6px;
+  top:6px;
+  font-size:10px;
+  color:#ecfeff;
+  background:rgba(15,23,42,0.66);
+  border:1px solid rgba(148,163,184,0.55);
+  border-radius:4px;
+  padding:2px 5px;
+  letter-spacing:0.02em;
+}
 #viewer-3d-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:12px; pointer-events:none; }
 #capture-panel { position:absolute; left:10px; top:46px; width:220px; background:rgba(255,255,255,0.92); border:1px solid #d1d5db; border-radius:8px; padding:8px; display:none; backdrop-filter:blur(3px); }
 #capture-panel.show { display:block; }
+#capture-panel { z-index:4; }
 #capture-panel.collapsed #capture-body { display:none; }
 #capture-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:6px; }
 #capture-switch { margin-bottom:6px; }
@@ -68,7 +93,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
   background:#f8fafc;
   overflow:hidden;
 }
-#capture-active-img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+#capture-active-img { width:100%; height:auto; object-fit:contain; display:block; background:#fff; }
 #capture-active-label { font-size:10px; color:#4b5563; text-align:center; padding:4px; border-top:1px solid #e5e7eb; background:#fff; }
 #opacity-legend {
   margin-top:6px;
@@ -111,6 +136,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
   border-radius:10px;
   padding:10px;
   backdrop-filter:blur(3px);
+  z-index:4;
 }
 #render-panel.collapsed #render-body { display:none; }
 #render-title { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#6b7280; margin-bottom:8px; }
@@ -208,7 +234,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 #btn-generate-render:disabled { opacity:0.5; cursor:default; }
 #render-result { margin-top:8px; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; background:#f8fafc; display:none; }
 #render-result.show { display:block; }
-#render-result img { width:100%; display:block; }
+#render-result img { width:100%; height:auto; object-fit:contain; display:block; }
 #render-result-meta { border-top:1px solid #e5e7eb; background:#fff; color:#4b5563; font-size:10px; padding:6px; line-height:1.4; }
 
 #sidebar { width:196px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
@@ -246,7 +272,8 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 #btn-generate-3d { position:absolute; top:10px; right:10px; z-index:12; border:1px solid var(--border2); background:rgba(24,28,39,0.92); color:var(--text); border-radius:4px; padding:6px 8px; font-family:var(--mono); font-size:10px; letter-spacing:0.04em; cursor:pointer; }
 #btn-generate-3d:hover { border-color:var(--accent); color:#fff; }
 #canvas-hint { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); pointer-events:none; white-space:nowrap; }
-#coord-disp { position:absolute; top:10px; left:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
+#coord-disp { position:absolute; top:10px; right:10px; font-size:10px; color:var(--muted); pointer-events:none; font-family:var(--mono); }
+#canvas-hud { position:absolute; top:10px; left:10px; font-size:10px; font-family:var(--mono); line-height:1.5; pointer-events:none; background:rgba(255,255,255,0.86); border:1px solid rgba(100,116,139,0.35); border-radius:4px; padding:5px 8px; max-width:260px; display:none; }
 #shift-ind { position:absolute; bottom:12px; right:12px; font-size:10px; color:var(--amber); pointer-events:none; display:none; }
 #canvas-palette { position:absolute; bottom:36px; left:50%; transform:translateX(-50%); display:flex; gap:12px; background:rgba(20,23,28,0.88); border:1px solid var(--border2); border-radius:6px; padding:5px 12px; pointer-events:all; z-index:10; backdrop-filter:blur(4px); }
 #canvas-palette label { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text); cursor:pointer; user-select:none; white-space:nowrap; }
@@ -275,6 +302,46 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 .mode-btn { width:100%; padding:5px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; cursor:pointer; margin-top:4px; transition:all .12s; }
 .mode-btn:hover { border-color:var(--amber); color:var(--amber); }
 .mode-btn.active { background:rgba(245,158,11,0.15); border-color:var(--amber); color:var(--amber); }
+
+/* ── Fit palette ──────────────────────────────────────────────────────── */
+#fit-palette { display:none; flex-direction:column; flex:1; overflow:hidden; }
+.fit-section { padding:8px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.fit-section-title { font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+.fit-step-list { display:flex; flex-direction:column; gap:3px; }
+.fit-step { display:flex; align-items:center; gap:7px; padding:5px 7px; border-radius:4px; border:1px solid transparent; cursor:pointer; transition:all .12s; }
+.fit-step:hover:not(.disabled) { border-color:var(--border2); background:var(--surface2); }
+.fit-step.active { border-color:var(--accent); background:rgba(59,130,246,.12); }
+.fit-step.disabled { opacity:0.35; cursor:default; pointer-events:none; }
+.fit-step-num { width:16px; height:16px; border-radius:50%; background:var(--border2); color:var(--muted); font-size:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.fit-step.active .fit-step-num { background:var(--accent); color:#fff; }
+.fit-step-label { font-size:10px; color:var(--text); }
+.fit-check { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text); margin-bottom:4px; cursor:pointer; }
+.fit-check input { accent-color:var(--accent); }
+.fit-log { font-size:9px; color:var(--muted); flex:1; overflow-y:auto; white-space:pre-wrap; line-height:1.5; background:var(--bg); padding:6px; border-radius:3px; border:1px solid var(--border); min-height:60px; }
+#fit-log-section { flex:1; min-height:0; display:flex; flex-direction:column; padding:8px 10px; gap:4px; }
+.fit-run-btn { width:100%; padding:7px; background:rgba(59,130,246,.15); border:1px solid var(--accent); border-radius:4px; color:var(--accent); font-family:var(--mono); font-size:10px; cursor:pointer; transition:all .12s; letter-spacing:0.04em; }
+.fit-run-btn:hover:not(:disabled) { background:rgba(59,130,246,.3); }
+.fit-run-btn:disabled { opacity:0.35; cursor:default; }
+
+/* ── Plan drawing review modal (task 1: wall-thickness + 2D drawing) ───── */
+#pd-modal { display:none; position:fixed; inset:0; background:rgba(8,10,15,0.78); z-index:50; align-items:center; justify-content:center; }
+#pd-modal.show { display:flex; }
+#pd-modal-inner { width:min(1400px,94vw); height:min(900px,92vh); background:var(--surface); border:1px solid var(--border2); border-radius:8px; display:flex; flex-direction:column; overflow:hidden; }
+#pd-modal-header { display:flex; align-items:center; gap:16px; padding:0 14px; height:40px; border-bottom:1px solid var(--border); flex-shrink:0; }
+#pd-modal-title { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+#pd-modal-header .spacer { flex:1; }
+#pd-toggles { display:flex; gap:12px; }
+#pd-toggles label { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text); cursor:pointer; user-select:none; }
+#pd-toggles input { accent-color:var(--accent); cursor:pointer; }
+#pd-modal-body { flex:1; display:flex; min-height:0; }
+#pd-canvas-wrap { flex:1; background:#fbfaf7; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+#pd-canvas { display:block; max-width:100%; max-height:100%; }
+#pd-sidebar { width:236px; flex-shrink:0; border-left:1px solid var(--border); overflow-y:auto; padding:12px; }
+#pd-violations { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+.pd-violation { font-size:10px; line-height:1.4; border-left:2px solid var(--border2); padding-left:7px; color:var(--muted); }
+.pd-violation.blocking { border-left-color:var(--red); color:var(--text); }
+.pd-violation .pd-v-head { font-weight:500; }
+#pd-empty-state { font-size:11px; color:var(--muted); text-align:center; padding:40px 20px; line-height:1.6; }
 </style>
 </head>
 <body>
@@ -306,6 +373,15 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
     </div>
 
     <div class="ss">
+      <div class="sl">architectural drawing</div>
+      <div class="dz" id="dz-plan-drawing">
+        <input type="file" id="fi-plan-drawing" accept=".json">
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-plan-drawing">load FloorPlan fixture…</span>
+      </div>
+      <div class="hint" style="margin-top:2px">schema.py contract — the export_schema_fixture.py output shape ({boundary, plan, violations})</div>
+    </div>
+
+    <div class="ss">
       <div class="sl">draw</div>
       <div class="hint">
         <kbd>click</kbd> add vertex<br>
@@ -324,6 +400,15 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           clear entrance
         </button>
         <div id="entrance-info" style="font-size:9px;color:var(--muted);margin-top:3px;display:none"></div>
+        <div class="sl" style="margin-top:8px;margin-bottom:4px">boundary edges</div>
+        <button class="mode-btn" id="btn-edge-type-mode">
+          &#9707; edge types
+        </button>
+        <div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.6">
+          <span style="color:#22c55e">&#9632;</span> exterior &nbsp;
+          <span style="color:#64748b">&#9632;</span> inter-tenancy &nbsp;
+          <span style="color:#eab308">&#9632;</span> hallway
+        </div>
       </div>
     </div>
 
@@ -345,6 +430,18 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
       <div class="field">
         <label>bathrooms <span id="v-bath">1</span></label>
         <input id="rng-bathrooms" type="range" min="0" max="4" value="1" step="1">
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-balcony">
+        balcony</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-study">
+        study</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chk-storage">
+        storage</label>
       </div>
     </div>
 
@@ -369,12 +466,24 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
       <div class="field">
         <label><input type="checkbox" id="chk-graph">
         show room graph</label>
-      </div>
-      <div class="field">
-        <label><input type="checkbox" id="chk-fit">
-        fit rooms into boundary</label>
+        <label><input type="checkbox" id="chk-plan-geom" checked>
+        plan geometry</label>
       </div>
       <button class="run-btn" id="run-btn" disabled>retrieve</button>
+      <button class="clear-btn" id="btn-feasibility-check" style="width:100%;margin-top:4px">&#9683; check fit (pre-analysis)</button>
+      <div id="feasibility-result" style="font-size:10px;margin-top:4px;line-height:1.55"></div>
+    </div>
+
+    <div class="ss" id="topo-flags-section" style="display:none">
+      <div class="sl">topology checks</div>
+      <div id="topo-flags-panel" style="font-size:10px;line-height:1.6"></div>
+    </div>
+
+    <div class="ss">
+      <div class="sl">swap</div>
+      <button class="clear-btn" id="btn-swap-nodes" style="width:100%" disabled>swap selected rooms</button>
+      <button class="clear-btn" id="btn-swap-reset" style="width:100%;margin-top:4px;display:none">reset swap</button>
+      <div id="swap-readout" style="font-size:10px;margin-top:4px;line-height:1.5"></div>
     </div>
 
     <div class="ss">
@@ -392,7 +501,9 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 
   <div id="viewer-shell">
     <div id="view-tabs">
-      <button class="view-tab active" id="tab-2d">2D Plan</button>
+      <button class="view-tab" id="tab-fp">Floor plate</button>
+      <button class="view-tab active" id="tab-2d">Unit</button>
+      <button class="view-tab" id="tab-fit">Fit</button>
       <button class="view-tab" id="tab-3d">3D View</button>
     </div>
 
@@ -401,6 +512,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <canvas id="main-canvas"></canvas>
         <button id="btn-generate-3d">Generate 3D</button>
         <div id="coord-disp"></div>
+        <div id="canvas-hud"></div>
         <div id="canvas-hint">draw a boundary polygon to begin</div>
         <div id="shift-ind">SHIFT LOCK</div>
         <div id="canvas-palette">
@@ -437,8 +549,9 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           <label for="render-view">View</label>
           <select id="render-view">
             <option value="exterior" selected>exterior</option>
-            <option value="street perspective">street perspective</option>
-            <option value="aerial three-quarter">aerial three-quarter</option>
+            <option value="aerial">aerial</option>
+            <option value="street">street</option>
+            <option value="garden">garden</option>
           </select>
         </div>
         <div class="render-row">
@@ -446,6 +559,8 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           <select id="render-light">
             <option value="golden hour" selected>golden hour</option>
             <option value="overcast">overcast</option>
+            <option value="midday">midday</option>
+            <option value="dusk">dusk</option>
             <option value="night">night</option>
           </select>
         </div>
@@ -459,11 +574,24 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           </select>
         </div>
         <div class="render-row">
-          <label for="render-prompt">Prompt</label>
+          <label for="render-context">Context</label>
+          <select id="render-context">
+            <option value="rural" selected>rural</option>
+            <option value="urban">urban</option>
+            <option value="suburban">suburban</option>
+            <option value="coastal">coastal</option>
+            <option value="forest">forest</option>
+            <option value="hillside">hillside</option>
+            <option value="rooftop">rooftop</option>
+            <option value="desert">desert</option>
+          </select>
+        </div>
+        <div class="render-row">
+          <label for="render-prompt">Notes</label>
           <textarea id="render-prompt" placeholder="Add details: facade rhythm, glazing ratio, landscaping, people scale, camera mood..."></textarea>
         </div>
         <div class="render-row">
-          <label for="render-prompt-preview">Preview</label>
+          <label id="render-prompt-preview-label" for="render-prompt-preview">Prompt preview (CLIP)</label>
           <textarea id="render-prompt-preview" readonly spellcheck="false" aria-label="Structured prompt preview"></textarea>
         </div>
         <div class="render-row">
@@ -491,7 +619,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         </div>
         <div class="render-row" id="openai-row-api-key">
           <label for="render-openai-key">OpenAI Key</label>
-          <input id="render-openai-key" type="password" placeholder="set OPENAI_API_KEY on server" autocomplete="off" spellcheck="false" disabled>
+          <input id="render-openai-key" type="password" placeholder="sk-… (or set OPENAI_API_KEY on server)" autocomplete="off" spellcheck="false">
         </div>
         <div class="render-row" id="openai-row-model">
           <label for="render-openai-model">OpenAI Model</label>
@@ -507,12 +635,19 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           </select>
         </div>
         <div class="render-row" id="python-row-resolution">
-          <label>Resolution</label>
+          <label>Image Size</label>
           <div id="python-grid-resolution">
-            <input id="py-width" type="number" min="256" max="1536" step="64" value="512" placeholder="width">
+            <input id="py-width" type="number" min="256" max="2048" step="64" value="1024" placeholder="width">
             <span>x</span>
-            <input id="py-height" type="number" min="256" max="1536" step="64" value="512" placeholder="height">
+            <input id="py-height" type="number" min="256" max="2048" step="64" value="1024" placeholder="height">
           </div>
+        </div>
+        <div class="render-row" id="render-row-frame-toggle">
+          <label for="toggle-frame-guide">Frame</label>
+          <label style="width:auto;padding-top:0;display:flex;align-items:center;gap:6px;color:#374151;">
+            <input id="toggle-frame-guide" type="checkbox" checked>
+            show capture frame
+          </label>
         </div>
         <button id="btn-generate-render">Generate Render</button>
         <div id="render-result">
@@ -580,15 +715,105 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
   </div>
 
   <div id="right-panel">
-    <div id="right-header">
-      <span>alternatives</span>
-      <span id="result-count" style="color:var(--muted);font-size:9px"></span>
+
+    <!-- alternatives panel — shown in Unit and Floor plate tabs -->
+    <div id="alt-panel" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div id="right-header">
+        <span>alternatives</span>
+        <span id="result-count" style="color:var(--muted);font-size:9px"></span>
+      </div>
+      <div id="results-list">
+        <div id="results-empty">run retrieval to see results</div>
+      </div>
+      <button class="clear-btn" id="btn-draw-architectural" style="margin:8px;flex-shrink:0">draw architecturally &rarr;</button>
+      <div style="margin:0 8px 8px;flex-shrink:0;border-top:1px solid var(--border);padding-top:8px">
+        <div class="hint" style="margin-bottom:4px">ARAP debug — drawn on canvas, not a separate renderer</div>
+        <button class="clear-btn" id="btn-arap-align-canvas" style="width:100%;margin-bottom:4px">1 &middot; align (similarity_align)</button>
+        <button class="clear-btn" id="btn-arap-solve-canvas" style="width:100%;margin-bottom:4px">2 &middot; ARAP adaptation (arap_solve)</button>
+        <button class="clear-btn" id="btn-arap-rectify-canvas" style="width:100%;margin-bottom:4px">3 &middot; rectify (rectify_mesh + rectify_rooms)</button>
+        <button class="clear-btn" id="btn-arap-fill-canvas" style="width:100%;margin-bottom:4px">4 &middot; fill living (fill_boundary_with_living)</button>
+        <button class="clear-btn" id="btn-arap-oracle-canvas" style="width:100%;margin-bottom:4px">5 &middot; oracle (surface_defects — measures only)</button>
+        <button class="clear-btn" id="btn-arap-agent-canvas" style="width:100%;margin-bottom:4px">6 &middot; agent refine (orchestrate_refinement — slow, calls Ollama)</button>
+        <button class="clear-btn" id="btn-arap-arrange-canvas" style="width:100%;margin-bottom:4px">&#9656; arrange (rectangular dual — replaces 2&ndash;4)</button>
+        <button class="clear-btn" id="btn-arap-clear-canvas" style="width:100%">clear overlay</button>
+      </div>
     </div>
-    <div id="results-list">
-      <div id="results-empty">run retrieval to see results</div>
+
+    <!-- fit palette — shown in Fit tab -->
+    <div id="fit-palette">
+
+      <div class="fit-section">
+        <div class="fit-section-title">WORKFLOW</div>
+        <div class="fit-step-list">
+          <div class="fit-step active" id="fit-step-1">
+            <span class="fit-step-num">1</span>
+            <span class="fit-step-label">Map layout graph</span>
+          </div>
+          <div class="fit-step disabled" id="fit-step-2">
+            <span class="fit-step-num">2</span>
+            <span class="fit-step-label">Grow rooms</span>
+          </div>
+          <div class="fit-step disabled" id="fit-step-3">
+            <span class="fit-step-num">3</span>
+            <span class="fit-step-label">Verify</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fit-section">
+        <div class="fit-section-title">VIEW</div>
+        <label class="fit-check">
+          <input type="checkbox" id="fit-show-graph"> show adjacency graph
+        </label>
+        <label class="fit-check">
+          <input type="checkbox" id="fit-show-original" checked> show original rooms
+        </label>
+        <label class="fit-check">
+          <input type="checkbox" id="fit-show-boundary" checked> show target boundary
+        </label>
+      </div>
+
+      <div id="fit-log-section">
+        <div class="fit-section-title">STATUS</div>
+        <pre class="fit-log" id="fit-log">retrieve a plan, then switch here to begin fitting.</pre>
+      </div>
+
+      <div style="padding:8px;flex-shrink:0;">
+        <button class="fit-run-btn" id="fit-run-btn" disabled>▶ run step 1</button>
+      </div>
+
     </div>
   </div>
 
+</div>
+
+<div id="pd-modal">
+  <div id="pd-modal-inner">
+    <div id="pd-modal-header">
+      <span id="pd-modal-title">plan drawing — <span id="pd-modal-label">—</span></span>
+      <div class="spacer"></div>
+      <div id="pd-toggles">
+        <label><input type="checkbox" id="pd-toggle-walls" checked> walls</label>
+        <label><input type="checkbox" id="pd-toggle-doors" checked> doors</label>
+        <label><input type="checkbox" id="pd-toggle-outlines" checked> outlines</label>
+        <label><input type="checkbox" id="pd-toggle-labels" checked> labels</label>
+      </div>
+      <button class="clear-btn" id="pd-modal-close" style="width:auto;margin:0">close ✕</button>
+    </div>
+    <div id="pd-modal-body">
+      <div id="pd-canvas-wrap">
+        <canvas id="pd-canvas" width="1400" height="1400"></canvas>
+      </div>
+      <div id="pd-sidebar">
+        <div class="sl">fixture</div>
+        <div class="stat"><span class="stat-k">schema</span><span class="stat-v" id="pd-stat-schema">—</span></div>
+        <div class="stat"><span class="stat-k">rooms</span><span class="stat-v" id="pd-stat-rooms">—</span></div>
+        <div class="stat"><span class="stat-k">edges</span><span class="stat-v" id="pd-stat-edges">—</span></div>
+        <div class="sl" style="margin-top:14px">violations</div>
+        <div id="pd-violations"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="/src/main.js"></script>

@@ -271,8 +271,23 @@ Each edge object has:
 | Field | Description |
 |---|---|
 | `u`, `v` | Room IDs of the two connected rooms |
-| `relation` | Spatial relation code (dataset-specific integer) |
+| `relation` | Spatial relation of v relative to u (integer, see table below) |
 | `connection` | `0` = shared wall, `1` = door connection |
+
+`relation` values (direction of v from u):
+
+| Value | Name |
+|---|---|
+| 0 | `left-above` |
+| 1 | `left-below` |
+| 2 | `left-of` |
+| 3 | `above` |
+| 4 | `inside` |
+| 5 | `surrounding` |
+| 6 | `below` |
+| 7 | `right-of` |
+| 8 | `right-above` |
+| 9 | `right-below` |
 
 ### `doors` and `windows`
 
@@ -283,6 +298,226 @@ Each edge object has:
 | `bbox` | Bounding box `[x1, y1, x2, y2]` in normalised coords |
 | `orientation` | `"horizontal"` or `"vertical"` |
 | `room_refs` | List of room IDs the opening belongs to |
+
+---
+
+## Dev log
+
+### 2026-06-18 — Fit Step 1 affine baseline and staged testing protocol
+
+**Goal:** establish a geometrically correct affine initialisation for room nodes
+before the agent call, and define computable success criteria for each stage of
+the repositioning pipeline.
+
+#### Context
+
+The agent was producing wrong results — rooms on opposite sides of the target
+boundary, entrance on the wrong edge — because the affine transform used centroid
+spans with a 0.65 compression factor and ignored the `r.rot`/`r.mirror` values
+returned by retrieval. The agent also had no observation capability and no
+computable success criteria, so it could not self-correct.
+
+#### What was built
+
+**Corrected affine transform in `computeFitGraph` (`apps/web/src/main.js`)**
+
+Replaced the centroid-span/0.65 approach with a plan-boundary-bbox → target-
+boundary-bbox mapping:
+- Apply `applyTransform` (rotation + mirror from retrieval) to the plan boundary
+  vertices first, compute the bbox of those transformed vertices.
+- Map each room centroid through the same transform, then affine from the
+  transformed bbox to the target boundary bbox (1:1, no compression).
+- This preserves relative room layout and correctly accounts for entrance
+  orientation changes.
+
+**`suggested_positions` passed to server**
+
+`computeFitGraph` now pre-computes rotation/mirror-corrected centroid positions
+and includes them in the `/fit_step1` payload as `suggested_positions: {id: {x, y}}`.
+`fit_step1.py` uses these directly; the Python affine is only a fallback when
+they are absent.
+
+**Stage 1 diagnostic script (`tools/test_s1_baseline.py`)**
+
+Visual test harness for the affine baseline. Produces a two-panel PNG:
+- Left: original plan with boundary polygon, room polygons, centroids, entrance.
+- Right: affine-mapped centroids on the target boundary, with bbox annotations.
+
+Three test cases confirmed:
+- `test_s1_self.png` — self-fit is identity (correct).
+- `test_s1_rect.png` — rect target, no rotation: relative layout preserved.
+- `test_s1_rect_rot90.png` — 90° clockwise: entrance moves as expected.
+
+**Relation codes documented (`README.md`)**
+
+Added the `relation` integer-to-name mapping table (0–9) to the `### edges`
+schema section.
+
+#### Current state
+
+Stage 1 (affine baseline) is complete and visually verified. The staged testing
+protocol is defined but not yet executed past Stage 1:
+
+| Stage | Description | Status |
+|---|---|---|
+| 1 | Affine baseline visual check | **done** |
+| 2 | Containment — `point_in_polygon` + `snap_to_interior` | not started |
+| 3 | Radial depth rank (C2, Kendall tau ≥ 0.8) | not started |
+| 4 | Angular order (C3) | not started |
+| 5 | Correction loop (C2/C3 fixes) | not started |
+| 6 | Graph proximity (C4) | not started |
+| 7 | Type affinity (C5) | not started |
+
+The LLM agent is suspended until the algorithmic stages are in place to give it
+correct starting positions and computable success criteria to check against.
+
+---
+
+### 2026-06-18 — Fit Step 1 agent test harness
+
+**Goal:** wire the fit-step1 brief to a real Claude call so the spatial reasoning
+loop can be exercised end-to-end from the command line before the browser endpoint
+is built.
+
+#### What was built
+
+**`tools/test_fit_step1.py`**
+
+Standalone Python script that:
+1. Loads a plan JSON from `data/fixtures/plans/test_data/` (default: plan 987).
+2. Builds the layout graph — boundary polygon, room nodes (centroid of each room
+   polygon), and an entrance node whose centroid is snapped to the nearest point
+   on the boundary perimeter via `_nearest_pt_on_boundary`.  A synthetic
+   `connection: 1` edge is inserted from the entrance to the nearest common-zone
+   room (sourceType 0 or 4), matching the JS behaviour in `computeFitGraph`.
+3. Reads `docs/dev/design/fit-step1-brief.md` and passes it as the system prompt.
+4. Calls Claude Opus 4.8 with adaptive thinking and `set_node_position` as the
+   single tool.  Uses streaming (`stream.get_final_message()`) and an agentic
+   loop that feeds tool results back until `stop_reason == "end_turn"`.
+5. Prints each `set_node_position` call as it arrives, then a summary table of
+   final positions with room labels.
+
+```bash
+source .venv/bin/activate
+python tools/test_fit_step1.py
+python tools/test_fit_step1.py --plan data/fixtures/plans/test_data/290.json
+```
+
+---
+
+### 2026-06-17 — Fit tab and spatial reasoning brief
+
+**Goal:** replace the heuristic fitting pipeline with a step-by-step harness
+driven by spatial reasoning. The heuristic pipeline (edge-push → clip →
+fill_residual) was producing topologically incorrect results — rooms clustering
+at concave boundary vertices, rooms outside the boundary — because it encoded no
+understanding of what a residential layout should look like.
+
+#### What was built
+
+**Fit tab (`apps/web/index.html`, `apps/web/src/main.js`, `apps/web/src/canvas-renderer.js`)**
+
+New tab in the main view bar (next to Floor plate, Unit, 3D View). When active:
+- The retrieved plan is rendered faded (45% alpha) behind the target boundary.
+- The target boundary is rendered prominently (solid blue fill + thick stroke).
+- A dedicated right-panel palette replaces the standard controls, with a
+  three-step workflow (Map layout graph → Grow rooms → Verify), view toggles,
+  a status log, and a "▶ run step N" button.
+- Auto-fit on retrieve has been removed. The Fit tab is the only entry point
+  for fitting work.
+
+**Layout graph mapping (`computeFitGraph` in `main.js`)**
+
+"▶ run step 1" computes a graph of room nodes mapped into the target boundary:
+- Room centroids are extracted from `fp.rooms`, with rotation/mirror applied to
+  match the displayed orientation.
+- An affine transform (plan centroid → boundary centroid, scaled to fit) maps
+  all room nodes into the boundary.
+- The **entrance node** is a special case: its position is snapped to the
+  nearest point on the target boundary perimeter using `_nearestPtOnBoundary`,
+  and a synthetic edge connects it to the nearest common-area room (living or
+  dining). The entrance is rendered as a **square** to signal it is a fixed
+  boundary anchor; all other room nodes are rendered as circles.
+- Adjacency edges are drawn with solid lines (door connections, `connection: 1`)
+  and dashed lines (shared wall, no door, `connection: 0`).
+
+**Spatial reasoning brief (`docs/dev/design/fit-step1-brief.md`)**
+
+Behaviour specification for the agent that will reposition nodes in Step 1.
+Key principles:
+- All edges in `fp.edges` represent shared walls. `connection: 1` means the
+  wall has a door (circulation); `connection: 0` means wall adjacency only.
+- Entrance is a fixed anchor on the boundary perimeter.
+- Bedrooms must be placed near the boundary (exterior wall for windows).
+- At least one bathroom must be reachable from the common zone.
+- Balconies must be on the perimeter.
+- The agent traces the solid-edge circulation skeleton outward from the
+  entrance to verify every room is reachable without passing through a
+  private room.
+
+#### Current state
+
+The graph visualisation is working. Node positions from the current affine
+transform are compressed toward the boundary centre (a known limitation of
+treating centroid span as plan span). The next step is to replace the affine
+initialisation with the agent call: a backend endpoint that sends the graph
+and boundary to Claude with the brief, receives `set_node_position` calls,
+and returns updated node positions to the browser.
+
+Two features noted for future implementation:
+- **Boundary segment flags** (exterior vs. corridor-facing) — lets the agent
+  distinguish walls suitable for bedrooms from interior-facing walls.
+- **`hintAngle` per node** — the angle from the original plan's entrance to
+  each room centroid, giving the agent a directional starting hypothesis
+  without requiring the new boundary shape to match the original.
+
+---
+
+### 2026-06-16 — Fitting harness wired to the browser
+
+**Goal:** end-to-end test path — draw a boundary → retrieve a plan → fit it using the agent harness tools → inspect invariant results — all from the browser without touching Python directly.
+
+#### What was built
+
+**`/fit_harness` endpoint (`apps/api/server.py`)**
+
+New POST endpoint that runs a three-step automated fit:
+
+1. **Edge-push** (`fit_rooms_in_boundary`) — translates each room until it is fully inside the query boundary. Bedrooms that straddle the boundary edge end up touching it, satisfying G3.
+2. **Clip** (`clip_room_to_boundary`) — trims any polygon protrusion remaining after translation.
+3. **Fill residual** (`fill_residual`) — sets the common-area room (living/dining) to `boundary − union(all other rooms)`, guaranteeing 100% coverage (G4).
+
+The endpoint then runs `run_invariants` and returns the full G1–G6 report alongside the fitted plan JSON.
+
+**G6 proportion invariant (`packages/floorplan_core/fit_invariants.py`)**
+
+New `check_room_proportions(plan, original_plan, tolerance=0.10)` function. For each non-common room it compares:
+- **Area**: Shapely polygon area — must stay within ±10% of the pre-fit area.
+- **Aspect ratio**: bounding-box width/height — must stay within ±10% of the pre-fit ratio.
+
+`run_invariants` now accepts an optional `original_plan` argument; when provided it runs G6 and appends failures like `"G6: r_4 exceeds ±10% proportion limit (area ×0.875, aspect ×0.875)"`.
+
+**Frontend (`apps/web/src/main.js`)**
+
+- `runRetrieveFitHarness()` — one-click function: retrieves top plan for the drawn boundary, transforms the query boundary into the plan's coordinate frame (`boundaryInPlanSpace`), calls `/fit_harness`, stores the result in `fittedCache` with `fitMode=true` so the fitted plan renders on the canvas.
+- "**Retrieve + Fit Harness**" section in the dev panel (`?dev=true`) tools tab — button + log area that shows the full invariant report (G1–G5 pass/fail, coverage %, G6 proportion summary, per-room violation details).
+
+#### Status
+
+| Invariant | Status |
+|---|---|
+| G1 containment | passing |
+| G2 overlaps | passing |
+| G3 bedrooms touch boundary | passing after adding edge-push step |
+| G4 100% coverage | passing after adding edge-push step (fill_residual now works on correctly-positioned rooms) |
+| G5 common area ≥ 0 | passing |
+| G6 ±10% proportions | **still failing** — rooms that get clipped lose area/aspect ratio; next step is to investigate whether the boundary mismatch is too large for the retrieved plan, or whether a scale/transform step before fitting would reduce clipping |
+
+#### Next steps
+
+- Investigate G6 failures: are they caused by poor retrieval matches (plan shape too different from query boundary) or by the fitting strategy clipping too aggressively?
+- Consider a pre-fit scale step that normalises the plan's room cluster to the query boundary's bounding box before edge-push, reducing the clipping needed.
+- Alternatively, surface a "fit quality score" based on how much each room was clipped so the user can choose a better-matched plan from the retrieval results.
 
 ---
 

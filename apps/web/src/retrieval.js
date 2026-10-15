@@ -1,4 +1,4 @@
-import { ABBR, ENT_DIM, ROOM_DIM, ROOM_GROUPS, SHAPE_DIM, TOTAL_DIM } from './constants.js';
+import { ABBR, ROOM_GROUPS } from './constants.js';
 import { createAdaptedResults, createFitModeState, createResultSelectionState } from './queryState.js';
 import { bdryCenter } from './geometry.js';
 
@@ -142,10 +142,13 @@ export function setStatusUI(msg,cls='',doc=document){
   el.className=cls;
 }
 
-export function checkReadyState({db,closed,boundary},doc=document){
+export function checkReadyState({closed,boundary},doc=document){
+  // Retrieval runs entirely server-side (canonical retrieval-prototype
+  // module + rplan_index_v5.npz — 2026-08-10) — no client-side index
+  // needed to enable the button.
   const btn=doc.getElementById('run-btn');
   if(!btn)return;
-  btn.disabled=!(db.descs&&db.names&&closed&&boundary.length>=3);
+  btn.disabled=!(closed&&boundary.length>=3);
 }
 
 export function tryFinalizeIndex({db,onReady,onError,doc=document}){
@@ -216,14 +219,18 @@ export async function runRetrievalFlow({
   entrance,
   req,
   params,
-  db,
   setStatus,
-  runRetrievalLocal,
   applyServerPlans,
   afterRender,
   checkReady,
+  typedEdges=[],
   doc=document,
 }){
+  // Retrieval always runs through the backend now (canonical
+  // retrieval-prototype module — 2026-08-10). No client-side fallback:
+  // the app previously had a divergent local reimplementation that
+  // silently kicked in whenever the server was unreachable, which is
+  // exactly the drift this decision was meant to eliminate.
   if(!closed||boundary.length<3)return;
   setStatus('retrieving…','warn');
   const runBtn=doc.getElementById('run-btn');
@@ -236,6 +243,9 @@ export async function runRetrievalFlow({
     shape_w:params.shape_w,
     ent_w:params.ent_w,
     room_w:params.room_w,
+    // Step 1 (topology → generate → select): the target's typed edges drive the
+    // topology re-rank's perimeter-ring alignment (sparse; backend defaults rest).
+    typed_edges:typedEdges,
   };
   try{
     const {data}=await postJsonWithTimeout('/retrieve',body,{timeoutMs:15000});
@@ -246,144 +256,12 @@ export async function runRetrievalFlow({
     if(resultCountEl)resultCountEl.textContent=data.count+' results';
     afterRender?.();
   }catch(err){
-    console.warn('Server retrieval failed, falling back to local:',err);
-    setStatus('server unavailable — using local retrieval','warn');
-    await runRetrievalLocal();
+    console.error('Retrieval failed:',err);
+    setStatus(`retrieval failed — is the backend running? (${err.message})`,'err');
   }finally{
     checkReady?.();
-    if(runBtn)runBtn.disabled=!(db.descs&&db.names&&closed&&boundary.length>=3);
+    if(runBtn)runBtn.disabled=!(closed&&boundary.length>=3);
   }
-}
-
-export async function runLocalRetrievalData({
-  db,
-  boundary,
-  entrance,
-  req,
-  params,
-  cache,
-  fetchWithCacheFn,
-  shapeDescFn,
-  entranceDescFn,
-  roomCountDescFn,
-  combinedDescFn,
-  l2distFn,
-}){
-  const rawVerts=boundary.map(({x,y})=>[x,y]);
-  let sigArea=0;
-  for(let i=0;i<rawVerts.length;i++){
-    const [x0,y0]=rawVerts[i],[x1,y1]=rawVerts[(i+1)%rawVerts.length];
-    sigArea+=x0*y1-x1*y0;
-  }
-  const bdryArr=sigArea>0?[...rawVerts].reverse():rawVerts;
-  const N=db.names.length;
-
-  if(db.dim===TOTAL_DIM){
-    const qShape=shapeDescFn(bdryArr,1);
-    const qEnt=entrance?entranceDescFn(boundary,entrance):null;
-    const qRoom=roomCountDescFn(req);
-
-    const dists=new Float32Array(N);
-    const bestAngles=new Float32Array(N);
-    const bestMirror=new Uint8Array(N);
-    for(let i=0;i<N;i++){
-      const off=i*TOTAL_DIM;
-      let sd=0;
-      for(let j=0;j<SHAPE_DIM;j++){
-        const d=qShape[j]-db.descs[off+j];
-        sd+=d*d;
-      }
-      sd=Math.sqrt(sd)*params.shape_w;
-
-      let ed=0;
-      if(qEnt&&params.ent_w>0){
-        const eo=off+SHAPE_DIM;
-        const d_rx=db.descs[eo],d_ry=db.descs[eo+1];
-        const d_cx=db.descs[eo+2],d_cy=db.descs[eo+3];
-        const qSq=qEnt[0]**2+qEnt[1]**2+qEnt[2]**2+qEnt[3]**2;
-        const dSq=d_rx**2+d_ry**2+d_cx**2+d_cy**2;
-        const A=qEnt[0]*d_rx+qEnt[1]*d_ry+qEnt[2]*d_cx+qEnt[3]*d_cy;
-        const B=qEnt[1]*d_rx-qEnt[0]*d_ry+qEnt[3]*d_cx-qEnt[2]*d_cy;
-        const ed_n=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(A*A+B*B)));
-        const Am=-qEnt[0]*d_rx+qEnt[1]*d_ry-qEnt[2]*d_cx+qEnt[3]*d_cy;
-        const Bm=-qEnt[1]*d_rx-qEnt[0]*d_ry-qEnt[3]*d_cx-qEnt[2]*d_cy;
-        const ed_m=Math.sqrt(Math.max(0,qSq+dSq-2*Math.sqrt(Am*Am+Bm*Bm)));
-        if(ed_m<ed_n){
-          ed=ed_m*params.ent_w;
-          bestMirror[i]=1;
-          bestAngles[i]=Math.round(Math.atan2(Bm,Am)/(Math.PI/2))*(Math.PI/2);
-        }else{
-          ed=ed_n*params.ent_w;
-          bestMirror[i]=0;
-          bestAngles[i]=Math.round(Math.atan2(B,A)/(Math.PI/2))*(Math.PI/2);
-        }
-      }
-
-      let rd=0;
-      for(let j=0;j<ROOM_DIM;j++){
-        const d=qRoom[j]-db.descs[off+SHAPE_DIM+ENT_DIM+j];
-        rd+=d*d;
-      }
-      rd=Math.sqrt(rd)*params.room_w;
-      dists[i]=sd+ed+rd;
-    }
-
-    const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
-    const planData=await Promise.all(idx.map(async (i)=>{
-      const name=db.names[i];
-      const stem=name.replace(/\.(png|json)$/i,'');
-      if(cache[stem])return cache[stem];
-      if(cache[name])return cache[name];
-      try{
-        const pr=await fetchWithCacheFn('test_data/'+name);
-        const data=await pr.json();
-        cache[stem]=data;
-        if(data.id)cache[data.id]=data;
-        return data;
-      }catch(_err){
-        return null;
-      }
-    }));
-
-    return idx.map((dbIdx,rank)=>({
-      name:db.names[dbIdx],
-      dist:dists[dbIdx],
-      fp:planData[rank],
-      adapted:false,
-      rot:bestAngles[dbIdx],
-      mirror:!!bestMirror[dbIdx],
-    }));
-  }
-
-  const qfp={id:'__q__',boundary:boundary.map(({x,y})=>[x,y,0,0]),rooms:[],edges:[]};
-  const qd=combinedDescFn(qfp,params.shape_w,params.room_w);
-  const dim=db.dim;
-  const dists=new Float32Array(N);
-  for(let i=0;i<N;i++)dists[i]=l2distFn(qd,db.descs,i*dim,dim);
-
-  const idx=Array.from({length:N},(_,i)=>i).sort((a,b)=>dists[a]-dists[b]).slice(0,params.topn);
-  const planData=await Promise.all(idx.map(async (i)=>{
-    const name=db.names[i];
-    const stem=name.replace(/\.(png|json)$/i,'');
-    if(cache[stem])return cache[stem];
-    try{
-      const pr=await fetchWithCacheFn('test_data/'+name);
-      const data=await pr.json();
-      cache[stem]=data;
-      if(data.id)cache[data.id]=data;
-      return data;
-    }catch(_err){
-      return null;
-    }
-  }));
-
-  return idx.map((dbIdx,rank)=>({
-    name:db.names[dbIdx],
-    dist:dists[dbIdx],
-    fp:planData[rank],
-    adapted:false,
-    rot:0,
-  }));
 }
 
 export function roomSummary(fp){
@@ -397,17 +275,77 @@ export function roomSummary(fp){
   return ROOM_GROUPS.filter((g)=>cnt[g.name]>0).map((g)=>`${ABBR[g.name]}:${cnt[g.name]}`).join('  ')||'—';
 }
 
-export function renderAdaptedResultsView({plans,listEl,selectResult,drawFP,drawDoorsWindows,drawGraph,sync3DSceneIfNeeded}){
+// Topology sensor badge (passed/total), shared by both card renderers below.
+// Backend attaches flags to every retrieved plan; absent/malformed → no badge.
+function flagsBadgeHtml(flags){
+  const s=flags&&flags.summary;
+  if(!s||typeof s.passed!=='number'||typeof s.total!=='number')return'';
+  const ok=s.passed===s.total;
+  const col=ok?'#16a34a':(s.passed>0?'#d97706':'#dc2626');
+  return `<div class="card-dist" style="color:${col};font-weight:600">${ok?'✓':'✗'} ${s.passed}/${s.total} checks</div>`;
+}
+
+// Card-thumbnail view mode, shared across both result-list renderers below so
+// a user's Graph/Plan choice survives a full re-render (new retrieval, boundary
+// edit, etc). Defaults to Graph so topology is what's shown first.
+let cardView='graph';
+
+// Paints one result card's thumbnail canvas in the current cardView mode.
+// 'graph' = new topology view (drawTopologyGraph); 'plan' = existing geometry
+// render (drawFP + drawDoorsWindows + drawGraph, unchanged from before this
+// toggle existed).
+function drawCardThumb(tctx,r,{drawFP,drawDoorsWindows,drawGraph,drawTopologyGraph},showClipped=true){
+  tctx.fillStyle='#f1f5f9';
+  tctx.fillRect(0,0,200,200);
+  if(!r.fp){
+    tctx.fillStyle='#94a3b8';
+    tctx.font='10px monospace';
+    tctx.textAlign='center';
+    tctx.fillText('no plan data',100,100);
+    return;
+  }
+  if(cardView==='graph'&&drawTopologyGraph){
+    drawTopologyGraph(tctx,r.fp,r.retrieval,200,200,r.rot||0,[0,0],r.mirror||false);
+  }else{
+    drawFP(tctx,r.fp,200,200,false,showClipped,r.rot||0,[0,0],r.mirror||false);
+    drawDoorsWindows(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
+    drawGraph(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
+  }
+}
+
+// Toggle button shared by both card-list renderers: flips cardView and
+// repaints every thumbnail canvas already on the page in place — it does NOT
+// rebuild cards, so selection state / fit cache in the caller is untouched.
+function appendCardViewToggle(listEl,cardEntries,drawFns){
+  const btn=document.createElement('button');
+  btn.className='clear-btn';
+  btn.style.cssText='margin-bottom:6px;font-size:10px;padding:3px 8px;flex-shrink:0';
+  const label=()=>btn.textContent=cardView==='graph'?'◈ Graph view (show Plan)':'▦ Plan view (show Graph)';
+  label();
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    cardView=cardView==='graph'?'plan':'graph';
+    label();
+    cardEntries.forEach(({r,tctx,showClipped})=>drawCardThumb(tctx,r,drawFns,showClipped));
+  };
+  listEl.appendChild(btn);
+}
+
+export function renderAdaptedResultsView({plans,listEl,selectResult,drawFP,drawDoorsWindows,drawGraph,drawTopologyGraph,sync3DSceneIfNeeded}){
   const results=createAdaptedResults(plans);
   const fittedCache={};
   const selected=null;
   const displacementArrows=[];
+  const drawFns={drawFP,drawDoorsWindows,drawGraph,drawTopologyGraph};
 
   listEl.innerHTML='';
   if(!results.length){
     listEl.innerHTML='<div id="results-empty">no adapted results</div>';
     return {results,fittedCache,selected,displacementArrows};
   }
+
+  const cardEntries=[];
+  appendCardViewToggle(listEl,cardEntries,drawFns);
 
   results.forEach((r,i)=>{
     const card=document.createElement('div');
@@ -419,29 +357,44 @@ export function renderAdaptedResultsView({plans,listEl,selectResult,drawFP,drawD
     tc.width=200;
     tc.height=200;
     const tctx=tc.getContext('2d');
-    tctx.fillStyle='#f1f5f9';
-    tctx.fillRect(0,0,200,200);
-    if(r.fp)drawFP(tctx,r.fp,200,200,false,true,r.rot||0,[0,0],r.mirror||false);
-    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
-    if(r.fp)drawGraph(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
-    else{
-      tctx.fillStyle='#94a3b8';
-      tctx.font='10px monospace';
-      tctx.textAlign='center';
-      tctx.fillText('no plan data',100,100);
-    }
+    cardEntries.push({r,tctx,showClipped:true});
+    drawCardThumb(tctx,r,drawFns,true);
     card.appendChild(tc);
 
     const ret=r.retrieval||{};
-    const iou=(ret.iou_score??0).toFixed(3);
-    const rot=ret.orientation??0;
-    const scale=(ret.scale_factor??1).toFixed(2);
     const dist=(r.dist??0).toFixed(4);
+    // ret.rot is radians (geo_ent_num_retrieval.retrieve()'s best_angles) —
+    // the old dead `ret.orientation` field this replaced was never real, so
+    // this unit mismatch had no visible symptom until now.
+    const rot=((ret.rot??0)*180/Math.PI).toFixed(0);
+    const mirror=ret.mirror?' ↔':'';
+    // The paper's three weighted component distances (dist = their sum) —
+    // shape (Option B rotation-aware Fourier), entrance (door position +
+    // wall normal + radial), room-count. null on the legacy flat-.bin
+    // fallback, which doesn't decompose distance into components.
+    const fmt=(v)=>v==null?'—':v.toFixed(3);
     const meta=document.createElement('div');
     meta.className='card-meta';
     const srcId=ret.source_id??r.name;
+    // Topology re-rank (Step 1): the list order IS this score. Show topo +
+    // daylight-fit inline; per-room daylight detail on hover so the card stays
+    // compact. Bold-green when the boundary is fully satisfied.
+    const topo=ret.topo;
+    let topoHtml='';
+    if(topo){
+      const dayfit=topo.components?.daylight_fit;
+      const per=topo.daylight_detail?.per_room||{};
+      const perTip=Object.entries(per).map(([k,v])=>`${k}: ${v}`).join('\n')
+        +(topo.mirror?'\n(mirror)':'');
+      const good=(dayfit??0)>=0.999;
+      topoHtml=`<div class="card-dist" title="${perTip}" style="color:${good?'#16a34a':'#0f172a'};font-weight:600">`
+        +`topo: ${fmt(topo.score)}&nbsp;&nbsp;dayfit: ${fmt(dayfit)}${topo.mirror?' ↔':''}</div>`;
+    }
     meta.innerHTML=`<div class="card-title">#${i+1} ${srcId}</div>`+
-      `<div class="card-dist">dist: ${dist}&nbsp;&nbsp;iou: ${iou}&nbsp;&nbsp;rot: ${rot}°&nbsp;&nbsp;scale: ${scale}</div>`+
+      flagsBadgeHtml(ret.flags)+
+      topoHtml+
+      `<div class="card-dist">dist: ${dist}&nbsp;&nbsp;rot: ${rot}°${mirror}</div>`+
+      `<div class="card-dist">shp: ${fmt(ret.shape_dist)}&nbsp;&nbsp;ent: ${fmt(ret.ent_dist)}&nbsp;&nbsp;rm: ${fmt(ret.room_dist)}</div>`+
       `<div class="card-rooms">${r.fp?roomSummary(r.fp):'—'}</div>`;
     card.appendChild(meta);
     listEl.appendChild(card);
@@ -451,12 +404,17 @@ export function renderAdaptedResultsView({plans,listEl,selectResult,drawFP,drawD
   return {results,fittedCache,selected,displacementArrows};
 }
 
-export function renderResultsListView({results,selected,listEl,selectResult,drawFP,drawDoorsWindows,drawGraph}){
+export function renderResultsListView({results,selected,listEl,selectResult,drawFP,drawDoorsWindows,drawGraph,drawTopologyGraph}){
+  const drawFns={drawFP,drawDoorsWindows,drawGraph,drawTopologyGraph};
   listEl.innerHTML='';
   if(!results.length){
     listEl.innerHTML='<div id="results-empty">run retrieval to see results</div>';
     return;
   }
+
+  const cardEntries=[];
+  appendCardViewToggle(listEl,cardEntries,drawFns);
+
   results.forEach((r,i)=>{
     const card=document.createElement('div');
     card.className='result-card'+(i===selected?' selected':'');
@@ -467,22 +425,15 @@ export function renderResultsListView({results,selected,listEl,selectResult,draw
     tc.width=200;
     tc.height=200;
     const tctx=tc.getContext('2d');
-    tctx.fillStyle='#f1f5f9';
-    tctx.fillRect(0,0,200,200);
-    if(r.fp)drawFP(tctx,r.fp,200,200,false,false,r.rot||0,[0,0],r.mirror||false);
-    if(r.fp)drawDoorsWindows(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
-    if(r.fp)drawGraph(tctx,r.fp,200,200,r.rot||0,[0,0],r.mirror||false);
-    else{
-      tctx.fillStyle='#94a3b8';
-      tctx.font='10px monospace';
-      tctx.textAlign='center';
-      tctx.fillText('no plan data',100,100);
-    }
+    cardEntries.push({r,tctx,showClipped:false});
+    drawCardThumb(tctx,r,drawFns,false);
     card.appendChild(tc);
 
     const meta=document.createElement('div');
     meta.className='card-meta';
-    meta.innerHTML=`<div class="card-title">#${i+1} ${r.name}</div><div class="card-dist">dist: ${r.dist.toFixed(4)}</div><div class="card-rooms">${r.fp?roomSummary(r.fp):'—'}</div>`;
+    meta.innerHTML=`<div class="card-title">#${i+1} ${r.name}</div>`+
+      flagsBadgeHtml(r.retrieval&&r.retrieval.flags)+
+      `<div class="card-dist">dist: ${r.dist.toFixed(4)}</div><div class="card-rooms">${r.fp?roomSummary(r.fp):'—'}</div>`;
     card.appendChild(meta);
     listEl.appendChild(card);
   });

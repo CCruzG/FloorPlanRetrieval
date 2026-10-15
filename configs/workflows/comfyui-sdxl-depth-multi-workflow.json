@@ -1,14 +1,12 @@
 {
   "1": {
-    "inputs": {
-      "ckpt_name": "juggernautXL_ragnarokBy.safetensors"
-    },
+    "inputs": { "ckpt_name": "juggernautXL_ragnarokBy.safetensors" },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {"title": "Load Checkpoint"}
   },
   "2": {
     "inputs": {
-      "text": "photorealistic architectural render, professional architectural photography, 8k, sharp focus, realistic scale, modern residential building, elevated exterior view, rural context, grass ground plane, trees in background, golden hour sunlight, long soft shadows, warm sky bounce, vertical timber battens, matte concrete base, clear glass facade",
+      "text": "photorealistic architectural render, professional architectural photography, 8k, sharp focus, realistic scale, modern residential building, eye-level two-point perspective exterior view, open countryside, grass ground plane, trees in background, golden hour sunlight, long soft shadows, warm sky bounce, vertical timber board cladding on exterior walls, timber door timber frame, glass dark metal frame windows, exposed concrete soffit, timber-clad parapet",
       "clip": ["1", 1]
     },
     "class_type": "CLIPTextEncode",
@@ -16,101 +14,126 @@
   },
   "3": {
     "inputs": {
-      "text": "ugly, blurry, distorted, cartoon, diagonal wood grain, random timber, dark scene, stormy, dramatic, neon glow, glowing floor, base illumination, emissive ground, extra wings, annexes, balconies, canopies, additions, extensions, watermark, text, oversaturated, deformed geometry",
+      "text": "ugly, blurry, distorted, cartoon, dark scene, stormy, neon glow, emissive ground, extra wings, annexes, canopies, watermark, text, oversaturated, deformed geometry, added extensions",
       "clip": ["1", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "Negative Prompt"}
   },
   "4": {
-    "inputs": {
-      "image": "capture_2026-05-26T06-01-31__depth.png"
-    },
+    "inputs": { "image": "capture_2026-05-26T06-01-31__depth.png" },
     "class_type": "LoadImage",
     "_meta": {"title": "Load Depth Map"}
   },
   "6": {
-    "inputs": {
-      "image": "capture_2026-05-26T06-01-31__silhouette.png"
-    },
+    "inputs": { "image": "capture_2026-05-26T06-01-31__silhouette.png" },
     "class_type": "LoadImage",
     "_meta": {"title": "Load Silhouette"}
   },
   "7": {
-    "inputs": {
-      "image": "capture_2026-05-26T06-01-31__opacity_mask.png"
-    },
+    "inputs": { "image": "capture_2026-05-26T06-01-31__opacity_mask.png" },
     "class_type": "LoadImage",
     "_meta": {"title": "Load Opacity Mask"}
   },
+  "30": {
+    "inputs": { "image": "capture_2026-05-26T06-01-31__normal.png" },
+    "class_type": "LoadImage",
+    "_meta": {"title": "Load Normal Map"}
+  },
   "8": {
-    "inputs": {
-      "upscale_method": "lanczos",
-      "width": 1024,
-      "height": 1024,
-      "crop": "disabled",
-      "image": ["4", 0]
-    },
+    "inputs": { "upscale_method": "lanczos", "width": 1024, "height": 1024, "crop": "disabled", "image": ["4", 0] },
     "class_type": "ImageScale",
     "_meta": {"title": "Scale Depth"}
   },
   "10": {
-    "inputs": {
-      "upscale_method": "lanczos",
-      "width": 1024,
-      "height": 1024,
-      "crop": "disabled",
-      "image": ["6", 0]
-    },
+    "inputs": { "upscale_method": "lanczos", "width": 1024, "height": 1024, "crop": "disabled", "image": ["6", 0] },
     "class_type": "ImageScale",
     "_meta": {"title": "Scale Silhouette"}
   },
+  "25": {
+    "inputs": { "upscale_method": "lanczos", "width": 1024, "height": 1024, "crop": "disabled", "image": ["7", 0] },
+    "class_type": "ImageScale",
+    "_meta": {"title": "Scale Opacity Mask"}
+  },
+  "31": {
+    "inputs": { "upscale_method": "lanczos", "width": 1024, "height": 1024, "crop": "disabled", "image": ["30", 0] },
+    "class_type": "ImageScale",
+    "_meta": {"title": "Scale Normal Map"}
+  },
   "11": {
-    "inputs": {
-      "control_net_name": "controlnet_depth_SDXL.safetensors"
-    },
+    "inputs": { "control_net_name": "controlnet_depth_SDXL.safetensors" },
     "class_type": "ControlNetLoader",
     "_meta": {"title": "CN Loader — Depth"}
   },
+  "33": {
+    "inputs": { "control_net_name": "controlnet-union-sdxl-1.0.safetensors" },
+    "class_type": "ControlNetLoader",
+    "_meta": {"title": "CN Loader — Normal (Union)"}
+  },
   "13": {
-    "inputs": {
-      "control_net_name": "controlnet-scribble-sdxl-1.0.safetensors"
-    },
+    "inputs": { "control_net_name": "controlnet-scribble-sdxl-1.0.safetensors" },
     "class_type": "ControlNetLoader",
     "_meta": {"title": "CN Loader — Silhouette"}
   },
+  "26": {
+    "inputs": { "control_net_name": "sdxl_segmentation_ade20k_controlnet.safetensors" },
+    "class_type": "ControlNetLoader",
+    "_meta": {"title": "CN Loader — Seg (ADE20K)"}
+  },
   "14": {
     "inputs": {
-      "strength": 0.85,
-      "start_percent": 0,
-      "end_percent": 1,
+      "strength": 0.65,
+      "start_percent": 0.0,
+      "end_percent": 1.0,
       "positive": ["2", 0],
       "negative": ["3", 0],
       "control_net": ["11", 0],
       "image": ["8", 0]
     },
     "class_type": "ControlNetApplyAdvanced",
-    "_meta": {"title": "Apply CN — Depth (0.85)"}
+    "_meta": {"title": "Apply CN — Depth (0.65)"}
+  },
+  "32": {
+    "inputs": {
+      "strength": 0.50,
+      "start_percent": 0.0,
+      "end_percent": 0.80,
+      "positive": ["14", 0],
+      "negative": ["14", 1],
+      "control_net": ["33", 0],
+      "image": ["31", 0]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {"title": "Apply CN — Normal (0.50, end 0.80)"}
   },
   "16": {
     "inputs": {
-      "strength": 0.75,
-      "start_percent": 0,
-      "end_percent": 1,
-      "positive": ["14", 0],
-      "negative": ["14", 1],
+      "strength": 0.45,
+      "start_percent": 0.0,
+      "end_percent": 0.65,
+      "positive": ["32", 0],
+      "negative": ["32", 1],
       "control_net": ["13", 0],
       "image": ["10", 0]
     },
     "class_type": "ControlNetApplyAdvanced",
-    "_meta": {"title": "Apply CN — Silhouette (0.75)"}
+    "_meta": {"title": "Apply CN — Silhouette (0.45, end 0.65)"}
+  },
+  "27": {
+    "inputs": {
+      "strength": 0.55,
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "positive": ["16", 0],
+      "negative": ["16", 1],
+      "control_net": ["26", 0],
+      "image": ["25", 0]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {"title": "Apply CN — Seg/Opacity (0.55)"}
   },
   "17": {
-    "inputs": {
-      "width": 1024,
-      "height": 1024,
-      "batch_size": 1
-    },
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 },
     "class_type": "EmptyLatentImage",
     "_meta": {"title": "Empty Latent Image"}
   },
@@ -118,7 +141,7 @@
     "inputs": {
       "seed": 1006571258638451,
       "steps": 30,
-      "cfg": 7.5,
+      "cfg": 7.0,
       "sampler_name": "dpmpp_2m",
       "scheduler": "karras",
       "denoise": 1,
@@ -131,71 +154,33 @@
     "_meta": {"title": "KSampler"}
   },
   "19": {
-    "inputs": {
-      "samples": ["18", 0],
-      "vae": ["1", 2]
-    },
+    "inputs": { "samples": ["18", 0], "vae": ["1", 2] },
     "class_type": "VAEDecode",
     "_meta": {"title": "VAE Decode"}
   },
   "20": {
-    "inputs": {
-      "filename_prefix": "arch_render_sdxl_multi",
-      "images": ["19", 0]
-    },
+    "inputs": { "filename_prefix": "arch_render_sdxl_multi", "images": ["19", 0] },
     "class_type": "SaveImage",
     "_meta": {"title": "Save Image"}
   },
   "21": {
-    "inputs": {
-      "images": ["8", 0]
-    },
+    "inputs": { "images": ["8", 0] },
     "class_type": "PreviewImage",
     "_meta": {"title": "Preview — Depth"}
   },
   "23": {
-    "inputs": {
-      "images": ["10", 0]
-    },
+    "inputs": { "images": ["10", 0] },
     "class_type": "PreviewImage",
     "_meta": {"title": "Preview — Silhouette"}
   },
-  "25": {
-    "inputs": {
-      "upscale_method": "lanczos",
-      "width": 1024,
-      "height": 1024,
-      "crop": "disabled",
-      "image": ["7", 0]
-    },
-    "class_type": "ImageScale",
-    "_meta": {"title": "Scale Opacity Mask"}
-  },
-  "26": {
-    "inputs": {
-      "control_net_name": "sdxl_segmentation_ade20k_controlnet.safetensors"
-    },
-    "class_type": "ControlNetLoader",
-    "_meta": {"title": "CN Loader — Seg (ADE20K)"}
-  },
-  "27": {
-    "inputs": {
-      "strength": 0.45,
-      "start_percent": 0,
-      "end_percent": 1,
-      "positive": ["16", 0],
-      "negative": ["16", 1],
-      "control_net": ["26", 0],
-      "image": ["25", 0]
-    },
-    "class_type": "ControlNetApplyAdvanced",
-    "_meta": {"title": "Apply CN — Seg/Opacity (0.45)"}
-  },
   "28": {
-    "inputs": {
-      "images": ["25", 0]
-    },
+    "inputs": { "images": ["25", 0] },
     "class_type": "PreviewImage",
     "_meta": {"title": "Preview — Opacity Mask"}
+  },
+  "34": {
+    "inputs": { "images": ["31", 0] },
+    "class_type": "PreviewImage",
+    "_meta": {"title": "Preview — Normal Map"}
   }
 }

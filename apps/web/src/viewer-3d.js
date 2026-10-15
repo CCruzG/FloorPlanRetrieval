@@ -76,6 +76,171 @@ export function createViewer3D({
     return out.toDataURL('image/png');
   }
 
+  function getRequestedCaptureSize(){
+    const rawWidth=parseInt(document.getElementById('py-width')?.value||'1024',10);
+    const rawHeight=parseInt(document.getElementById('py-height')?.value||'1024',10);
+    const width=Math.max(256,Math.min(2048,Number.isFinite(rawWidth)?rawWidth:1024));
+    const height=Math.max(256,Math.min(2048,Number.isFinite(rawHeight)?rawHeight:1024));
+    return {width,height};
+  }
+
+  function computeCenteredAspectRect(totalWidth,totalHeight,targetAspect){
+    const safeW=Math.max(1,Math.floor(totalWidth));
+    const safeH=Math.max(1,Math.floor(totalHeight));
+    const safeAspect=Math.max(1e-6,targetAspect||1);
+    let width=safeW;
+    let height=Math.round(width/safeAspect);
+    if(height>safeH){
+      height=safeH;
+      width=Math.round(height*safeAspect);
+    }
+    const x=Math.floor((safeW-width)/2);
+    const y=Math.floor((safeH-height)/2);
+    return {x,y,width,height};
+  }
+
+  function cropAndScaleImageData(srcImg,frameRect,targetWidth,targetHeight){
+    const srcCanvas=document.createElement('canvas');
+    srcCanvas.width=srcImg.width;
+    srcCanvas.height=srcImg.height;
+    const sctx=srcCanvas.getContext('2d');
+    sctx.putImageData(srcImg,0,0);
+
+    const outCanvas=document.createElement('canvas');
+    outCanvas.width=targetWidth;
+    outCanvas.height=targetHeight;
+    const octx=outCanvas.getContext('2d');
+    octx.imageSmoothingEnabled=true;
+    octx.imageSmoothingQuality='high';
+    octx.drawImage(
+      srcCanvas,
+      frameRect.x,
+      frameRect.y,
+      frameRect.width,
+      frameRect.height,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    );
+    return octx.getImageData(0,0,targetWidth,targetHeight);
+  }
+
+  function updateCaptureFrameGuide(){
+    const mount=document.getElementById('viewer-3d');
+    const guide=document.getElementById('capture-frame-guide');
+    const frameBox=document.getElementById('capture-frame-box');
+    const frameLabel=document.getElementById('capture-frame-label');
+    const toggle=document.getElementById('toggle-frame-guide');
+    if(!mount||!guide||!frameBox||!frameLabel)return;
+
+    const {width,height}=getRequestedCaptureSize();
+    const rect=computeCenteredAspectRect(mount.clientWidth,mount.clientHeight,width/Math.max(1,height));
+    guide.style.display=(toggle?.checked??true)?'block':'none';
+    frameBox.style.left=`${rect.x}px`;
+    frameBox.style.top=`${rect.y}px`;
+    frameBox.style.width=`${rect.width}px`;
+    frameBox.style.height=`${rect.height}px`;
+    frameLabel.textContent=`frame ${width}x${height}`;
+
+    layoutRenderPanelInShadedRegion(mount,rect);
+    layoutCapturePanelInShadedRegion(mount,rect);
+  }
+
+  function layoutRenderPanelInShadedRegion(mount,frameRect){
+    const panel=document.getElementById('render-panel');
+    if(!panel||!mount)return;
+
+    const toolbarHeight=36;
+    const pad=10;
+    const panelWidth=Math.ceil(panel.offsetWidth||360);
+    const panelHeight=Math.ceil(panel.offsetHeight||220);
+    const viewerW=Math.max(1,Math.floor(mount.clientWidth));
+    const viewerH=Math.max(1,Math.floor(mount.clientHeight));
+
+    const leftShade=frameRect.x-pad;
+    const rightShade=viewerW-(frameRect.x+frameRect.width)-pad;
+    const topShade=frameRect.y-pad;
+    const bottomShade=viewerH-(frameRect.y+frameRect.height)-pad;
+
+    panel.style.left='';
+    panel.style.right='';
+
+    if(rightShade>=panelWidth){
+      panel.style.right=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(leftShade>=panelWidth){
+      panel.style.left=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(topShade>=panelHeight){
+      panel.style.right=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(bottomShade>=panelHeight){
+      panel.style.right=`${pad}px`;
+      panel.style.top=`${toolbarHeight+frameRect.y+frameRect.height+pad}px`;
+      return;
+    }
+
+    panel.style.right=`${pad}px`;
+    panel.style.top=`${toolbarHeight+pad}px`;
+  }
+
+  function layoutCapturePanelInShadedRegion(mount,frameRect){
+    const panel=document.getElementById('capture-panel');
+    if(!panel||!mount)return;
+
+    const toolbarHeight=36;
+    const pad=10;
+    const panelWidth=Math.ceil(panel.offsetWidth||220);
+    const panelHeight=Math.ceil(panel.offsetHeight||220);
+    const viewerW=Math.max(1,Math.floor(mount.clientWidth));
+    const viewerH=Math.max(1,Math.floor(mount.clientHeight));
+
+    const leftShade=frameRect.x-pad;
+    const rightShade=viewerW-(frameRect.x+frameRect.width)-pad;
+    const topShade=frameRect.y-pad;
+    const bottomShade=viewerH-(frameRect.y+frameRect.height)-pad;
+
+    panel.style.left='';
+    panel.style.right='';
+
+    if(leftShade>=panelWidth){
+      panel.style.left=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(rightShade>=panelWidth){
+      panel.style.right=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(topShade>=panelHeight){
+      panel.style.left=`${pad}px`;
+      panel.style.top=`${toolbarHeight+pad}px`;
+      return;
+    }
+
+    if(bottomShade>=panelHeight){
+      panel.style.left=`${pad}px`;
+      panel.style.top=`${toolbarHeight+frameRect.y+frameRect.height+pad}px`;
+      return;
+    }
+
+    panel.style.left=`${pad}px`;
+    panel.style.top=`${toolbarHeight+pad}px`;
+  }
+
   function makeBinaryMaskDataUrl(maskImg){
     const out=new ImageData(new Uint8ClampedArray(maskImg.data),maskImg.width,maskImg.height);
     const d=out.data;
@@ -239,7 +404,7 @@ export function createViewer3D({
     return imageDataToDataUrl(out);
   }
 
-  function captureOpacityMaskDataUrl(scene,camera,renderer){
+  function captureOpacityMaskImageData(scene,camera,renderer){
     const prevOverride=scene.overrideMaterial;
     const prevBg=scene.background;
     const prevClr=renderer.getClearColor(new THREE.Color()).clone();
@@ -285,7 +450,7 @@ export function createViewer3D({
     const out=new ImageData(new Uint8ClampedArray(maskImg.data),maskImg.width,maskImg.height);
     const d=out.data;
     for(let i=0;i<d.length;i+=4)d[i+3]=255;
-    return imageDataToDataUrl(out);
+    return out;
   }
 
   function loadScriptOnce(src){
@@ -367,6 +532,16 @@ export function createViewer3D({
     renderer.setSize(w,h);
     mount.appendChild(renderer.domElement);
 
+    const frameGuide=document.createElement('div');
+    frameGuide.id='capture-frame-guide';
+    const frameBox=document.createElement('div');
+    frameBox.id='capture-frame-box';
+    const frameLabel=document.createElement('div');
+    frameLabel.id='capture-frame-label';
+    frameBox.appendChild(frameLabel);
+    frameGuide.appendChild(frameBox);
+    mount.appendChild(frameGuide);
+
     const controls=new THREE.OrbitControls(camera,renderer.domElement);
     controls.enableDamping=true;
     controls.target.set(5,0,5);
@@ -394,6 +569,23 @@ export function createViewer3D({
     viewer3D.planGroup=planGroup;
     viewer3D.initialized=true;
 
+    if(!viewer3D.captureSizeListenersBound){
+      ['py-width','py-height'].forEach((id)=>{
+        const input=document.getElementById(id);
+        if(!input)return;
+        input.addEventListener('input',updateCaptureFrameGuide);
+        input.addEventListener('change',updateCaptureFrameGuide);
+      });
+      const frameToggle=document.getElementById('toggle-frame-guide');
+      if(frameToggle){
+        frameToggle.addEventListener('input',updateCaptureFrameGuide);
+        frameToggle.addEventListener('change',updateCaptureFrameGuide);
+      }
+      viewer3D.captureSizeListenersBound=true;
+    }
+
+    updateCaptureFrameGuide();
+
     const animate=()=>{
       viewer3D.animId=requestAnimationFrame(animate);
       controls.update();
@@ -411,6 +603,7 @@ export function createViewer3D({
     viewer3D.camera.updateProjectionMatrix();
     viewer3D.renderer.setPixelRatio(window.devicePixelRatio||1);
     viewer3D.renderer.setSize(w,h);
+    updateCaptureFrameGuide();
   }
 
   function clear3DPlanGroup(){
@@ -453,7 +646,7 @@ export function createViewer3D({
   function planPtToSceneXY(pt,state){
     let [x,y]=planVertexToXY(pt);
     const cen=(state.rot||state.mirror)?bdryCenter(state.fpBdry):null;
-    if(state.mirror)x=2*cen[0]-x;
+    if(state.mirror)y=2*cen[1]-y;
     if(state.rot)[x,y]=rotatePtAround([x,y],state.rot,cen);
     x+=state.offset[0];
     y+=state.offset[1];
@@ -844,6 +1037,7 @@ export function createViewer3D({
     const scene=viewer3D.scene;
     const camera=viewer3D.camera;
     const renderer=viewer3D.renderer;
+    const {width:targetWidth,height:targetHeight}=getRequestedCaptureSize();
 
     const prevNear=camera.near;
     const prevFar=camera.far;
@@ -851,10 +1045,17 @@ export function createViewer3D({
 
     let captureNear=camera.near;
     let captureFar=camera.far;
+    let captureRectPx=null;
 
     let captured;
     let previewDataUrl=null;
     try{
+      captureRectPx=computeCenteredAspectRect(
+        renderer.domElement.width,
+        renderer.domElement.height,
+        targetWidth/Math.max(1,targetHeight),
+      );
+
       const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
       if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){
         const center=bounds.getCenter(new THREE.Vector3());
@@ -873,14 +1074,20 @@ export function createViewer3D({
       captured=withCaptureVisibility(()=>{
         scene.overrideMaterial=depthMat;
         renderer.render(scene,camera);
-        const depthImg=captureCanvasImageData(renderer.domElement);
+        const depthImgFull=captureCanvasImageData(renderer.domElement);
+        const maskImgFull=captureMaskImageData(scene,camera,renderer);
+        const normalImgFull=captureNormalImageData(scene,camera,renderer);
+        const opacityImgFull=captureOpacityMaskImageData(scene,camera,renderer);
 
-        const maskImg=captureMaskImageData(scene,camera,renderer);
-        const normalImg=captureNormalImageData(scene,camera,renderer);
+        const depthImg=cropAndScaleImageData(depthImgFull,captureRectPx,targetWidth,targetHeight);
+        const maskImg=cropAndScaleImageData(maskImgFull,captureRectPx,targetWidth,targetHeight);
+        const normalImg=cropAndScaleImageData(normalImgFull,captureRectPx,targetWidth,targetHeight);
+        const opacityImg=cropAndScaleImageData(opacityImgFull,captureRectPx,targetWidth,targetHeight);
+
         const depthDataUrl=makeDepthDataUrlFromImageData(depthImg,maskImg,captureNear,captureFar);
         const maskDataUrl=makeBinaryMaskDataUrl(maskImg);
         const normalDataUrl=makeNormalDataUrlFromImageData(normalImg,maskImg);
-        const opacityMaskDataUrl=captureOpacityMaskDataUrl(scene,camera,renderer);
+        const opacityMaskDataUrl=imageDataToDataUrl(opacityImg);
         return {
           depthDataUrl,
           maskDataUrl,
@@ -895,7 +1102,9 @@ export function createViewer3D({
       camera.updateProjectionMatrix();
       scene.overrideMaterial=null;
       renderer.render(scene,camera);
-      previewDataUrl=renderer.domElement.toDataURL('image/png');
+      const previewFull=captureCanvasImageData(renderer.domElement);
+      const previewCrop=cropAndScaleImageData(previewFull,captureRectPx,targetWidth,targetHeight);
+      previewDataUrl=imageDataToDataUrl(previewCrop);
       depthMat.dispose();
     }
 
@@ -908,8 +1117,9 @@ export function createViewer3D({
     renderCaptureState.capturedAt=new Date().toISOString();
     renderCaptureState.activeView='preview';
     updateCapturePanel();
+    updateCaptureFrameGuide();
     refreshStructuredPromptPreview();
-    setViewer3DStatus(`Maps captured (near ${captureNear.toFixed(3)}, far ${captureFar.toFixed(3)}).`);
+    setViewer3DStatus(`Maps captured inside frame ${targetWidth}x${targetHeight} (near ${captureNear.toFixed(3)}, far ${captureFar.toFixed(3)}).`);
   }
 
   return {

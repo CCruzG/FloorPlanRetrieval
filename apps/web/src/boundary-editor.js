@@ -148,7 +148,7 @@ export function createBoundaryEditor({
   }
 
   function saveBoundary(){
-    const { closed, boundary, entrance, req }=getState();
+    const { closed, boundary, entrance, edgeTypes, req }=getState();
     if(!closed||boundary.length<3){alert('Close the boundary first.');return;}
     const defaultName='boundary '+(libLoad().length+1);
     const el=doc.getElementById('lib-list');
@@ -170,6 +170,7 @@ export function createBoundaryEditor({
         name,
         vertices:boundary.map(({x,y})=>({x,y})),
         entrance:entrance?{x:entrance.x,y:entrance.y}:null,
+        edgeTypes:Array.isArray(edgeTypes)?edgeTypes.slice():[],
         saved:new Date().toISOString(),
         requirements:{bedrooms:req.bedrooms,bathrooms:req.bathrooms},
       });
