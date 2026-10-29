@@ -1133,6 +1133,134 @@ def topo_check_route():
                     "node_pos": topo.get("node_pos", {}), **result})
 
 
+# ── /generate endpoint (Stage 0 — node-driven geometric solver) ───────────────
+
+@app.route("/generate", methods=["POST"])
+def generate_route():
+    """
+    Stage 0 of the agent harness (docs/agent-harness-build-plan.md): realise room
+    geometry from the GRAPH — node positions + boundary — via the node-driven
+    solver (packages.floorplan_core.generate), not from the source plan's bboxes.
+
+    Node positions come from the topology layer (topological_fitness, the same
+    placement the topology graph is drawn from), so the generated rooms sit on the
+    same nodes the Observe/Act loop manipulates. Pass `swap: [id_a, id_b]` to edit
+    the Spec's node assignment and re-derive geometry through the seam — the
+    Stage-0 proof that the agent writes a Spec and the Generator realises it.
+
+    Request body (JSON):
+        fp             : plan dict ('rooms', 'edges', 'entrance')
+        boundary       : [[x, y], ...] target boundary polygon
+        entrance_point : [x, y] target entrance point, same space as boundary
+        typed_edges    : optional target [{edge_index, type}] (defaulted like /retrieve)
+        requirements   : optional {bedrooms, bathrooms}
+        swap           : optional [id_a, id_b] — reassign two rooms' nodes
+        mm_per_unit    : optional float — boundary-units -> mm (enables min-size);
+                         defaults to the plan SCALE when omitted
+
+    Response (JSON): {status, rooms, node_pos, room_edges, spec_nodes, feasible,
+    report} — report.debug_steps carries the per-stage snapshot for the visual test.
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    fp = body.get("fp")
+    boundary = body.get("boundary")
+    entrance_point = body.get("entrance_point")
+    typed_edges = body.get("typed_edges")
+    requirements = body.get("requirements")
+    swap = body.get("swap")
+    mm_per_unit = body.get("mm_per_unit")
+
+    if not isinstance(fp, dict) or not fp.get("rooms"):
+        return jsonify({"error": "missing or invalid 'fp' (must have rooms)"}), 400
+    if not isinstance(boundary, list) or len(boundary) < 3:
+        return jsonify({"error": "boundary must be a list of at least 3 [x, y] points"}), 400
+    if not entrance_point:
+        return jsonify({"error": "missing entrance_point"}), 400
+
+    try:
+        from packages.floorplan_core.generate import (
+            spec_from_plan, generate, reassign, SCALE as _PLAN_SCALE,
+        )
+        # The frontend does not send mm_per_unit; without it the solver drops every
+        # min_edge to 0. Default to the plan scale (boundary units -> mm).
+        if not mm_per_unit:
+            mm_per_unit = float(_PLAN_SCALE)
+        # Resolve boundary edge types the same way /retrieve and /topo_check do,
+        # then compute the topology layer so node_pos (and room_edges for the
+        # drawn connectors) match the placement the graph is drawn from.
+        resolved_types = default_edge_types(boundary, entrance_point)
+        for e in typed_edges or []:
+            i = e.get("edge_index")
+            if i is not None and 0 <= i < len(boundary) and e.get("type"):
+                resolved_types[i] = e["type"]
+        topo = topological_fitness(
+            fp, target_boundary=boundary, target_edge_types=resolved_types,
+            entrance_point=entrance_point, requirements=requirements,
+        )
+        fp_with_nodes = dict(fp)
+        fp_with_nodes["node_pos"] = body.get("node_pos") or topo.get("node_pos", {})
+
+        # Score against the DRAWN entrance (target frame), not the source plan's
+        # entrance (source frame): the generated geometry sits in the drawn
+        # boundary, so entry-room detection must use where the user put the door.
+        drawn_entrance = ([entrance_point[0], entrance_point[1],
+                           entrance_point[0], entrance_point[1]]
+                          if entrance_point else fp.get("entrance"))
+        spec = spec_from_plan(
+            fp_with_nodes, boundary, edge_types=resolved_types,
+            entrance=drawn_entrance, mm_per_unit=mm_per_unit,
+        )
+        # Thread the room↔boundary target (which target edge each room should front,
+        # from the topo-rank ring alignment) into the Spec so the realiser honours it
+        # (generate step 2b). Keyed by room id; survives a swap (demand follows
+        # identity, which is what the swap edits the node of, not the id).
+        boundary_demands = {}
+        for rid, contacts in (topo.get("room_edges") or {}).items():
+            idxs = sorted({c.get("target_edge_index") for c in contacts
+                           if c.get("target_edge_index") is not None})
+            if idxs:
+                boundary_demands[str(rid)] = idxs
+        spec["boundary_demands"] = boundary_demands
+        if swap and len(swap) == 2:
+            spec = reassign(spec, swap[0], swap[1])
+        plan = generate(spec)
+        # Re-derive room↔boundary from the GENERATED geometry. The solver re-tiles
+        # the boundary, so the source's room_edges are stale (a room drawn off an
+        # edge still carried the source contact — the LR→west phantom). Polygons are
+        # in target space, so raycast directly, skipping the display transform.
+        from packages.floorplan_core.topo_signature import _raycast_room_edges
+        gen_room_edges = _raycast_room_edges(
+            plan, boundary, entrance_point, mirror=False,
+            target_edge_types=resolved_types, node_pos=plan.get("node_pos"),
+            in_target_space=True,
+        )
+        # Stage-1: score the generated geometry with the sensor registry, using the
+        # freshly re-derived room_edges so daylight/capacity judge the realised frontage.
+        from packages.floorplan_core.topo_sensors import run_sensors
+        sensors = run_sensors(plan, gen_room_edges,
+                              requirements=requirements, target_boundary=boundary,
+                              spec=spec)
+    except Exception as exc:
+        logger.exception("generate failed")
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({
+        "status": "ok",
+        "rooms": plan["rooms"],
+        "edges": plan.get("edges", []),
+        "node_pos": plan.get("node_pos", {}),
+        "room_edges": gen_room_edges,
+        "spec_nodes": spec["node_assignment"],
+        "feasible": plan["feasible"],
+        "report": plan["report"],
+        "sensors": sensors,
+    })
+
+
 # ── CLI / entry point ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

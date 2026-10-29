@@ -237,7 +237,9 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); font-si
 #render-result img { width:100%; height:auto; object-fit:contain; display:block; }
 #render-result-meta { border-top:1px solid #e5e7eb; background:#fff; color:#4b5563; font-size:10px; padding:6px; line-height:1.4; }
 
-#sidebar { width:196px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+#sidebar { width:196px; min-width:150px; max-width:560px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+#sidebar-resizer { width:5px; flex-shrink:0; cursor:col-resize; background:transparent; transition:background 0.12s; }
+#sidebar-resizer:hover, #sidebar-resizer.dragging { background:var(--accent, #3b82f6); }
 .ss { padding:10px 12px; border-bottom:1px solid var(--border); }
 .sl { font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
 
@@ -342,6 +344,31 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 .pd-violation.blocking { border-left-color:var(--red); color:var(--text); }
 .pd-violation .pd-v-head { font-weight:500; }
 #pd-empty-state { font-size:11px; color:var(--muted); text-align:center; padding:40px 20px; line-height:1.6; }
+
+/* ── Floating info HUD (over the 2D canvas) ──────────────────────────── */
+#hud { position:absolute; top:46px; right:10px; width:234px; max-height:calc(100% - 56px); display:flex; flex-direction:column; background:rgba(24,28,39,0.93); border:1px solid var(--border2); border-radius:8px; backdrop-filter:blur(4px); z-index:11; overflow:hidden; }
+#hud-head { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; border-bottom:1px solid var(--border); cursor:pointer; flex-shrink:0; user-select:none; }
+#hud-head .sl { margin:0; }
+#hud-head .hud-caret { color:var(--muted); font-size:9px; }
+#hud-head .hud-caret::after { content:'▾ hide'; }
+#hud-body { overflow-y:auto; }
+#hud-body .ss:last-child { border-bottom:none; }
+#hud.collapsed #hud-body { display:none; }
+#hud.collapsed #hud-head { border-bottom:none; }
+#hud.collapsed .hud-caret::after { content:'▸ show'; }
+#stage1-sensors-label { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+#btn-copy-sensors { border:1px solid var(--border2); background:transparent; color:var(--muted); font-family:var(--mono); font-size:9px; letter-spacing:0.04em; text-transform:none; padding:2px 6px; border-radius:3px; cursor:pointer; line-height:1.4; }
+#btn-copy-sensors:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── Collapsible sidebar drawers (parameters, dev / legacy) ──────────── */
+details.ss > summary { list-style:none; cursor:pointer; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:7px; user-select:none; }
+details.ss > summary::-webkit-details-marker { display:none; }
+details.ss > summary::before { content:'▸'; font-size:9px; color:var(--muted); }
+details.ss[open] > summary::before { content:'▾'; }
+details.ss[open] > summary { margin-bottom:8px; }
+#dev-drawer[open] { background:rgba(30,36,54,0.45); }
+#dev-drawer .sl { margin-top:10px; }
+#dev-drawer .sl:first-of-type { margin-top:0; }
 </style>
 </head>
 <body>
@@ -355,33 +382,6 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 
   <div id="sidebar">
     <div class="ss">
-      <div class="sl">index</div>
-      <div class="dz" id="dz-bin">
-        <input type="file" id="fi-bin" accept=".bin">
-        <span class="dz-tag">BIN</span><span class="dz-name" id="lbl-bin">index.bin</span>
-      </div>
-      <div class="dz" id="dz-nms">
-        <input type="file" id="fi-nms" accept=".json">
-        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-nms">index_names.json</span>
-      </div>
-      <div class="dz" id="dz-pls">
-        <input type="file" id="fi-pls" accept=".json" multiple>
-        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-pls">plan files (multi)</span>
-      </div>
-      <div id="idx-st" style="font-size:10px;color:var(--muted);padding:2px 0">—</div>
-      <button class="clear-btn" id="btn-clear-plan-cache" style="margin-top:4px">clear plan cache</button>
-    </div>
-
-    <div class="ss">
-      <div class="sl">architectural drawing</div>
-      <div class="dz" id="dz-plan-drawing">
-        <input type="file" id="fi-plan-drawing" accept=".json">
-        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-plan-drawing">load FloorPlan fixture…</span>
-      </div>
-      <div class="hint" style="margin-top:2px">schema.py contract — the export_schema_fixture.py output shape ({boundary, plan, violations})</div>
-    </div>
-
-    <div class="ss">
       <div class="sl">draw</div>
       <div class="hint">
         <kbd>click</kbd> add vertex<br>
@@ -390,7 +390,6 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <kbd>esc</kbd> clear
       </div>
       <button class="clear-btn" id="btn-clear-boundary">clear boundary</button>
-      <button class="clear-btn" id="btn-save-boundary" style="margin-top:4px">save boundary…</button>
       <div id="entrance-controls" style="display:none;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
         <div class="sl" style="margin-bottom:4px">entrance</div>
         <button class="mode-btn" id="btn-entrance-mode">
@@ -414,6 +413,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
 
     <div class="ss" id="lib-section">
       <div class="sl">boundary library</div>
+      <button class="clear-btn" id="btn-save-boundary" style="width:100%;margin-bottom:6px">+ add current boundary</button>
       <div id="lib-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
       <button class="clear-btn" id="btn-export-library" style="width:100%">export library JSON</button>
       <label class="clear-btn" style="width:100%;text-align:center;cursor:pointer;margin-top:4px">
@@ -446,37 +446,35 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
     </div>
 
     <div class="ss">
-      <div class="sl">parameters</div>
-      <div class="field">
-        <label>results <span id="v-topn">5</span></label>
-        <input id="rng-topn" type="range" min="1" max="20" value="5" step="1">
-      </div>
-      <div class="field">
-        <label>shape weight <span id="v-sw">1.0</span></label>
-        <input id="rng-shape-weight" type="range" min="0" max="2" value="1.0" step="0.1">
-      </div>
-      <div class="field">
-        <label>entrance weight <span id="v-entw">2.0</span></label>
-        <input id="rng-entrance-weight" type="range" min="0" max="4" value="2.0" step="0.1">
-      </div>
-      <div class="field">
-        <label>room weight <span id="v-rmw">1.0</span></label>
-        <input id="rng-room-weight" type="range" min="0" max="2" value="1.0" step="0.1">
-      </div>
+      <div class="sl">retrieve</div>
       <div class="field">
         <label><input type="checkbox" id="chk-graph">
         show room graph</label>
         <label><input type="checkbox" id="chk-plan-geom" checked>
         plan geometry</label>
       </div>
+      <details class="ss" style="padding:0;border:none;margin-bottom:8px">
+        <summary>weights &amp; results</summary>
+        <div class="field" style="margin-top:8px">
+          <label>results <span id="v-topn">5</span></label>
+          <input id="rng-topn" type="range" min="1" max="20" value="5" step="1">
+        </div>
+        <div class="field">
+          <label>shape weight <span id="v-sw">1.0</span></label>
+          <input id="rng-shape-weight" type="range" min="0" max="2" value="1.0" step="0.1">
+        </div>
+        <div class="field">
+          <label>entrance weight <span id="v-entw">2.0</span></label>
+          <input id="rng-entrance-weight" type="range" min="0" max="4" value="2.0" step="0.1">
+        </div>
+        <div class="field">
+          <label>room weight <span id="v-rmw">1.0</span></label>
+          <input id="rng-room-weight" type="range" min="0" max="2" value="1.0" step="0.1">
+        </div>
+      </details>
       <button class="run-btn" id="run-btn" disabled>retrieve</button>
       <button class="clear-btn" id="btn-feasibility-check" style="width:100%;margin-top:4px">&#9683; check fit (pre-analysis)</button>
       <div id="feasibility-result" style="font-size:10px;margin-top:4px;line-height:1.55"></div>
-    </div>
-
-    <div class="ss" id="topo-flags-section" style="display:none">
-      <div class="sl">topology checks</div>
-      <div id="topo-flags-panel" style="font-size:10px;line-height:1.6"></div>
     </div>
 
     <div class="ss">
@@ -486,18 +484,43 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
       <div id="swap-readout" style="font-size:10px;margin-top:4px;line-height:1.5"></div>
     </div>
 
-    <div class="ss">
-      <div class="sl">stats</div>
-      <div class="stat"><span class="stat-k">index</span><span class="stat-v" id="s-idx">—</span></div>
-      <div class="stat"><span class="stat-k">plans loaded</span><span class="stat-v" id="s-pls">0</span></div>
-      <div class="stat"><span class="stat-k">boundary verts</span><span class="stat-v" id="s-bv">—</span></div>
-      <div class="stat"><span class="stat-k">entrance</span><span class="stat-v" id="s-ent">—</span></div>
-      <div class="stat"><span class="stat-k">scale</span><span class="stat-v">1 unit = 18 m</span></div>
+    <div class="ss" id="generate-section" style="display:none">
+      <div class="sl">stage 0 · generate from nodes</div>
+      <button class="clear-btn" id="btn-generate" style="width:100%" disabled>generate geometry from nodes</button>
+      <button class="clear-btn" id="btn-generate-swap" style="width:100%;margin-top:4px" disabled>generate + swap selected</button>
+      <button class="clear-btn" id="btn-generate-reset" style="width:100%;margin-top:4px;display:none">reset generate</button>
+      <div id="generate-readout" style="font-size:10px;margin-top:4px;line-height:1.5"></div>
     </div>
-    <div class="ss" id="legend">
-      <div class="sl">legend</div>
-    </div>
+
+    <details class="ss" id="dev-drawer">
+      <summary>dev / legacy</summary>
+
+      <div class="sl">index</div>
+      <div class="dz" id="dz-bin">
+        <input type="file" id="fi-bin" accept=".bin">
+        <span class="dz-tag">BIN</span><span class="dz-name" id="lbl-bin">index.bin</span>
+      </div>
+      <div class="dz" id="dz-nms">
+        <input type="file" id="fi-nms" accept=".json">
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-nms">index_names.json</span>
+      </div>
+      <div class="dz" id="dz-pls">
+        <input type="file" id="fi-pls" accept=".json" multiple>
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-pls">plan files (multi)</span>
+      </div>
+      <div id="idx-st" style="font-size:10px;color:var(--muted);padding:2px 0">—</div>
+      <button class="clear-btn" id="btn-clear-plan-cache" style="margin-top:4px">clear plan cache</button>
+
+      <div class="sl">architectural drawing</div>
+      <div class="dz" id="dz-plan-drawing">
+        <input type="file" id="fi-plan-drawing" accept=".json">
+        <span class="dz-tag">JSON</span><span class="dz-name" id="lbl-plan-drawing">load FloorPlan fixture…</span>
+      </div>
+      <div class="hint" style="margin-top:2px">schema.py contract — the export_schema_fixture.py output shape ({boundary, plan, violations})</div>
+    </details>
   </div>
+
+  <div id="sidebar-resizer" title="drag to resize"></div>
 
   <div id="viewer-shell">
     <div id="view-tabs">
@@ -520,6 +543,42 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
           <label><input type="checkbox" id="chk-show-win" checked> windows</label>
           <label><input type="checkbox" id="chk-show-idoors" checked> int. doors</label>
           <label><input type="checkbox" id="chk-show-common" checked> common area</label>
+        </div>
+
+        <div id="hud">
+          <div id="hud-head" onclick="document.getElementById('hud').classList.toggle('collapsed')">
+            <span class="sl">readouts</span><span class="hud-caret"></span>
+          </div>
+          <div id="hud-body">
+
+            <div class="ss" id="topo-flags-section" style="display:none">
+              <div class="sl">topology checks</div>
+              <div id="topo-flags-panel" style="font-size:10px;line-height:1.6"></div>
+            </div>
+
+            <div class="ss" id="hud-sensors">
+              <div class="sl" id="stage1-sensors-label" style="display:none">
+                <span>stage 1 · sensors</span>
+                <button id="btn-copy-sensors" title="copy sensor output for debugging">copy</button>
+              </div>
+              <div id="stage1-sensors" style="font-size:11.5px;font-weight:500;margin-top:2px;line-height:1.55;letter-spacing:0.01em"></div>
+            </div>
+
+            <div class="ss" id="hud-rooms" style="display:none">
+              <div class="sl">room areas</div>
+              <div id="room-areas" style="font-size:11px;line-height:1.6"></div>
+            </div>
+
+            <div class="ss">
+              <div class="sl">stats</div>
+              <div class="stat"><span class="stat-k">index</span><span class="stat-v" id="s-idx">—</span></div>
+              <div class="stat"><span class="stat-k">plans loaded</span><span class="stat-v" id="s-pls">0</span></div>
+              <div class="stat"><span class="stat-k">boundary verts</span><span class="stat-v" id="s-bv">—</span></div>
+              <div class="stat"><span class="stat-k">entrance</span><span class="stat-v" id="s-ent">—</span></div>
+              <div class="stat"><span class="stat-k">scale</span><span class="stat-v">1 unit = 18 m</span></div>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>
@@ -726,8 +785,9 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <div id="results-empty">run retrieval to see results</div>
       </div>
       <button class="clear-btn" id="btn-draw-architectural" style="margin:8px;flex-shrink:0">draw architecturally &rarr;</button>
-      <div style="margin:0 8px 8px;flex-shrink:0;border-top:1px solid var(--border);padding-top:8px">
-        <div class="hint" style="margin-bottom:4px">ARAP debug — drawn on canvas, not a separate renderer</div>
+      <details style="margin:0 8px 8px;flex-shrink:0;border-top:1px solid var(--border);padding-top:8px">
+        <summary style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none">ARAP debug (legacy)</summary>
+        <div class="hint" style="margin:6px 0 4px">drawn on canvas, not a separate renderer</div>
         <button class="clear-btn" id="btn-arap-align-canvas" style="width:100%;margin-bottom:4px">1 &middot; align (similarity_align)</button>
         <button class="clear-btn" id="btn-arap-solve-canvas" style="width:100%;margin-bottom:4px">2 &middot; ARAP adaptation (arap_solve)</button>
         <button class="clear-btn" id="btn-arap-rectify-canvas" style="width:100%;margin-bottom:4px">3 &middot; rectify (rectify_mesh + rectify_rooms)</button>
@@ -736,7 +796,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         <button class="clear-btn" id="btn-arap-agent-canvas" style="width:100%;margin-bottom:4px">6 &middot; agent refine (orchestrate_refinement — slow, calls Ollama)</button>
         <button class="clear-btn" id="btn-arap-arrange-canvas" style="width:100%;margin-bottom:4px">&#9656; arrange (rectangular dual — replaces 2&ndash;4)</button>
         <button class="clear-btn" id="btn-arap-clear-canvas" style="width:100%">clear overlay</button>
-      </div>
+      </details>
     </div>
 
     <!-- fit palette — shown in Fit tab -->

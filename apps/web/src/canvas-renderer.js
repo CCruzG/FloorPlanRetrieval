@@ -69,6 +69,8 @@ export function createCanvasRenderer({
       arapDebugLabel,
       arapDebugDoor,
       arapDebugReport,
+      generatedRooms,
+      generatedNodes,
     }=getState();
 
     const vpZoom=viewport?.zoom??1;
@@ -128,7 +130,11 @@ export function createCanvasRenderer({
       // retrieved-plan preview underneath it is just visual noise — hide it
       // rather than draw both on top of each other.
       const arapActive=!!(arapDebugRooms&&arapDebugRooms.length);
-      const planVisible=!arapActive&&(!isFitTab||(fitState?.showOriginal!==false));
+      // Stage-0 generated geometry is its own target-space overlay (drawn below);
+      // while it is up, hide the source-space preview + source graph the same way
+      // the ARAP debug overlay does, so the two coordinate frames never overlap.
+      const genActive=!!(generatedRooms&&generatedRooms.length);
+      const planVisible=!arapActive&&!genActive&&(!isFitTab||(fitState?.showOriginal!==false));
       // params.showPlanGeom (default true) is the master switch for the plan's
       // polygonal layer — rooms, plan boundary, doors, windows, entrance — so it
       // can be dropped to read the topology graph alone. The query boundary
@@ -142,7 +148,7 @@ export function createCanvasRenderer({
       // preview and the fit tab stay native size. n2c, drawFP's fit-box and the
       // graph's own t() are the same mapping (pad 0.07), so a canvas-space scale
       // about n2c(qc) contains all three consistently.
-      const useTargetGraph=!isFitTab&&params.showGraph
+      const useTargetGraph=!isFitTab&&!genActive&&params.showGraph
         &&results[selected].retrieval?.room_edges&&boundary.length>=3;
       let containScale=null;
       if(useTargetGraph){
@@ -178,7 +184,7 @@ export function createCanvasRenderer({
         if(containScale)ctx.restore();
         if(isFitTab)ctx.globalAlpha=1.0;
       }
-      if(!arapActive&&(params.showGraph||(isFitTab&&fitState?.showGraph&&!fitState?.mappedGraph))){
+      if(!arapActive&&!genActive&&(params.showGraph||(isFitTab&&fitState?.showGraph&&!fitState?.mappedGraph))){
         // Prefer the rich topology graph (nodes + adjacency + room->boundary
         // connectors) — same renderer the retrieval cards use. room_edges is
         // keyed to the ORIGINAL retrieved plan's boundary, so draw rawPlan (not
@@ -197,7 +203,7 @@ export function createCanvasRenderer({
         drawFitGraph(ctx,fitState.mappedGraph);
 
       const ent=fp.entrance;
-      if(!arapActive&&showPlanGeom&&ent&&ent.length===4){
+      if(!arapActive&&!genActive&&showPlanGeom&&ent&&ent.length===4){
         const cen=bdryCenter(fp.boundary||[]);
         let [ex1,ey1]=[ent[0],ent[1]];
         let [ex2,ey2]=[ent[2],ent[3]];
@@ -297,6 +303,78 @@ export function createCanvasRenderer({
         // (updateCanvasHud in main.js), not painted here — so it stays put under
         // pan/zoom. Only the per-room flags above are drawn on the canvas.
       }
+    }
+
+    // ── Stage-0 generated overlay (node-driven solver, /generate) ────────────
+    // generatedRooms are ALREADY in target (drawn-boundary) space, drawn with the
+    // pad-0.07 fit-box (toPx) — the same mapping as n2c and the boundary overlay —
+    // so they land inside the drawn boundary with no source->target display trick.
+    // Gate on generatedRooms directly: genActive is scoped to the selected-plan
+    // branch above and is not in scope here.
+    if(generatedRooms&&generatedRooms.length){
+      // Draw directly (not via drawFP, which colours by numeric source_type the
+      // retrieved plan may not carry): a distinct translucent colour per room +
+      // a dark outline so adjacent rooms are separable, the room label at the
+      // centroid, and the node dot on top so "node inside its room" is visible.
+      const pad=0.07,sc=Math.min(cW,cH)*(1-2*pad),dox=(cW-sc)/2,doy=(cH-sc)/2;
+      const toPx=([x,y])=>[x*sc+dox,y*sc+doy];
+      const GPAL=['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb7185','#22d3ee','#a3e635','#fca5a5','#c4b5fd'];
+      ctx.save();
+      (generatedRooms||[]).forEach((room,ri)=>{
+        if(!room.polygon||room.polygon.length<3)return;
+        ctx.beginPath();
+        room.polygon.forEach((p,i)=>{const[px,py]=toPx(p);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);});
+        ctx.closePath();
+        ctx.fillStyle=GPAL[ri%GPAL.length]+'99';ctx.fill();
+        ctx.strokeStyle='#1e293b';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
+        const cx=room.polygon.reduce((a,p)=>a+p[0],0)/room.polygon.length;
+        const cy=room.polygon.reduce((a,p)=>a+p[1],0)/room.polygon.length;
+        const[lx,ly]=toPx([cx,cy]);
+        ctx.fillStyle='#0f172a';ctx.font='10px monospace';ctx.textAlign='center';
+        ctx.fillText(String(room.type??room.id),lx,ly);
+      });
+      // redraw the topology graph over the generated geometry: adjacency edges
+      // between the (re-placed) nodes, so the graph matches the new layout. Solid
+      // = door/open (connection 1), faint dashed = adjacency without a door.
+      const genEdges=(results[selected]?.fp?.edges)||[];
+      genEdges.forEach((e)=>{
+        const a=generatedNodes?.[String(e.u)],b=generatedNodes?.[String(e.v)];
+        if(!Array.isArray(a)||!Array.isArray(b))return;
+        const[ax,ay]=toPx(a),[bx,by]=toPx(b);
+        const open=(e.connection===1);
+        ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+        ctx.strokeStyle=open?'rgba(15,23,42,0.6)':'rgba(15,23,42,0.22)';
+        ctx.lineWidth=open?2:1;ctx.setLineDash(open?[]:[3,3]);ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      // room↔boundary connectors (room_edges) over the generated geometry — the same
+      // data the sensors read, so the realised frontage of each room is visible here
+      // too (the graph view only draws them when the overlay is off).
+      const _etc={external:'#22c55e',shared_wall:'#64748b',facing_corridor:'#eab308'};
+      const genRE=results[selected]?.retrieval?.room_edges||{};
+      Object.entries(genRE).forEach(([rid,conns])=>{
+        const node=generatedNodes?.[String(rid)];
+        if(!Array.isArray(node)||node.length<2)return;
+        const[gnx,gny]=toPx(node);
+        (Array.isArray(conns)?conns:[]).forEach((cn)=>{
+          if(!Array.isArray(cn?.target_point)||cn.target_point.length<2)return;
+          const[tx,ty]=toPx(cn.target_point);
+          ctx.beginPath();ctx.moveTo(gnx,gny);ctx.lineTo(tx,ty);
+          ctx.strokeStyle=_etc[cn.edge_type]||'rgba(15,23,42,0.5)';
+          ctx.lineWidth=1.5;ctx.setLineDash([2,2]);ctx.stroke();
+        });
+      });
+      ctx.setLineDash([]);
+      Object.values(generatedNodes||{}).forEach((p)=>{
+        if(!Array.isArray(p)||p.length<2)return;
+        const[px,py]=toPx(p);
+        ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);
+        ctx.fillStyle='#111827';ctx.fill();
+        ctx.lineWidth=2;ctx.strokeStyle='#fff';ctx.stroke();
+      });
+      ctx.restore();
+      ctx.fillStyle='#1e293b';ctx.font='11px monospace';ctx.textAlign='left';
+      ctx.fillText('stage 0 · generated from nodes',8,cH-8);
     }
 
     if(!closed&&boundary.length>=1){

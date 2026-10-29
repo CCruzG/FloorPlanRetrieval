@@ -11,7 +11,9 @@ from .geo_ent_num_retrieval import (
     ENT_DIM,
     ROOM_DIM,
 )
-from .topo_signature import topological_fitness, default_edge_types
+from .topo_signature import (
+    topological_fitness, default_edge_types, filter_corner_adjacencies,
+)
 from .topo_sensors import run_sensors
 
 
@@ -177,6 +179,9 @@ def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
         p["retrieval"]["shape_dist"] = None if shape_dists[rank] is None else float(shape_dists[rank])
         p["retrieval"]["ent_dist"] = None if ent_dists[rank] is None else float(ent_dists[rank])
         p["retrieval"]["room_dist"] = None if room_dists[rank] is None else float(room_dists[rank])
+        # Drop corner-only room↔room edges: a point contact is not an adjacency, so
+        # it must not enter the drawn graph, generation, or reachability.
+        filter_corner_adjacencies(p)
         result_list.append(p)
 
     if not result_list:

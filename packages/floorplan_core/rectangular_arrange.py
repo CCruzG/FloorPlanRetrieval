@@ -579,6 +579,66 @@ def _dropped_adjacency(source_edges, rooms, realised_adj) -> list:
     return dropped
 
 
+def reconcile_edges(realised_adj, source_edges):
+    """Rebuild the room↔room edge list to match a realised layout after a move.
+
+    `realised_adj`: {frozenset({id_a, id_b}), ...} — the pairs the realised geometry
+        actually makes share a wall (from _realised_adjacency), keyed by room id.
+    `source_edges`: the plan's carried edges [{u, v, connection, open?, type?}, ...].
+
+    The two edge kinds get opposite treatment, because they mean different things:
+      • CONNECTION edges (door=1 / open=2) are design intent tied to a room's
+        identity. They are carried onto the realised layout wherever the two rooms
+        are STILL adjacent; a connection whose rooms no longer touch is a DROPPED
+        connection — surfaced, not silently kept, because it is the move's
+        feasibility cost (the linearity-paper "guard-limited" signal).
+      • WALL edges (connection 0 / adjacency-only) are a by-product of the layout,
+        not intent. Carried wall edges are discarded and re-derived: every realised
+        adjacency with no surviving connection becomes a plain wall edge. This is
+        what stops a moved room from dragging a stale wall adjacency to a place the
+        two rooms no longer touch.
+
+    Returns (edges, report). report = {dropped_connections, preserved_connections,
+    wall_edges}; edges is the reconciled [{u, v, connection, ...}, ...].
+    """
+    def _is_conn(e):
+        return (e.get("connection") in (1, 2)
+                or e.get("open") is True
+                or e.get("type") in ("door", "open"))
+
+    conn_by_pair = {}
+    for e in source_edges or []:
+        u, v = e.get("u"), e.get("v")
+        if u is None or v is None or u == v:
+            continue
+        if _is_conn(e):
+            conn_by_pair[frozenset((u, v))] = e
+
+    edges, preserved = [], 0
+    for pair in realised_adj:
+        if len(pair) != 2:
+            continue
+        u, v = tuple(pair)
+        src = conn_by_pair.get(pair)
+        if src is not None:
+            edges.append(dict(src))                           # connection survived — carry verbatim
+            preserved += 1
+        else:
+            edges.append({"u": u, "v": v, "connection": 0})   # realised adjacency → re-derived wall
+
+    dropped = []
+    for pair, e in conn_by_pair.items():
+        if pair not in realised_adj:
+            dropped.append({"u": e.get("u"), "v": e.get("v"),
+                            "connection": e.get("connection"),
+                            "open": bool(e.get("open")) or e.get("connection") == 2})
+
+    report = {"dropped_connections": dropped,
+              "preserved_connections": preserved,
+              "wall_edges": len(edges) - preserved}
+    return edges, report
+
+
 def _largest_ring(geom) -> list:
     """Exterior coords of a (possibly multi-part) shapely geometry as an
     (x, y) list — flexible rooms can be rectilinear, so return the outer ring

@@ -1,0 +1,5 @@
+# graphify scope: map the architecture (code + design docs), not fixtures/data.
+# The RPlan corpus, fixture plans, index and config JSON are data, not structure.
+data/
+*.json
+.claude/

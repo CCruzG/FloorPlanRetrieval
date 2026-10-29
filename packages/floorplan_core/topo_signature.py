@@ -36,7 +36,7 @@ _FP_DIR = Path(
 )
 if str(_FP_DIR) not in sys.path:
     sys.path.insert(0, str(_FP_DIR))
-from schema import ROOM_TYPE_MAP  # noqa: E402
+from schema import ROOM_TYPE_MAP, SCALE  # noqa: E402
 
 # Room categories, aligned to rectangular_arrange's daylight/access tiers so
 # retrieval and the placed-arrangement sensors judge by one rule set.
@@ -66,11 +66,36 @@ WEIGHTS = {
 
 # ── labels / graph (intrinsic terms) ─────────────────────────────────────────
 
+# Canonicalise the many label spellings onto the category vocabulary above.
+# Keyed on the SEPARATOR-STRIPPED lowercase form, so "LivingRoom", "living room"
+# and "living_room" all collapse to the same key. generate.py labels rooms via
+# rectangular_arrange._label, which returns the raw display name ("LivingRoom");
+# without this map those never match COMMON/BEDROOMS/TRANSIT and the sensors
+# silently misclassify every living/dining/master room on a generated plan.
+_LABEL_ALIAS = {
+    "living": "living", "livingroom": "living", "livingdiningroom": "living",
+    "masterbedroom": "master_bedroom", "masterroom": "master_bedroom", "master": "master_bedroom",
+    "bedroom": "bedroom", "secondroom": "bedroom", "childroom": "bedroom",
+    "guestroom": "bedroom", "secondbedroom": "bedroom",
+    "study": "study", "studyroom": "study",
+    "dining": "dining", "diningroom": "dining",
+    "kitchen": "kitchen",
+    "bathroom": "bathroom", "washroom": "bathroom", "toilet": "bathroom", "ensuite": "bathroom",
+    "balcony": "balcony",
+    "storage": "storage", "store": "storage", "storeroom": "storage",
+    "hallway": "hallway", "corridor": "corridor", "entrance": "entrance", "foyer": "foyer",
+}
+
+
 def _label(room: dict) -> str:
     t = room.get("type")
     if isinstance(t, int) and t in ROOM_TYPE_MAP:
         return ROOM_TYPE_MAP[t]
-    return str(room.get("label", "")).strip().lower().replace(" ", "_")
+    # generated plans (generate.py) carry the label as a STRING in `type`;
+    # retrieved plans carry an int there. Accept the string form too.
+    raw = t if (isinstance(t, str) and t.strip()) else room.get("label", "")
+    s = str(raw).strip().lower().replace(" ", "_")
+    return _LABEL_ALIAS.get(s.replace("_", ""), s)
 
 
 def _adjacency(plan: dict) -> dict:
@@ -253,6 +278,50 @@ def _source_ring_rooms(plan, n=N_SAMPLES):
     return ring_ids, ring_edge_idxs, label_by_id
 
 
+def filter_corner_adjacencies(plan, tol=None):
+    """Drop room↔room edges whose polygons meet only at a corner (shared boundary
+    length at or below tol). A point contact is not an adjacency, but some source
+    plans encode it as one (the K–S2 corner case). Mutates and returns plan; edges
+    whose rooms cannot be geometry-tested are kept (never dropped blindly). tol
+    defaults to a small fraction of the plan's bbox diagonal."""
+    edges = plan.get("edges")
+    rooms = plan.get("rooms")
+    if not edges or not rooms:
+        return plan
+    polys = {}
+    allx, ally = [], []
+    for r in rooms:
+        pg = r.get("polygon")
+        if pg and len(pg) >= 3:
+            sp = SPoly(pg)
+            if not sp.is_valid:
+                sp = sp.buffer(0)
+            polys[r.get("id")] = sp
+            allx += [p[0] for p in pg]
+            ally += [p[1] for p in pg]
+    if not allx:
+        return plan
+    if tol is None:
+        diag = math.hypot(max(allx) - min(allx), max(ally) - min(ally)) or 1.0
+        tol = 1e-4 * diag
+    kept = []
+    for e in edges:
+        pu, pv = polys.get(e.get("u")), polys.get(e.get("v"))
+        if pu is None or pv is None:
+            kept.append(e)
+            continue
+        try:
+            shared = pu.boundary.intersection(pv.boundary)
+            length = 0.0 if shared.is_empty else shared.length
+        except Exception:
+            kept.append(e)
+            continue
+        if length > tol:
+            kept.append(e)
+    plan["edges"] = kept
+    return plan
+
+
 def default_edge_types(boundary, entrance_point):
     """Fallback typing when the target boundary carries none: every edge
     external except the one nearest the entrance, which faces the corridor —
@@ -433,28 +502,53 @@ def _place_nodes_in_target(plan, target_boundary, entrance_point, mirror):
     return node_pos
 
 
-def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_edge_types):
+def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_edge_types,
+                        node_pos=None, in_target_space=False):
     """Room↔target-edge adjacency by RAYCAST (2026-09-16), the single source both
     the drawn connectors and the daylight/capacity sensors consume.
 
     A room fronts the boundary along the outward normals of its EXTERIOR walls —
-    room-polygon edges whose midpoint lies on the plan perimeter. A ray from the
-    node (display-frame, inside the boundary) along each normal connects to the
-    first target edge it crosses. Interior rooms (no exterior wall) get no entry.
-    Returns {str(room_id): [{target_edge_index, edge_index, edge_type, arc_frac,
-    target_point}]}. Replaces the direction-mapped ring connectors, which were
-    computed in a different orientation and disagreed with the placed nodes.
+    room-polygon edges whose midpoint lies on the plan perimeter. For each such wall,
+    a ray from the room NODE along the wall's outward normal connects to the first
+    target edge. The contact is dropped if the wall's placed midpoint is farther than
+    PROX_TOL from that edge (it faces the edge but does not reach it — the bathroom→
+    north phantom) or if the realised contact is narrower than WIN_MIN_M (a notch, not
+    a window/door). Interior rooms (no exterior wall) get no entry. Returns
+    {str(room_id): [{target_edge_index, edge_index, edge_type, arc_frac, width_m,
+    target_point}]}.
+
+    `node_pos` supplies the ray origin (the drawn, inside-boundary node position).
     """
-    bpts = _xy(plan.get("boundary") or [])
     tpts = _xy(target_boundary or [])
-    if len(bpts) < 3 or len(tpts) < 3:
-        return {}
-    to_target, to_dir = _display_transform(
-        bpts, tpts, _entrance_point_of_plan(plan), entrance_point, mirror)
+    if in_target_space:
+        # Generated geometry: polygons + nodes are ALREADY in target space, so the
+        # display transform is identity and the plan's own boundary IS the target.
+        bpts = tpts
+        if len(tpts) < 3:
+            return {}
+        to_target = lambda x, y: [x, y]
+        to_dir = lambda dx, dy: (dx, dy)
+    else:
+        bpts = _xy(plan.get("boundary") or [])
+        if len(bpts) < 3 or len(tpts) < 3:
+            return {}
+        to_target, to_dir = _display_transform(
+            bpts, tpts, _entrance_point_of_plan(plan), entrance_point, mirror)
     n = len(tpts)
     nb = len(bpts)
     types = target_edge_types or []
     EPS2 = 0.02 ** 2   # ponytail: plan-unit tolerance for "wall on plan perimeter"
+    SCALE_M = SCALE / 1000.0   # target boundary unit → metres
+    WIN_MIN_M = 1.2            # window floor (external edges): BADS min opening width
+    DOOR_MIN_M = 0.9           # access floor (facing_corridor edges): a door, not a
+    #                           window — a corridor contact this wide is a real entry.
+    #                           Below the relevant floor a contact is a notch, dropped.
+    _txs = [p[0] for p in tpts]; _tys = [p[1] for p in tpts]
+    tdiag = math.hypot(max(_txs) - min(_txs), max(_tys) - min(_tys)) or 1.0
+    PROX_TOL = 0.15 * tdiag    # a wall FRONTS the edge its ray hits only if the wall's
+    #                           placed midpoint is within this of that edge (the
+    #                           retrieval contain-scale inset); farther = faces but
+    #                           does not reach it (a phantom). Provisional; calibrated.
 
     def ray_first_edge(px, py, dx, dy):
         best_u, best_i, best_pt = float("inf"), -1, None
@@ -480,17 +574,21 @@ def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_ed
             continue
         cxp = sum(p[0] for p in poly) / len(poly)
         cyp = sum(p[1] for p in poly) / len(poly)
-        nx0, ny0 = to_target(cxp, cyp)               # ray origin = node
-        fronts = {}   # tidx -> {"w": summed wall length, "maxw":.., "pt":[..]}
+        # Ray origin = the DRAWN node (nudged inside the boundary) so the connector
+        # is honest; fall back to the raw transformed centroid only if unavailable.
+        placed = node_pos.get(str(r.get("id"))) if node_pos else None
+        nx0, ny0 = (placed[0], placed[1]) if placed else to_target(cxp, cyp)
+        fronts = {}   # tidx -> {"w": summed wall length, "width_m":.., "pt":[..]}
         m = len(poly)
         for k in range(m):
             ax, ay = poly[k]
             bx, by = poly[(k + 1) % m]
             midx, midy = (ax + bx) / 2.0, (ay + by) / 2.0
-            on_perim = any(
-                _pt_seg_dist2((midx, midy), bpts[j], bpts[(j + 1) % nb]) < EPS2
-                for j in range(nb)
+            perim_d2 = min(
+                (_pt_seg_dist2((midx, midy), bpts[j], bpts[(j + 1) % nb]) for j in range(nb)),
+                default=float("inf"),
             )
+            on_perim = perim_d2 < EPS2
             if not on_perim:
                 continue
             nx, ny = -(by - ay), (bx - ax)           # outward normal (plan coords)
@@ -499,27 +597,56 @@ def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_ed
             if nx * (midx - cxp) + ny * (midy - cyp) < 0:
                 nx, ny = -nx, -ny
             ddx, ddy = to_dir(nx, ny)
+            # Ray + occlusion cast from the room NODE. A node-origin ray reliably
+            # reaches a target edge even on a non-convex boundary; a ray from a wall
+            # near a concave notch can miss every edge segment and drop a real
+            # contact. The occlusion test below still rejects phantoms (a ray that
+            # crosses another room to reach the edge), and the width floor rejects
+            # notches — so the node origin keeps robustness without readmitting them.
             tidx, hit = ray_first_edge(nx0, ny0, ddx, ddy)
-            if tidx < 0:
+            # Proximity test: the wall FRONTS the edge its ray hits only if the wall's
+            # own placed midpoint is within PROX_TOL of that edge. Keeps a genuine
+            # contact whose node-ray crosses a neighbour (LR→corridor, bathroom in
+            # between) and drops a phantom whose wall sits deep interior (bathroom→
+            # north) — the thing node-occlusion could not distinguish.
+            wmx, wmy = to_target(midx, midy)
+            edge_d2 = (_pt_seg_dist2((wmx, wmy), tpts[tidx], tpts[(tidx + 1) % n])
+                       if tidx >= 0 else float("inf"))
+            far = edge_d2 > PROX_TOL * PROX_TOL
+            # realised contact width in metres = the wall's length in the target frame
+            tax, tay = to_target(ax, ay)
+            tbx, tby = to_target(bx, by)
+            width_m = math.hypot(tbx - tax, tby - tay) * SCALE_M
+            if tidx < 0 or far:
                 continue
             wlen = math.hypot(bx - ax, by - ay)
-            cur = fronts.get(tidx) or {"w": 0.0, "maxw": -1.0, "pt": None}
+            cur = fronts.get(tidx) or {"w": 0.0, "width_m": 0.0, "pt": None}
             cur["w"] += wlen
-            if wlen > cur["maxw"]:
-                cur["maxw"] = wlen
+            if width_m > cur["width_m"]:       # widest single wall = the primary contact
+                cur["width_m"] = width_m
                 cur["pt"] = [round(hit[0], 5), round(hit[1], 5)]
             fronts[tidx] = cur
-        if fronts:
-            total = sum(v["w"] for v in fronts.values()) or 1.0
+        # Keep only contacts at least as wide as their edge's minimum opening: a
+        # window on an external edge (WIN_MIN_M) or a door on a corridor edge
+        # (DOOR_MIN_M). A wall narrower than that is a notch, disregarded as a
+        # contact surface. (A corridor contact is an access/door, so it has the
+        # smaller door floor — a 1.0-1.2 m entry to the corridor is real.)
+        def _floor(ti):
+            et = types[ti] if 0 <= ti < len(types) else EXTERNAL
+            return DOOR_MIN_M if et == "facing_corridor" else WIN_MIN_M
+        kept = {ti: v for ti, v in fronts.items() if v["width_m"] >= _floor(ti)}
+        if kept:
+            total = sum(v["w"] for v in kept.values()) or 1.0
             room_edges[str(r.get("id"))] = [
                 {
                     "target_edge_index": tidx,
                     "edge_index": tidx,
                     "edge_type": types[tidx] if 0 <= tidx < len(types) else EXTERNAL,
                     "arc_frac": round(v["w"] / total, 4),
+                    "width_m": round(v["width_m"], 3),
                     "target_point": v["pt"],
                 }
-                for tidx, v in sorted(fronts.items())
+                for tidx, v in sorted(kept.items())
             ]
     return room_edges
 
@@ -645,7 +772,8 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
         mirror = bool((plan.get("retrieval") or {}).get("mirror", False))
         node_pos = _place_nodes_in_target(plan, target_boundary, entrance_point, mirror)
         room_edges = _raycast_room_edges(
-            plan, target_boundary, entrance_point, mirror, target_edge_types)
+            plan, target_boundary, entrance_point, mirror, target_edge_types,
+            node_pos=node_pos)
     else:
         dfit, dfit_detail, mirror = 0.5, {"reason": "no target boundary"}, False
         room_edges = {}

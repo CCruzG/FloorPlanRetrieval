@@ -77,9 +77,18 @@ def swap_nodes(plan: dict, room_a: str, room_b: str,
     gained = [sorted(pair) for pair in realised_adj - original_edges]
     dropped = [sorted(pair) for pair in original_edges - realised_adj]
 
+    # Reconcile the edge list against the realised adjacency: connections (door/
+    # open) follow room identity where still adjacent, walls are re-derived from
+    # geometry, stranded connections are reported. The caller writes these back
+    # onto the plan so the drawn graph and the sensors stop seeing the stale
+    # identity-keyed edges the swap left behind.
+    reconciled_edges, recon_report = ra.reconcile_edges(realised_adj, edges)
+
     return {
         "status": "ok",
         "arrangement": arrangement,
+        "edges": reconciled_edges,
         "adjacency_delta": {"gained": gained, "dropped": dropped},
+        "edge_reconciliation": recon_report,
         "guard": "shared-neighbour",
     }

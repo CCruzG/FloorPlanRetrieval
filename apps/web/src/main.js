@@ -81,6 +81,11 @@ let graphSelection=[];
 
 let arapDebugRooms=null;
 let arapDebugLabel=null;
+// Stage 0 (agent harness) — the node-driven solver's output, drawn as a
+// target-space overlay (canvas-renderer.js, gated on genActive). Rooms are in the
+// drawn-boundary frame; generatedNodes are the node positions the solver used.
+let generatedRooms=null;
+let generatedNodes=null;
 // Stage 1 (re-solve loop) — the arrange step's judgement report, rendered as an
 // overlay so infeasibility is visible on the canvas, not only in the console.
 // Null for every step except `arrange`.
@@ -2278,7 +2283,7 @@ Select a requirement info button to view how its check is measured.
         ?'#22c55e'
         :(status==='blocked'
           ?'#f59e0b'
-          :(status==='disabled'?'#94a3b8':'#ef4444'));
+          :(status==='disabled'?'#94a3b8':'#f87171'));
       tr.innerHTML=`
         <td>${item.name||'requirement'}</td>
         <td>${item.expected??'-'}</td>
@@ -2736,6 +2741,8 @@ function getActiveFPState(){
     arapDebugLabel,
     arapDebugDoor,
     arapDebugReport,
+    generatedRooms,
+    generatedNodes,
   }),
   getActiveFPState,
   n2c,
@@ -2751,6 +2758,7 @@ render=()=>{
   updateCanvasHud();
   updateTopoFlagsPanel();
   updateSwapPanel();
+  updateGeneratePanel();
   if(activeTab==='fit')_fitSyncRunButton();
 };
 
@@ -2778,14 +2786,14 @@ function updateCanvasHud(){
   else if(graphSelection.length===2)lines.push(['swap: '+graphSelection.join(' ↔ '),'#2563eb']);
   const rep=arapDebugReport;
   if(rep){
-    lines.push([rep.feasible?'✓ feasible':'✗ not feasible',rep.feasible?'#16a34a':'#ef4444']);
+    lines.push([rep.feasible?'✓ feasible':'✗ not feasible',rep.feasible?'#4ade80':'#f87171']);
     const under=(rep.rooms||[]).filter(r=>!r.ok).map(r=>r.label);
-    if(under.length)lines.push(['under-min: '+under.join(', '),'#ef4444']);
+    if(under.length)lines.push(['under-min: '+under.join(', '),'#f87171']);
     if((rep.no_daylight||[]).length)lines.push(['no-daylight: '+rep.no_daylight.join(', '),'#d97706']);
     if((rep.no_access||[]).length)lines.push(['no-access: '+rep.no_access.join(', '),'#a855f7']);
-    if((rep.clipped_out_rooms||[]).length)lines.push(['clipped-out: '+rep.clipped_out_rooms.join(', '),'#ef4444']);
-    if(rep.enclosures)lines.push(['enclosures: '+rep.enclosures,'#ef4444']);
-    if(rep.clip_splits)lines.push(['clip-splits: '+rep.clip_splits,'#ef4444']);
+    if((rep.clipped_out_rooms||[]).length)lines.push(['clipped-out: '+rep.clipped_out_rooms.join(', '),'#f87171']);
+    if(rep.enclosures)lines.push(['enclosures: '+rep.enclosures,'#f87171']);
+    if(rep.clip_splits)lines.push(['clip-splits: '+rep.clip_splits,'#f87171']);
     if((rep.dropped_adjacencies||[]).length)lines.push(['dropped-adj: '+rep.dropped_adjacencies.join(', '),'#d97706']);
     lines.push([`${rep.mode} · grid ${(rep.grid||[]).join('×')} · rot ${rep.rotation_deg||0}°`,'#64748b']);
   }
@@ -2797,7 +2805,95 @@ function updateCanvasHud(){
 // Sidebar panel listing the selected result's topology sensor checks
 // (backend-attached retrieval.flags — pure consumption, degrades to hidden
 // when the field is absent/malformed or nothing is selected).
-const FLAG_SENSOR_LABELS={reachability:'reachability',access_typed:'access typing',bedroom_daylight:'bedroom daylight',common_daylight:'common daylight',entrance_valid:'entrance'};
+const FLAG_SENSOR_LABELS={reachability:'reachability',access_typed:'access typing',bedroom_daylight:'bedroom daylight',common_daylight:'common daylight',daylight:'daylight (D26)',room_depth:'room depth (D25)',min_room_size:'min room size (D24)',boundary_capacity:'boundary capacity',node_in_room:'node-in-room',entrance_valid:'entrance'};
+
+// Stage-1: render the scored sensor registry returned by /generate. Shows the
+// hard/soft kind, pass/fail, signed margin and detail, plus the gates/soft-score
+// summary. Pure consumption; hides when absent.
+function renderStage1Sensors(sensors){
+  const label=document.getElementById('stage1-sensors-label');
+  const el=document.getElementById('stage1-sensors');
+  if(!el)return;
+  const checks=sensors&&Array.isArray(sensors.checks)?sensors.checks:null;
+  if(!checks){if(label)label.style.display='none';el.innerHTML='';return;}
+  if(label)label.style.display='';
+  const s=sensors.summary||{};
+  const head=`<div style="margin-bottom:4px;color:${s.gates_pass?'#4ade80':'#f87171'}">`+
+    `${s.gates_pass?'✓ gates pass':'✗ gates fail'} · ${s.passed}/${s.total} sensors · soft ${s.soft_score}</div>`;
+  const rows=checks.map((chk)=>{
+    const ok=!!chk?.ok,skipped=!!chk?.skipped;
+    const name=FLAG_SENSOR_LABELS[chk?.sensor]||chk?.sensor||'?';
+    const kind=chk?.kind==='soft'?'soft':'hard';
+    const mark=skipped?'–':(ok?'✓':'✗');
+    const colour=skipped?'#64748b':(ok?'#4ade80':'#f87171');
+    const m=(typeof chk?.margin==='number')?` <span style="opacity:0.6">[${chk.margin>=0?'+':''}${Math.round(chk.margin*1000)/1000}]</span>`:'';
+    return `<div style="color:${colour};opacity:${ok&&!skipped?0.92:1};margin-bottom:3px">`+
+      `${mark} <span style="opacity:0.65">${kind}</span> ${name}${m} — ${chk?.detail??''}</div>`;
+  }).join('');
+  el.innerHTML=head+rows;
+}
+
+// Per-generated-room surface area (m²), for visual evaluation of outputs. 1 boundary
+// unit = 18 m, so area(m²) = area(units²) × 324 — the same scale (schema SCALE) the
+// min-size sensor uses, so these figures agree with its mm² report. Rooms the D24
+// sensor flags undersized are marked.
+function renderRoomAreas(report, sensors){
+  const sec=document.getElementById('hud-rooms');
+  const el=document.getElementById('room-areas');
+  if(!el)return;
+  const rooms=(report&&Array.isArray(report.rooms))?report.rooms:null;
+  if(!rooms||!rooms.length){if(sec)sec.style.display='none';el.innerHTML='';return;}
+  if(sec)sec.style.display='';
+  const LIN=18, AREA=324;   // 1 boundary unit = 18 m → 324 m²/unit²
+  const RED='#f87171', TXT='var(--text)', MUT='var(--muted)';
+  let total=0;
+  const rows=rooms.map((r)=>{
+    const m2=(typeof r.area==='number')?r.area*AREA:0; total+=m2;
+    const shortM=(typeof r.short==='number')?r.short*LIN:null;
+    const longM=(typeof r.long==='number')?r.long*LIN:null;
+    const minEdgeM=(r.min_edge||0)/1000;    // mm → m
+    const minAreaM2=(r.min_area||0)/1e6;    // mm² → m²
+    const edgeBad=minEdgeM>0&&shortM!=null&&shortM<minEdgeM-1e-6;
+    const areaBad=minAreaM2>0&&m2<minAreaM2-1e-6;
+    const dims=(shortM==null)?'—':`${shortM.toFixed(1)}×${longM.toFixed(1)} m`;
+    const sub=dims+(edgeBad?` ⚠ edge<${minEdgeM.toFixed(1)}`:'')+(areaBad?` · area<${minAreaM2.toFixed(0)}`:'');
+    return `<div style="margin-bottom:4px">`+
+      `<div style="display:flex;justify-content:space-between"><span>${r.label||r.id}</span>`+
+      `<span style="color:${areaBad?RED:TXT}">${m2.toFixed(1)} m²${areaBad?' ⚠':''}</span></div>`+
+      `<div style="font-size:9px;color:${edgeBad?RED:MUT}">${sub}</div>`+
+    `</div>`;
+  }).join('');
+  el.innerHTML=rows+'<div style="display:flex;justify-content:space-between;color:var(--muted);'+
+    `border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span>total</span><span>${total.toFixed(1)} m²</span></div>`;
+}
+
+// Resizable left sidebar — drag the divider; width persists per browser.
+(function initSidebarResizer(){
+  const bar=document.getElementById('sidebar'),handle=document.getElementById('sidebar-resizer');
+  if(!bar||!handle)return;
+  const MIN=150,MAX=560;
+  try{const w=parseInt(localStorage.getItem('sidebarWidth'),10);
+    if(w>=MIN&&w<=MAX)bar.style.width=w+'px';}catch(_){}
+  let dragging=false;
+  const onMove=(e)=>{
+    if(!dragging)return;
+    const w=Math.max(MIN,Math.min(MAX,e.clientX-bar.getBoundingClientRect().left));
+    bar.style.width=w+'px';
+    window.dispatchEvent(new Event('resize'));  // let the canvas re-fit
+  };
+  const stop=()=>{
+    if(!dragging)return;
+    dragging=false;handle.classList.remove('dragging');
+    document.body.style.cursor='';document.body.style.userSelect='';
+    try{localStorage.setItem('sidebarWidth',String(parseInt(bar.style.width,10)));}catch(_){}
+    window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',stop);
+  };
+  handle.addEventListener('mousedown',(e)=>{
+    e.preventDefault();dragging=true;handle.classList.add('dragging');
+    document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',stop);
+  });
+})();
 function updateTopoFlagsPanel(){
   const section=document.getElementById('topo-flags-section');
   const el=document.getElementById('topo-flags-panel');
@@ -2809,7 +2905,7 @@ function updateTopoFlagsPanel(){
   el.innerHTML=checks.map((chk)=>{
     const ok=!!chk?.ok;
     const label=FLAG_SENSOR_LABELS[chk?.sensor]||chk?.sensor||'?';
-    return `<div style="color:${ok?'#16a34a':'#dc2626'};opacity:${ok?0.75:1};margin-bottom:3px">`+
+    return `<div style="color:${ok?'#4ade80':'#f87171'};opacity:${ok?0.75:1};margin-bottom:3px">`+
       `${ok?'✓':'✗'} ${label} — ${chk?.detail??''}</div>`;
   }).join('');
 }
@@ -2929,6 +3025,13 @@ async function runSwapNodes(){
     if(!roomA||!roomB)throw new Error('swapped room not found in plan');
     [roomA.polygon,roomB.polygon]=[roomB.polygon,roomA.polygon];
 
+    // Apply the backend's reconciled room↔room edges (walls re-derived from the
+    // swapped geometry, surviving connections carried by identity, stranded ones
+    // dropped) so the drawn graph and the sensors below both see the swapped
+    // layout's real adjacencies — not the stale pre-swap edges that would draw a
+    // phantom link to a room the moved room no longer touches.
+    if(Array.isArray(resp.edges))swappedPlan.edges=resp.edges;
+
     const {data:tc}=await postJsonWithTimeout('/topo_check',{
       fp:swappedPlan,
       boundary:boundary.map(({x,y})=>[x,y]),
@@ -2949,7 +3052,9 @@ async function runSwapNodes(){
 
     const {gained=[],dropped=[]}=resp.adjacency_delta||{};
     const adjMsg=(gained.length||dropped.length)?`adjacency: dropped ${dropped.length}, gained ${gained.length}`:'adjacency preserved';
-    if(el)el.textContent=`Swapped ${ra} ↔ ${rb} · ${adjMsg} · checks ${tc.summary?.passed??'?'}/${tc.summary?.total??'?'}`;
+    const broken=resp.edge_reconciliation?.dropped_connections||[];
+    const brokenMsg=broken.length?` · ⚠ ${broken.length} connection${broken.length>1?'s':''} broken`:'';
+    if(el)el.textContent=`Swapped ${ra} ↔ ${rb} · ${adjMsg} · checks ${tc.summary?.passed??'?'}/${tc.summary?.total??'?'}${brokenMsg}`;
   }catch(err){
     if(el)el.textContent=`Swap failed: ${err.message}`;
   }
@@ -2968,6 +3073,92 @@ function resetSwap(){
   renderList();
 }
 
+// ── Stage 0 (agent harness) — generate geometry from the graph ───────────────
+// The node-driven solver (/generate): room polygons derived from node positions
+// + boundary, NOT from the retrieved plan's bboxes. The ORIGINAL retrieved plan
+// is kept as the generate-source (stashed in __pregen) so node placement stays
+// stable across re-derives; the generated rooms replace fp for display, drawn by
+// the same render() path the swap uses. Passing the selected pair re-derives
+// with those two rooms' nodes swapped — the Stage-0 proof that the agent edits a
+// Spec and the Generator realises it. Reversible via resetGenerate().
+async function runGenerate(useSwap){
+  const el=document.getElementById('generate-readout');
+  if(selected===null||!closed){if(el)el.textContent='retrieve a plan and close a boundary first';return;}
+  const src=results[selected].fp;
+  const swapPair=(useSwap&&graphSelection.length===2)?[graphSelection[0],graphSelection[1]]:null;
+  if(el)el.textContent=swapPair?`generating (swap ${swapPair[0]} ↔ ${swapPair[1]})…`:'generating…';
+  try{
+    const {data:resp}=await postJsonWithTimeout('/generate',{
+      fp:src,
+      boundary:boundary.map(({x,y})=>[x,y]),
+      entrance_point:entrance?[entrance.x,entrance.y]:null,
+      typed_edges:boundaryTypedEdgesPayload(),
+      requirements:req||null,
+      swap:swapPair,
+    },{timeoutMs:15000});
+    if(resp.error)throw new Error(resp.error);
+    // Draw the generated geometry as a target-space overlay (the solver already
+    // placed it in the drawn boundary) — do NOT mutate results[selected].fp, so
+    // the retrieved plan stays the stable generate-source and reset is trivial.
+    // drawFP colours rooms by source_type (numeric); generated rooms carry only
+    // a string type, so copy source_type from the source plan by id — identical
+    // colouring to the normal preview. Ids are preserved through the solver (a
+    // swap moves a room's node, not its id), so a bedroom stays a bedroom colour.
+    const typeById=new Map((results[selected].fp.rooms||[]).map((rm)=>[String(rm.id),rm.source_type??rm.type]));
+    generatedRooms=(resp.rooms||[]).map((rm)=>({...rm,source_type:typeById.get(String(rm.id))??rm.type}));
+    generatedNodes=resp.node_pos||{};
+    // Refresh the drawn room↔boundary connectors to the ones THIS generate computed.
+    // They are otherwise left at whatever /retrieve produced, so after any backend
+    // change to the raycast the graph keeps showing stale connectors.
+    if(results[selected]?.retrieval)results[selected].retrieval.room_edges=resp.room_edges||{};
+    if(useSwap)graphSelection=[];
+    render();
+    const r=resp.report||{};
+    const flag=resp.feasible?'✓ coherent partition':'✗ partition not coherent';
+    const issues=[];
+    if((r.dropped_rooms||[]).length)issues.push(`dropped ${r.dropped_rooms.length}`);
+    if((r.clipped_out_rooms||[]).length)issues.push(`clipped-out ${r.clipped_out_rooms.length}`);
+    if(r.clip_splits)issues.push(`splits ${r.clip_splits}`);
+    if((r.node_relocated||[]).length)issues.push(`node relocated ${r.node_relocated.length} (room didn't contain its node)`);
+    const brokenConns=(r.edge_reconciliation?.dropped_connections||[]).length;
+    if(brokenConns)issues.push(`${brokenConns} connection${brokenConns>1?'s':''} broken`);
+    const cov=((r.coverage||0)*100).toFixed(1);
+    const areaFit=(r.area_mae!=null)?` · area Δ ${(r.area_mae*100).toFixed(1)}%/room`:'';
+    if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${issues.length?' · '+issues.join(', '):''}`;
+    renderStage1Sensors(resp.sensors);
+    renderRoomAreas(resp.report,resp.sensors);
+  }catch(err){
+    console.error('[stage0] generate failed:',err);
+    if(el)el.textContent=`generate failed: ${err.message}`;
+    renderStage1Sensors(null);
+    renderRoomAreas(null,null);
+  }
+}
+
+function resetGenerate(){
+  generatedRooms=null;
+  generatedNodes=null;
+  render();
+  const el=document.getElementById('generate-readout');
+  if(el)el.textContent='overlay cleared · retrieved view restored';
+  renderStage1Sensors(null);
+  renderRoomAreas(null,null);
+}
+
+// Mirror of updateSwapPanel: show the panel once a plan is selected and the
+// boundary is closed; the swap variant needs two nodes picked on the graph.
+function updateGeneratePanel(){
+  const section=document.getElementById('generate-section');
+  const gen=document.getElementById('btn-generate');
+  const genSwap=document.getElementById('btn-generate-swap');
+  const resetBtn=document.getElementById('btn-generate-reset');
+  const show=selected!==null&&closed;
+  if(section)section.style.display=show?'':'none';
+  if(gen)gen.disabled=!show;
+  if(genSwap)genSwap.disabled=!(show&&graphSelection.length===2);
+  if(resetBtn)resetBtn.style.display=generatedRooms?'':'none';
+}
+
 // Stage 0 pre-analysis — advisory check that the requested program can fit the
 // drawn boundary (area + external frontage) before retrieval.
 async function runFeasibilityCheck(){
@@ -2984,17 +3175,17 @@ async function runFeasibilityCheck(){
       boundary_typed_edges:boundaryTypedEdgesPayload(),
     },{timeoutMs:10000});
     if(data.error)throw new Error(data.error);
-    const mark=(ok)=>ok?'<span style="color:#16a34a">✓</span>':'<span style="color:#ef4444">✗</span>';
+    const mark=(ok)=>ok?'<span style="color:#4ade80">✓</span>':'<span style="color:#f87171">✗</span>';
     const verdict=data.feasible
-      ?'<span style="color:#16a34a;font-weight:600">✓ program can fit</span>'
-      :'<span style="color:#ef4444;font-weight:600">✗ program does not fit</span>';
+      ?'<span style="color:#4ade80;font-weight:600">✓ program can fit</span>'
+      :'<span style="color:#f87171;font-weight:600">✗ program does not fit</span>';
     el.innerHTML=verdict
       +`<div>${mark(data.area.ok)} area: need ${data.area.required_m2} m², have ${data.area.available_m2} m²</div>`
       +`<div>${mark(data.frontage.ok)} frontage: need ${data.frontage.required_m} m, have ${data.frontage.available_m} m</div>`
       +`<div style="color:var(--muted)">program: ${data.program.join(', ')}</div>`;
     console.log('[feasibility]',data);
   }catch(err){
-    el.innerHTML='<span style="color:#ef4444">check failed: '+err.message+'</span>';
+    el.innerHTML='<span style="color:#f87171">check failed: '+err.message+'</span>';
     console.error('feasibility_check failed:',err);
   }
 }
@@ -3373,6 +3564,9 @@ function selectResult(i){
   // was specific to whichever result was previously selected.
   arapDebugRooms=null;
   arapDebugLabel=null;
+  // Same for the Stage-0 generated overlay — it belonged to the old selection.
+  generatedRooms=null;
+  generatedNodes=null;
   arapDebugDoor=null;
   arapDebugReport=null;
   arapAlignedIndex=null;
@@ -3776,12 +3970,26 @@ function wirePhase1UI(){
   on('btn-clear-plan-cache','click',()=>clearPlanCache());
   on('btn-clear-boundary','click',()=>clearBoundary());
   on('btn-save-boundary','click',()=>saveBoundary());
+  // Copy the Stage-1 sensor readout as plain text for debugging / pasting.
+  on('btn-copy-sensors','click',()=>{
+    const t=document.getElementById('stage1-sensors');
+    if(!t||!t.innerText.trim())return;
+    navigator.clipboard?.writeText('stage 1 · sensors\n'+t.innerText).then(()=>{
+      const b=document.getElementById('btn-copy-sensors');
+      if(!b)return;
+      const o=b.textContent; b.textContent='copied';
+      setTimeout(()=>{b.textContent=o;},1000);
+    }).catch(()=>{});
+  });
   on('btn-entrance-mode','click',()=>toggleEntranceMode());
   on('btn-clear-entrance','click',()=>clearEntrance());
   on('btn-edge-type-mode','click',()=>toggleEdgeTypeMode());
   on('btn-feasibility-check','click',()=>runFeasibilityCheck());
   on('btn-swap-nodes','click',()=>runSwapNodes());
   on('btn-swap-reset','click',()=>resetSwap());
+  on('btn-generate','click',()=>runGenerate(false));
+  on('btn-generate-swap','click',()=>runGenerate(true));
+  on('btn-generate-reset','click',()=>resetGenerate());
   on('btn-export-library','click',()=>exportLibrary());
   on('fi-import-library','change',(e)=>importLibrary(e.target));
 

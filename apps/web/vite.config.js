@@ -25,6 +25,7 @@ const API_ROUTES = [
   "/subdivide_floor_plate",
   "/swap_nodes",
   "/topo_check",
+  "/generate",
 ];
 
 export default defineConfig({
