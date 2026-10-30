@@ -475,7 +475,9 @@ def check_min_room_size(ctx):
         # expressed as the edge it would add at the room's min width.
         m = min(m_edge, m_area / max(req["min_edge"], 1))
         worst = m if worst is None else min(worst, m)
-        if m_edge < 0 or m_area < 0:
+        # 1 mm / 0.01 m² tolerance: the solver places spans at exactly min_edge,
+        # and float error must not read as a violation
+        if m_edge < -1.0 or m_area < -1e4:
             failing.append(rid)
             details.append(f"{_nm(ctx, rid)}: edge {round(edge_mm)}mm"
                            f"/{req['min_edge']}, area {round(area_mm2)}mm²/{req['area']}")

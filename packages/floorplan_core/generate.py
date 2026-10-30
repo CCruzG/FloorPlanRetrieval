@@ -62,6 +62,13 @@ SCALE_M = SCALE / 1000.0   # normalized boundary unit -> metres (same as the ray
 _EDGE_FLOOR_M = {"facing_corridor": 0.9, "external": 1.2}
 
 
+# Pin-guard scale: 0.0 pins every boundary vertex (default); 1.0 skips boundary
+# jogs shorter than the smallest room min_edge, letting them fall back to the
+# clip. Measured 2026-10-30 on test_boundary_001b/005b (top 3): all pins -> 7
+# failing rooms, 0 clip losses; guard -> 13 (clip losses return); no pins -> 9.
+PIN_MIN_SEG_FACTOR = 0.0
+
+
 # ── Spec / Plan ──────────────────────────────────────────────────────────────
 # Both are plain dicts to stay continuous with the app's dict-centric plan format
 # (apps/web <-> apps/api send dicts). The Spec is the ONLY thing the agent writes.
@@ -150,47 +157,119 @@ def reassign(spec, room_a, room_b):
 
 # ── the solver ───────────────────────────────────────────────────────────────
 
-def _grid_lines(coords, lo, hi, tol):
+def _grid_lines(coords, lo, hi, tol, fixed=(), min_seg=0.0):
     """Separator lines along one axis from a bag of node coordinates: cluster the
     coords into bands, cut at the midpoints between consecutive bands, and bracket
-    with the boundary extent [lo, hi]. n bands -> n columns."""
+    with the boundary extent [lo, hi]. n bands -> n columns.
+
+    `fixed` are boundary-vertex coordinates on this axis (notch lines). They are
+    added as lines so every cell of an orthogonal boundary lies wholly inside or
+    wholly outside it — the solver then never credits a room with area the clip
+    removes. A node cut within `tol` of a fixed line is dropped (the fixed line
+    does its job). A fixed line closer than `min_seg` (the smallest room min_edge)
+    to the extent or to another kept pin is skipped: pinning a short boundary jog
+    would make a strip no room can occupy, so that jog falls back to the clip.
+    Returns (lines, fixed_idx): fixed_idx are the indices of lines pinned to the
+    boundary (always including both ends)."""
     bands = _cluster([c for c in coords if lo - tol <= c <= hi + tol], tol)
-    if not bands:
-        return [lo, hi]
     cuts = [(bands[k] + bands[k + 1]) / 2.0 for k in range(len(bands) - 1)]
-    return [lo] + cuts + [hi]
+    gap = max(tol, min_seg)
+    pins = []
+    for f in sorted(set(fixed)):
+        if lo + gap <= f <= hi - gap and (not pins or f - pins[-1] >= gap):
+            pins.append(f)
+    cuts = [c for c in cuts if all(abs(c - f) > tol for f in pins)]
+    tagged = sorted([(lo, True), (hi, True)] + [(f, True) for f in pins]
+                    + [(c, False) for c in cuts])
+    lines = [v for v, _ in tagged]
+    fixed_idx = {k for k, (_, is_pin) in enumerate(tagged) if is_pin}
+    return lines, fixed_idx
 
 
-def _solve_positions(n_sep, spans, total, gap_flex, eps):
+def _solve_positions(n_sep, spans, total, gap_flex, eps, fixed=None):
     """Separator positions along one axis by longest path (the arrange algorithm,
     made unit-relative via `eps` so it works in normalized OR mm space).
 
     `spans` are (lo, hi, min_size): position[hi] - position[lo] >= min_size for a
     room occupying grid columns [lo, hi). Returns (positions in [0, total],
     all_min_met); every gap is at least `eps`. Slack over the minimal feasible
-    layout is handed to the gaps a flexible room occupies."""
+    layout is handed to the gaps a flexible room occupies.
+
+    `fixed` {k: position} pins separators to the boundary (notch lines). Without
+    interior pins this is the original single-segment solve. With them, each
+    segment between consecutive pins gets the min layout + its own slack by flex,
+    then alternating forward/backward passes repair spans that cross a pin."""
     m = n_sep
-    pos = [0.0] * (m + 1)
-    spans_by_hi = {}
+    spans_by_hi, spans_by_lo = {}, {}
     for lo, hi, mn in spans:
         spans_by_hi.setdefault(hi, []).append((lo, mn))
-    for k in range(1, m + 1):
-        pos[k] = pos[k - 1] + eps
-        for lo, mn in spans_by_hi.get(k, []):
-            pos[k] = max(pos[k], pos[lo] + mn)
-    min_total = pos[m]
-    if min_total <= total:
-        slack = total - min_total
-        wsum = sum(gap_flex) or 1.0
-        widths = [pos[k + 1] - pos[k] for k in range(m)]
-        widths = [w + slack * (gf / wsum) for w, gf in zip(widths, gap_flex)]
-        out = [0.0]
-        for w in widths:
-            out.append(out[-1] + w)
-        out[-1] = total
-        return out, True
-    scale = total / min_total if min_total > 0 else 1.0
-    return [p * scale for p in pos], False
+        spans_by_lo.setdefault(lo, []).append((hi, mn))
+    pins = dict(fixed or {})
+    pins[0], pins[m] = 0.0, total
+    interior = [k for k in pins if 0 < k < m]
+    if not interior:
+        pos = [0.0] * (m + 1)
+        for k in range(1, m + 1):
+            pos[k] = pos[k - 1] + eps
+            for lo, mn in spans_by_hi.get(k, []):
+                pos[k] = max(pos[k], pos[lo] + mn)
+        min_total = pos[m]
+        if min_total <= total:
+            slack = total - min_total
+            wsum = sum(gap_flex) or 1.0
+            widths = [pos[k + 1] - pos[k] for k in range(m)]
+            widths = [w + slack * (gf / wsum) for w, gf in zip(widths, gap_flex)]
+            out = [0.0]
+            for w in widths:
+                out.append(out[-1] + w)
+            out[-1] = total
+            return out, True
+        scale = total / min_total if min_total > 0 else 1.0
+        return [p * scale for p in pos], False
+
+    # pinned: a gap can be no wider than its segment allows, so cap eps per segment
+    keys = sorted(pins)
+    for a, b in zip(keys, keys[1:]):
+        eps = min(eps, (pins[b] - pins[a]) / (2.0 * (b - a)))
+    # 1) per-segment min layout + slack by flex
+    pos = [0.0] * (m + 1)
+    for a, b in zip(keys, keys[1:]):
+        pos[a] = pins[a]
+        for k in range(a + 1, b + 1):
+            pos[k] = pos[k - 1] + eps
+            for lo, mn in spans_by_hi.get(k, []):
+                if lo >= a:
+                    pos[k] = max(pos[k], pos[lo] + mn)
+        slack = max(pins[b] - pos[b], 0.0)
+        widths = [pos[k + 1] - pos[k] for k in range(a, b)]
+        fl = gap_flex[a:b]
+        wsum = sum(fl) or 1.0
+        acc = pins[a]
+        for i, k in enumerate(range(a, b)):
+            acc += widths[i] + slack * (fl[i] / wsum)
+            pos[k + 1] = acc
+        pos[b] = pins[b]
+    # 2) repair spans crossing a pin (pins never move)
+    for _ in range(4 * (m + 1)):
+        changed = False
+        for k in range(1, m + 1):
+            if k in pins:
+                continue
+            lb = max([pos[k - 1] + eps] + [pos[lo] + mn for lo, mn in spans_by_hi.get(k, [])])
+            if pos[k] < lb - 1e-12:
+                pos[k], changed = lb, True
+        for k in range(m - 1, 0, -1):
+            if k in pins:
+                continue
+            ub = min([pos[k + 1] - eps] + [pos[hi] - mn for hi, mn in spans_by_lo.get(k, [])])
+            if pos[k] > ub + 1e-12:
+                pos[k], changed = ub, True
+        if not changed:
+            break
+    tol = 1e-9 * max(total, 1.0)
+    ok = (all(pos[k + 1] - pos[k] >= eps - tol for k in range(m))
+          and all(pos[hi] - pos[lo] >= mn - tol for lo, hi, mn in spans))
+    return pos, ok
 
 
 def _edge_border_cells(boundary, xs, ys, ncol, nrow):
@@ -247,9 +326,11 @@ def _num_components(cells):
     return comps
 
 
-def _bfs_cell_path(starts, goals, ncol, nrow):
+def _bfs_cell_path(starts, goals, ncol, nrow, allowed=None):
     """Shortest 4-connected grid path from any start cell to any goal cell
-    (fewest cells = fewest transfers). Returns the path incl. endpoints, or None."""
+    (fewest cells = fewest transfers). Returns the path incl. endpoints, or None.
+    `allowed` (a set of cells) restricts the walk — cells outside the boundary
+    have no owner and must not be crossed or transferred."""
     starts = set(starts)
     goals = set(goals)
     prev = {}
@@ -267,7 +348,8 @@ def _bfs_cell_path(starts, goals, ncol, nrow):
             return list(reversed(path))
         i, j = c
         for nb in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
-            if 0 <= nb[0] < ncol and 0 <= nb[1] < nrow and nb not in prev:
+            if (0 <= nb[0] < ncol and 0 <= nb[1] < nrow and nb not in prev
+                    and (allowed is None or nb in allowed)):
                 prev[nb] = c
                 q.append(nb)
     return None
@@ -310,7 +392,8 @@ def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nro
             # a slightly farther cell (a donor with room to spare) would work.
             cands = []
             for g in goals:
-                p = _bfs_cell_path(starts, {g}, ncol, nrow) if starts else None
+                p = (_bfs_cell_path(starts, {g}, ncol, nrow, allowed=set(owner))
+                     if starts else None)
                 if p:
                     cands.append(p)
             cands.sort(key=len)
@@ -484,11 +567,28 @@ def generate(spec):
     # ── 1. node-seeded grid ──────────────────────────────────────────────────
     tol_x = 0.04 * max(BW, 1e-9)
     tol_y = 0.04 * max(BH, 1e-9)
-    xs = _grid_lines([n["pos"][0] for n in nodes], bx0, bx1, tol_x)
-    ys = _grid_lines([n["pos"][1] for n in nodes], by0, by1, tol_y)
+    # Boundary-vertex coordinates become pinned grid lines (notch-aligned), so on
+    # an orthogonal boundary every cell is wholly inside or wholly outside it.
+    _dem = spec.get("demands", {}) or {}
+    _edges = [d.get("min_edge", 0.0) for d in _dem.values() if d.get("min_edge")]
+    min_seg = (min(_edges) / mm) if (_edges and mm and mm > 0) else 0.0
+    min_seg *= PIN_MIN_SEG_FACTOR
+    xs, x_pins = _grid_lines([n["pos"][0] for n in nodes], bx0, bx1, tol_x,
+                             fixed=[p[0] for p in boundary], min_seg=min_seg)
+    ys, y_pins = _grid_lines([n["pos"][1] for n in nodes], by0, by1, tol_y,
+                             fixed=[p[1] for p in boundary], min_seg=min_seg)
     ncol, nrow = len(xs) - 1, len(ys) - 1
     debug_steps.append({"step": "1_grid", "ncol": ncol, "nrow": nrow,
-                        "nodes": len(nodes)})
+                        "nodes": len(nodes),
+                        "pinned_x": len(x_pins) - 2, "pinned_y": len(y_pins) - 2})
+    bpoly_g = SPoly(boundary)
+    if not bpoly_g.is_valid:
+        bpoly_g = bpoly_g.buffer(0)
+    # a cell is usable when its centre lies in the boundary; outside cells get no
+    # owner, so no room is sized with area the clip would remove
+    inside = {(i, j) for i in range(ncol) for j in range(nrow)
+              if bpoly_g.contains(SPoint((xs[i] + xs[i + 1]) / 2.0,
+                                         (ys[j] + ys[j + 1]) / 2.0))}
 
     # ── 2. assign cells: seed each node's CONTAINING cell to it, then fill the
     # rest by nearest node. Seeding guarantees a node owns the cell it sits in,
@@ -514,7 +614,7 @@ def generate(spec):
     for i in range(ncol):
         ccx = (xs[i] + xs[i + 1]) / 2.0
         for j in range(nrow):
-            if (i, j) in owner:
+            if (i, j) in owner or (i, j) not in inside:
                 continue
             ccy = (ys[j] + ys[j + 1]) / 2.0
             best, bd = None, float("inf")
@@ -598,11 +698,23 @@ def generate(spec):
     # the spans are in. We solve in boundary units with a [0, BW]/[0, BH] extent.
     eps_x = 0.02 * max(BW, 1e-9)
     eps_y = 0.02 * max(BH, 1e-9)
-    xt, x_ok = _solve_positions(ncol, x_spans, BW, col_flex, eps_x)
-    yt, y_ok = _solve_positions(nrow, y_spans, BH, row_flex, eps_y)
+    # notch lines stay on the boundary; only node-derived cuts move
+    xt, x_ok = _solve_positions(ncol, x_spans, BW, col_flex, eps_x,
+                                fixed={k: xs[k] - bx0 for k in x_pins})
+    yt, y_ok = _solve_positions(nrow, y_spans, BH, row_flex, eps_y,
+                                fixed={k: ys[k] - by0 for k in y_pins})
     xt = [bx0 + v for v in xt]
     yt = [by0 + v for v in yt]
     debug_steps.append({"step": "3_resolve", "min_sizes_met": bool(x_ok and y_ok)})
+    # solved grid, for the canvas (drawn under the generated rooms): lines in
+    # target space, which are pinned to the boundary, and each cell's owner after
+    # the 2b repair (None = outside the boundary)
+    grid_lines = {
+        "xs": [round(v, 6) for v in xt], "ys": [round(v, 6) for v in yt],
+        "pinned_x": sorted(x_pins), "pinned_y": sorted(y_pins),
+        "cells": [[i, j, (str(owner[(i, j)]) if (i, j) in owner else None)]
+                  for i in range(ncol) for j in range(nrow)],
+    }
 
     # ── 3b. remap node positions through the same warp the grid underwent, so a
     # node keeps its fractional spot inside its (re-dimensioned) cell — i.e. stays
@@ -759,6 +871,7 @@ def generate(spec):
         "feasible": feasible,
         "report": {
             "grid": [ncol, nrow],
+            "grid_lines": grid_lines,
             "coverage": round(coverage, 4),
             "min_sizes_met": bool(x_ok and y_ok),
             "dropped_rooms": dropped,

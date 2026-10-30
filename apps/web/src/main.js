@@ -86,6 +86,9 @@ let arapDebugLabel=null;
 // drawn-boundary frame; generatedNodes are the node positions the solver used.
 let generatedRooms=null;
 let generatedNodes=null;
+// The solver grid behind the generated rooms (report.grid_lines): drawn under the
+// rooms so it is visible how the geometry was cut. null when nothing is generated.
+let generatedGrid=null;
 // Stage 1 (re-solve loop) — the arrange step's judgement report, rendered as an
 // overlay so infeasibility is visible on the canvas, not only in the console.
 // Null for every step except `arrange`.
@@ -2743,6 +2746,7 @@ function getActiveFPState(){
     arapDebugReport,
     generatedRooms,
     generatedNodes,
+    generatedGrid,
   }),
   getActiveFPState,
   n2c,
@@ -3107,6 +3111,7 @@ async function runGenerate(useSwap){
     const typeById=new Map((results[selected].fp.rooms||[]).map((rm)=>[String(rm.id),rm.source_type??rm.type]));
     generatedRooms=(resp.rooms||[]).map((rm)=>({...rm,source_type:typeById.get(String(rm.id))??rm.type}));
     generatedNodes=resp.node_pos||{};
+    generatedGrid=resp.report?.grid_lines||null;
     // Refresh the drawn room↔boundary connectors to the ones THIS generate computed.
     // They are otherwise left at whatever /retrieve produced, so after any backend
     // change to the raycast the graph keeps showing stale connectors.
@@ -3138,6 +3143,7 @@ async function runGenerate(useSwap){
 function resetGenerate(){
   generatedRooms=null;
   generatedNodes=null;
+  generatedGrid=null;
   render();
   const el=document.getElementById('generate-readout');
   if(el)el.textContent='overlay cleared · retrieved view restored';
@@ -3567,6 +3573,7 @@ function selectResult(i){
   // Same for the Stage-0 generated overlay — it belonged to the old selection.
   generatedRooms=null;
   generatedNodes=null;
+  generatedGrid=null;
   arapDebugDoor=null;
   arapDebugReport=null;
   arapAlignedIndex=null;

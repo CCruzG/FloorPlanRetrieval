@@ -71,6 +71,7 @@ export function createCanvasRenderer({
       arapDebugReport,
       generatedRooms,
       generatedNodes,
+      generatedGrid,
     }=getState();
 
     const vpZoom=viewport?.zoom??1;
@@ -320,6 +321,35 @@ export function createCanvasRenderer({
       const toPx=([x,y])=>[x*sc+dox,y*sc+doy];
       const GPAL=['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb7185','#22d3ee','#a3e635','#fca5a5','#c4b5fd'];
       ctx.save();
+      // Solver grid UNDER the rooms (report.grid_lines): how step 3 cut the
+      // boundary. Dashed slate = cut between node bands (moves with the solve);
+      // solid amber = pinned to a boundary vertex (notch-aligned, never moves);
+      // hatched = cell outside the boundary (no owner, no area credited).
+      const G=generatedGrid;
+      if(G&&Array.isArray(G.xs)&&Array.isArray(G.ys)&&G.xs.length>1&&G.ys.length>1){
+        ctx.save();ctx.globalAlpha=0.3;   // faint: context under the rooms, not content
+        const gx=G.xs,gy=G.ys,x0=gx[0],x1=gx[gx.length-1],y0=gy[0],y1=gy[gy.length-1];
+        (G.cells||[]).forEach(([i,j,own])=>{
+          if(own!==null&&own!==undefined)return;
+          const[ax,ay]=toPx([gx[i],gy[j]]),[bx,by]=toPx([gx[i+1],gy[j+1]]);
+          ctx.fillStyle='rgba(100,116,139,0.16)';ctx.fillRect(ax,ay,bx-ax,by-ay);
+          ctx.save();ctx.beginPath();ctx.rect(ax,ay,bx-ax,by-ay);ctx.clip();
+          ctx.strokeStyle='rgba(100,116,139,0.35)';ctx.lineWidth=1;ctx.setLineDash([]);
+          for(let t=-(by-ay);t<(bx-ax);t+=6){ctx.beginPath();ctx.moveTo(ax+t,by);ctx.lineTo(ax+t+(by-ay),ay);ctx.stroke();}
+          ctx.restore();
+        });
+        const pinX=new Set(G.pinned_x||[]),pinY=new Set(G.pinned_y||[]);
+        const line=(p,q,pinned)=>{
+          const[ax,ay]=toPx(p),[bx,by]=toPx(q);
+          ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+          ctx.strokeStyle=pinned?'rgba(217,119,6,0.85)':'rgba(51,65,85,0.55)';
+          ctx.lineWidth=pinned?1.5:1;ctx.setLineDash(pinned?[]:[4,3]);ctx.stroke();
+        };
+        gx.forEach((x,k)=>line([x,y0],[x,y1],pinX.has(k)));
+        gy.forEach((y,k)=>line([x0,y],[x1,y],pinY.has(k)));
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
       (generatedRooms||[]).forEach((room,ri)=>{
         if(!room.polygon||room.polygon.length<3)return;
         ctx.beginPath();
