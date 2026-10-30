@@ -19,15 +19,18 @@ export function createCanvasRenderer({
   planToCanvas,
 }) {
   function updateCursor(){
-    const { dragState, hoveredEntrance, hoveredRoom, selected, closed }=getState();
-    if(dragState){
+    const { dragState, hoveredEntrance, hoveredRoom, measureMode, mode }=getState();
+    if(measureMode){
+      canvas.style.cursor='crosshair';
+    }else if(dragState){
       canvas.style.cursor=dragState.mode==='entrance'||dragState.mode==='move'?'grabbing':(dragState.edgeAxis==='h'?'ns-resize':'ew-resize');
     }else if(hoveredEntrance){
       canvas.style.cursor='grab';
     }else if(hoveredRoom){
       canvas.style.cursor=hoveredRoom.mode==='body'?'grab':(hoveredRoom.edgeAxis==='h'?'ns-resize':'ew-resize');
     }else{
-      canvas.style.cursor=selected!==null&&closed?'default':'crosshair';
+      // crosshair only in draw/measure (measure handled above) — select/entrance/edgeType get the default arrow
+      canvas.style.cursor=mode==='draw'?'crosshair':'default';
     }
   }
 
@@ -72,6 +75,10 @@ export function createCanvasRenderer({
       generatedRooms,
       generatedNodes,
       generatedGrid,
+      generatedEdges,
+      measureMode,
+      measureA,
+      measureB,
     }=getState();
 
     const vpZoom=viewport?.zoom??1;
@@ -364,17 +371,28 @@ export function createCanvasRenderer({
         ctx.fillText(String(room.type??room.id),lx,ly);
       });
       // redraw the topology graph over the generated geometry: adjacency edges
-      // between the (re-placed) nodes, so the graph matches the new layout. Solid
-      // = door/open (connection 1), faint dashed = adjacency without a door.
-      const genEdges=(results[selected]?.fp?.edges)||[];
+      // between the (re-placed) nodes, so the graph matches the new layout.
+      // Three-valued now (moves.py SetConnection): door (connection 1) solid dark,
+      // open (connection 2) solid green — the two "passable" types — wall
+      // (connection 0 / absent) faint dashed. generatedEdges is the live plan's
+      // own edges (reflects a Stage-2 SetConnection edit); falls back to the
+      // retrieved source's edges when nothing has been generated with edits yet.
+      const genEdges=generatedEdges||(results[selected]?.fp?.edges)||[];
       genEdges.forEach((e)=>{
         const a=generatedNodes?.[String(e.u)],b=generatedNodes?.[String(e.v)];
         if(!Array.isArray(a)||!Array.isArray(b))return;
         const[ax,ay]=toPx(a),[bx,by]=toPx(b);
-        const open=(e.connection===1);
+        const isOpen=(e.connection===2);
+        const isDoor=(e.connection===1);
         ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
-        ctx.strokeStyle=open?'rgba(15,23,42,0.6)':'rgba(15,23,42,0.22)';
-        ctx.lineWidth=open?2:1;ctx.setLineDash(open?[]:[3,3]);ctx.stroke();
+        if(isOpen){
+          ctx.strokeStyle='rgba(34,197,94,0.75)';ctx.lineWidth=2;ctx.setLineDash([6,3]);
+        }else if(isDoor){
+          ctx.strokeStyle='rgba(15,23,42,0.6)';ctx.lineWidth=2;ctx.setLineDash([]);
+        }else{
+          ctx.strokeStyle='rgba(15,23,42,0.22)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+        }
+        ctx.stroke();
       });
       ctx.setLineDash([]);
       // room↔boundary connectors (room_edges) over the generated geometry — the same
@@ -524,6 +542,27 @@ export function createCanvasRenderer({
         ctx.fillStyle='#f59e0b';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // Measure tool overlay (2026-10-30) — point A to point B (or to the live
+    // cursor before B is placed), length in metres via METRES_PER_UNIT. Drawn
+    // in world space (inside the viewport transform) so it pans/zooms with
+    // the plan like the boundary edges it measures against.
+    if(measureMode&&measureA){
+      const end=measureB||mouse;
+      const [ax,ay]=n2c(measureA.x,measureA.y),[bx,by]=n2c(end.x,end.y);
+      ctx.save();
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+      ctx.strokeStyle=measureB?'#dc2626':'rgba(220,38,38,0.55)';
+      ctx.lineWidth=1.5;ctx.setLineDash(measureB?[]:[5,4]);ctx.stroke();ctx.setLineDash([]);
+      [[ax,ay],[bx,by]].forEach(([px,py])=>{
+        ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fillStyle='#dc2626';ctx.fill();
+      });
+      const lenM=Math.hypot(end.x-measureA.x,end.y-measureA.y)*METRES_PER_UNIT;
+      const mx=(ax+bx)/2,my=(ay+by)/2-9;
+      ctx.font='11px monospace';ctx.fillStyle='#dc2626';ctx.textAlign='center';
+      ctx.fillText(lenM.toFixed(2)+' m',mx,my);
+      ctx.restore();
     }
 
     // Restore ctx from viewport transform, then draw screen-space overlays
@@ -695,7 +734,7 @@ export function createCanvasRenderer({
         c.fillText(unitLabel,ux,uy-2);
         const area=resolveUnitAreaM2(unit,poly);
         c.fillStyle='#0f766e';
-        c.fillText(`${area.toFixed(1)} m2`,ux,uy+10);
+        c.fillText(`${area.toFixed(2)} m2`,ux,uy+10);
 
         // Retrieved plan id, when a layout has been retrieved for this unit.
         // Makes it readable at a glance which units drew the SAME source plan

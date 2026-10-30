@@ -1121,7 +1121,9 @@ def topo_check_route():
             entrance_point=entrance_point,
             requirements=requirements,
         )
-        result = run_sensors(fp, topo["room_edges"], requirements, target_boundary=boundary)
+        # topology checks only: fp's polygons are not generated geometry yet
+        result = run_sensors(fp, topo["room_edges"], requirements, target_boundary=boundary,
+                             layer="topology")
     except Exception as exc:
         logger.exception("topo_check failed")
         return jsonify({"error": str(exc)}), 500
@@ -1131,6 +1133,133 @@ def topo_check_route():
     # against the recomputed alignment.
     return jsonify({"status": "ok", "room_edges": topo["room_edges"],
                     "node_pos": topo.get("node_pos", {}), **result})
+
+
+# ── /generate + /moves/propose: shared Spec/generate/sensors pipeline ────────
+
+def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=None,
+                    swap=None, mm_per_unit=None, area_lift=True, connections=None,
+                    node_pos=None):
+    """
+    Build the Spec from `fp`, thread boundary_demands, apply an optional swap and
+    optional SetConnection edits, run the Stage-0 generator, re-derive room_edges
+    on the generated geometry, and score the sensor registry. /generate and
+    /moves/propose both call this — the one Spec -> generate -> sensors pipeline,
+    so the two routes cannot drift (ARCHITECTURE.md: server.py is wiring only).
+
+    connections : optional [{u, v, type}], type in wall|door|open. Each is applied
+    with SetConnectionMove().apply(spec, edit) — after boundary_demands and after
+    swap, before generate(spec) (moves.py: "a move edits only the Spec").
+
+    Returns {spec, plan, resolved_types, room_edges, sensors, connections_applied}.
+    Raises ValueError for an invalid connection type — the caller maps this to 400.
+    """
+    from packages.floorplan_core.generate import (
+        spec_from_plan, generate, reassign, SCALE as _PLAN_SCALE,
+    )
+    from packages.floorplan_core.topo_signature import exact_room_edges
+    from packages.floorplan_core.topo_sensors import run_sensors as _run_sensors
+    from packages.floorplan_core.moves import SetConnectionMove, _TYPE_TO_CONNECTION
+
+    # The frontend does not send mm_per_unit; without it the solver drops every
+    # min_edge to 0. Default to the plan scale (boundary units -> mm).
+    if not mm_per_unit:
+        mm_per_unit = float(_PLAN_SCALE)
+    # Resolve boundary edge types the same way /retrieve and /topo_check do,
+    # then compute the topology layer so node_pos (and room_edges for the
+    # drawn connectors) match the placement the graph is drawn from.
+    resolved_types = default_edge_types(boundary, entrance_point)
+    for e in typed_edges or []:
+        i = e.get("edge_index")
+        if i is not None and 0 <= i < len(boundary) and e.get("type"):
+            resolved_types[i] = e["type"]
+    topo = topological_fitness(
+        fp, target_boundary=boundary, target_edge_types=resolved_types,
+        entrance_point=entrance_point, requirements=requirements,
+    )
+    fp_with_nodes = dict(fp)
+    fp_with_nodes["node_pos"] = node_pos or topo.get("node_pos", {})
+
+    # Score against the DRAWN entrance (target frame), not the source plan's
+    # entrance (source frame): the generated geometry sits in the drawn
+    # boundary, so entry-room detection must use where the user put the door.
+    drawn_entrance = ([entrance_point[0], entrance_point[1],
+                       entrance_point[0], entrance_point[1]]
+                      if entrance_point else fp.get("entrance"))
+    spec = spec_from_plan(
+        fp_with_nodes, boundary, edge_types=resolved_types,
+        entrance=drawn_entrance, mm_per_unit=mm_per_unit,
+    )
+    # Thread the room↔boundary target (which target edge each room should front,
+    # from the topo-rank ring alignment) into the Spec so the realiser honours it
+    # (generate step 2b). Keyed by room id; survives a swap (demand follows
+    # identity, which is what the swap edits the node of, not the id).
+    boundary_demands = {}
+    for rid, contacts in (topo.get("room_edges") or {}).items():
+        idxs = sorted({c.get("target_edge_index") for c in contacts
+                       if c.get("target_edge_index") is not None})
+        if idxs:
+            boundary_demands[str(rid)] = idxs
+    spec["boundary_demands"] = boundary_demands
+    # before/after toggle for the step-3 min_area lift (default on)
+    spec["area_lift"] = area_lift is not False
+    if swap and len(swap) == 2:
+        spec = reassign(spec, swap[0], swap[1])
+
+    # Stage-2: apply the session's connection edits (SetConnection) to the Spec —
+    # after boundary_demands and the swap, before generate() realises it.
+    connections_applied = []
+    for edit in connections or []:
+        etype = edit.get("type")
+        if etype not in _TYPE_TO_CONNECTION:
+            raise ValueError(f"invalid connection type {etype!r} (must be wall|door|open)")
+        move_edit = {"move": "SetConnection", "u": edit.get("u"), "v": edit.get("v"), "type": etype}
+        spec = SetConnectionMove().apply(spec, move_edit)
+        connections_applied.append(move_edit)
+
+    plan = generate(spec)
+    # Re-derive room↔boundary from the GENERATED geometry. The solver re-tiles
+    # the boundary, so the source's room_edges are stale (a room drawn off an
+    # edge still carried the source contact — the LR→west phantom). Polygons are
+    # in target space, so read the contacts exactly off the shared walls.
+    gen_room_edges = exact_room_edges(plan, boundary, resolved_types)
+    # Stage-1: score the generated geometry with the sensor registry, using the
+    # freshly re-derived room_edges so daylight/capacity judge the realised frontage.
+    sensors = _run_sensors(plan, gen_room_edges,
+                           requirements=requirements, target_boundary=boundary,
+                           spec=spec, layer="geometry")
+    return {
+        "spec": spec, "plan": plan, "resolved_types": resolved_types,
+        "room_edges": gen_room_edges, "sensors": sensors,
+        "connections_applied": connections_applied,
+    }
+
+
+def _parse_generate_body(body):
+    """Shared request-field extraction + validation for /generate and
+    /moves/propose (identical bodies). Returns (fp, boundary, entrance_point,
+    typed_edges, requirements, swap, mm_per_unit, area_lift, connections, node_pos)
+    or (None, error_response) on a validation failure."""
+    fp = body.get("fp")
+    boundary = body.get("boundary")
+    entrance_point = body.get("entrance_point")
+    typed_edges = body.get("typed_edges")
+    requirements = body.get("requirements")
+    swap = body.get("swap")
+    mm_per_unit = body.get("mm_per_unit")
+    area_lift = body.get("area_lift", True)
+    connections = body.get("connections")
+    node_pos = body.get("node_pos")
+
+    if not isinstance(fp, dict) or not fp.get("rooms"):
+        return None, (jsonify({"error": "missing or invalid 'fp' (must have rooms)"}), 400)
+    if not isinstance(boundary, list) or len(boundary) < 3:
+        return None, (jsonify({"error": "boundary must be a list of at least 3 [x, y] points"}), 400)
+    if not entrance_point:
+        return None, (jsonify({"error": "missing entrance_point"}), 400)
+
+    return (fp, boundary, entrance_point, typed_edges, requirements, swap,
+            mm_per_unit, area_lift, connections, node_pos), None
 
 
 # ── /generate endpoint (Stage 0 — node-driven geometric solver) ───────────────
@@ -1157,108 +1286,145 @@ def generate_route():
         swap           : optional [id_a, id_b] — reassign two rooms' nodes
         mm_per_unit    : optional float — boundary-units -> mm (enables min-size);
                          defaults to the plan SCALE when omitted
+        area_lift      : optional bool — step-3 min_area lift (default true)
+        connections    : optional [{u, v, type}], type in wall|door|open — Stage-2
+                         SetConnection edits applied to the Spec before generate()
 
-    Response (JSON): {status, rooms, node_pos, room_edges, spec_nodes, feasible,
-    report} — report.debug_steps carries the per-stage snapshot for the visual test.
+    Response (JSON): {status, rooms, edges, node_pos, room_edges, spec_nodes,
+    feasible, report} — report.debug_steps carries the per-stage snapshot for the
+    visual test; report.connections_applied lists the connection edits that were
+    written into this generation.
     """
     try:
         body = request.get_json(force=True, silent=True) or {}
     except Exception:
         return jsonify({"error": "invalid JSON body"}), 400
 
-    fp = body.get("fp")
-    boundary = body.get("boundary")
-    entrance_point = body.get("entrance_point")
-    typed_edges = body.get("typed_edges")
-    requirements = body.get("requirements")
-    swap = body.get("swap")
-    mm_per_unit = body.get("mm_per_unit")
-
-    if not isinstance(fp, dict) or not fp.get("rooms"):
-        return jsonify({"error": "missing or invalid 'fp' (must have rooms)"}), 400
-    if not isinstance(boundary, list) or len(boundary) < 3:
-        return jsonify({"error": "boundary must be a list of at least 3 [x, y] points"}), 400
-    if not entrance_point:
-        return jsonify({"error": "missing entrance_point"}), 400
+    parsed, err = _parse_generate_body(body)
+    if err:
+        return err
+    (fp, boundary, entrance_point, typed_edges, requirements, swap,
+     mm_per_unit, area_lift, connections, node_pos) = parsed
 
     try:
-        from packages.floorplan_core.generate import (
-            spec_from_plan, generate, reassign, SCALE as _PLAN_SCALE,
+        gen = _generate_plan(
+            fp, boundary, entrance_point, typed_edges=typed_edges,
+            requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
+            area_lift=area_lift, connections=connections, node_pos=node_pos,
         )
-        # The frontend does not send mm_per_unit; without it the solver drops every
-        # min_edge to 0. Default to the plan scale (boundary units -> mm).
-        if not mm_per_unit:
-            mm_per_unit = float(_PLAN_SCALE)
-        # Resolve boundary edge types the same way /retrieve and /topo_check do,
-        # then compute the topology layer so node_pos (and room_edges for the
-        # drawn connectors) match the placement the graph is drawn from.
-        resolved_types = default_edge_types(boundary, entrance_point)
-        for e in typed_edges or []:
-            i = e.get("edge_index")
-            if i is not None and 0 <= i < len(boundary) and e.get("type"):
-                resolved_types[i] = e["type"]
-        topo = topological_fitness(
-            fp, target_boundary=boundary, target_edge_types=resolved_types,
-            entrance_point=entrance_point, requirements=requirements,
-        )
-        fp_with_nodes = dict(fp)
-        fp_with_nodes["node_pos"] = body.get("node_pos") or topo.get("node_pos", {})
-
-        # Score against the DRAWN entrance (target frame), not the source plan's
-        # entrance (source frame): the generated geometry sits in the drawn
-        # boundary, so entry-room detection must use where the user put the door.
-        drawn_entrance = ([entrance_point[0], entrance_point[1],
-                           entrance_point[0], entrance_point[1]]
-                          if entrance_point else fp.get("entrance"))
-        spec = spec_from_plan(
-            fp_with_nodes, boundary, edge_types=resolved_types,
-            entrance=drawn_entrance, mm_per_unit=mm_per_unit,
-        )
-        # Thread the room↔boundary target (which target edge each room should front,
-        # from the topo-rank ring alignment) into the Spec so the realiser honours it
-        # (generate step 2b). Keyed by room id; survives a swap (demand follows
-        # identity, which is what the swap edits the node of, not the id).
-        boundary_demands = {}
-        for rid, contacts in (topo.get("room_edges") or {}).items():
-            idxs = sorted({c.get("target_edge_index") for c in contacts
-                           if c.get("target_edge_index") is not None})
-            if idxs:
-                boundary_demands[str(rid)] = idxs
-        spec["boundary_demands"] = boundary_demands
-        if swap and len(swap) == 2:
-            spec = reassign(spec, swap[0], swap[1])
-        plan = generate(spec)
-        # Re-derive room↔boundary from the GENERATED geometry. The solver re-tiles
-        # the boundary, so the source's room_edges are stale (a room drawn off an
-        # edge still carried the source contact — the LR→west phantom). Polygons are
-        # in target space, so raycast directly, skipping the display transform.
-        from packages.floorplan_core.topo_signature import _raycast_room_edges
-        gen_room_edges = _raycast_room_edges(
-            plan, boundary, entrance_point, mirror=False,
-            target_edge_types=resolved_types, node_pos=plan.get("node_pos"),
-            in_target_space=True,
-        )
-        # Stage-1: score the generated geometry with the sensor registry, using the
-        # freshly re-derived room_edges so daylight/capacity judge the realised frontage.
-        from packages.floorplan_core.topo_sensors import run_sensors
-        sensors = run_sensors(plan, gen_room_edges,
-                              requirements=requirements, target_boundary=boundary,
-                              spec=spec)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("generate failed")
         return jsonify({"error": str(exc)}), 500
+
+    plan, spec = gen["plan"], gen["spec"]
+    report = plan["report"]
+    report["connections_applied"] = gen["connections_applied"]
 
     return jsonify({
         "status": "ok",
         "rooms": plan["rooms"],
         "edges": plan.get("edges", []),
         "node_pos": plan.get("node_pos", {}),
-        "room_edges": gen_room_edges,
+        "room_edges": gen["room_edges"],
         "spec_nodes": spec["node_assignment"],
         "feasible": plan["feasible"],
-        "report": plan["report"],
-        "sensors": sensors,
+        "report": report,
+        "sensors": gen["sensors"],
     })
+
+
+# ── /moves/propose endpoint (Stage 2 — the Act layer) ─────────────────────────
+
+@app.route("/moves/propose", methods=["POST"])
+def moves_propose_route():
+    """
+    Stage 2 of the agent harness (packages.floorplan_core.moves): build the Spec
+    and run generate() exactly as /generate does (via _generate_plan), then run
+    every applicable Move in MOVES — today, SetConnection — and return its
+    candidate edits ranked with their predicted sensor effect.
+
+    Request body (JSON): identical to /generate, including `connections` — the
+    session's current connection edits, applied before moves are proposed so a
+    candidate is proposed against where the plan actually stands.
+
+    Response (JSON): {candidates: [{edit, predicted, delta}, ...], sensors}.
+        edit      : the move's own edit dict, e.g. {move, u, v, type, reason}
+        predicted : {summary, failing} — failing maps sensor -> failing_rooms for
+                    every sensor predict_effect leaves failing
+        delta     : [{sensor, before_ok, after_ok, cleared}] — one entry per
+                    sensor whose ok flips; cleared is true when it flips false->true
+        sensors   : the current (pre-candidate) sensor result, run_sensors' own
+                    {summary, checks} shape
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    parsed, err = _parse_generate_body(body)
+    if err:
+        return err
+    (fp, boundary, entrance_point, typed_edges, requirements, swap,
+     mm_per_unit, area_lift, connections, node_pos) = parsed
+
+    try:
+        gen = _generate_plan(
+            fp, boundary, entrance_point, typed_edges=typed_edges,
+            requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
+            area_lift=area_lift, connections=connections, node_pos=node_pos,
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("moves/propose: generate failed")
+        return jsonify({"error": str(exc)}), 500
+
+    plan, spec, sensors = gen["plan"], gen["spec"], gen["sensors"]
+    ctx_inputs = {"room_edges": gen["room_edges"], "requirements": requirements,
+                  "target_boundary": boundary, "spec": spec}
+    cur_checks = {c["sensor"]: c for c in sensors.get("checks", [])}
+
+    try:
+        from packages.floorplan_core.moves import MOVES
+
+        candidates = []
+        for move in MOVES:
+            if not move.applicable(plan, sensors):
+                continue
+            for edit in move.propose(plan, sensors, ctx_inputs):
+                predicted = move.predict_effect(plan, edit, ctx_inputs)
+                pred_checks = {c["sensor"]: c for c in predicted.get("checks", [])}
+                delta = []
+                for name, cur in cur_checks.items():
+                    pred = pred_checks.get(name)
+                    if pred is None:
+                        continue
+                    # per-room change too: a move that fixes one of two failing
+                    # rooms leaves the sensor failing but is still progress
+                    before = {str(r) for r in cur.get("failing_rooms") or []}
+                    after = {str(r) for r in pred.get("failing_rooms") or []}
+                    if bool(cur["ok"]) != bool(pred["ok"]) or before != after:
+                        delta.append({"sensor": name, "before_ok": cur["ok"],
+                                     "after_ok": pred["ok"],
+                                     "cleared": (not cur["ok"]) and pred["ok"],
+                                     "rooms_fixed": sorted(before - after),
+                                     "rooms_broken": sorted(after - before)})
+                candidates.append({
+                    "edit": edit,
+                    "predicted": {
+                        "summary": predicted.get("summary", {}),
+                        "failing": {c["sensor"]: c["failing_rooms"]
+                                   for c in predicted.get("checks", []) if not c["ok"]},
+                    },
+                    "delta": delta,
+                })
+    except Exception as exc:
+        logger.exception("moves/propose: move evaluation failed")
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"candidates": candidates, "sensors": sensors})
 
 
 # ── CLI / entry point ─────────────────────────────────────────────────────────

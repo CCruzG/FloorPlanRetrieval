@@ -16,6 +16,7 @@ export function createBoundaryClosedState(){
   return {
     closed:true,
     snapFirst:false,
+    mode:'select',          // finishing a drawn boundary always lands back in select (2026-10-30)
   };
 }
 
@@ -37,6 +38,7 @@ export function createBoundaryClearedState(){
     edgeTypes:[],
     edgeTypeMode:false,
     hoveredEdge:null,
+    mode:'select',          // clearing never leaves the app in draw mode — re-enter via the button
   };
 }
 
@@ -51,6 +53,7 @@ export function createLoadedBoundaryState(entry){
     edgeTypes:Array.isArray(entry.edgeTypes)?entry.edgeTypes.slice():[],
     edgeTypeMode:false,
     hoveredEdge:null,
+    mode:'select',          // a loaded boundary is already closed — select, not draw (2026-10-30)
   };
 }
 

@@ -23,7 +23,7 @@ export function createInitialState(){
     db:{names:null,descs:null,dim:0,_raw:null},
     cache:{},
     req:{bedrooms:2,bathrooms:1,balcony:false,study:false,storage:false},
-    params:{topn:5,shape_w:1.0,ent_w:2.0,room_w:1.0,showGraph:false},
+    params:{topn:5,shape_w:1.0,ent_w:2.0,room_w:1.0,showGraph:true}, // graph on by default (change 2026-10-30)
     boundary:[],
     closed:false,
     entrance:null,

@@ -79,6 +79,22 @@ let {req,params,boundary,closed,entrance,entranceMode,entranceSnap,edgeTypes,edg
 // room ids, most-recently-selected two kept (oldest dropped past the cap).
 let graphSelection=[];
 
+// Interaction mode (2026-10-30) — single source of truth for what a canvas
+// click does: 'select' | 'draw' | 'measure' | 'entrance' | 'edgeType'.
+// entranceMode/edgeTypeMode/measureMode below are kept (too many call sites
+// read them directly to rip out safely) but are now DERIVED from mode —
+// set only via setMode(), never assigned directly outside it. Default
+// 'select': the app no longer starts mid-draw, a boundary vertex needs the
+// draw-boundary button first.
+let mode='select';
+
+// Measure tool (2026-10-30) — click-click distance readout, independent of
+// boundary/entrance/graph click modes. measureA/measureB are normalised
+// {x,y}; measureB null means the first point is down, waiting for the second.
+let measureMode=false;
+let measureA=null;
+let measureB=null;
+
 let arapDebugRooms=null;
 let arapDebugLabel=null;
 // Stage 0 (agent harness) — the node-driven solver's output, drawn as a
@@ -89,6 +105,19 @@ let generatedNodes=null;
 // The solver grid behind the generated rooms (report.grid_lines): drawn under the
 // rooms so it is visible how the geometry was cut. null when nothing is generated.
 let generatedGrid=null;
+// The generated plan's own room<->room edges (resp.edges), carrying the live
+// connection/separation (wall/door/open) after any Stage-2 SetConnection edit —
+// distinct from results[selected].fp.edges, which stays the retrieved source and
+// never reflects an edit. null when nothing is generated.
+let generatedEdges=null;
+
+// Stage 2 (agent harness, moves) — the session's SetConnection edits, applied
+// (in order) to the Spec on every /generate call via `connections`, and the
+// candidates /moves/propose last returned (cleared whenever the plan the
+// candidates were proposed against changes). Reset on a new plan selection, a
+// boundary clear, or "reset generate" (resetConnectionEdits, below).
+let connectionEdits=[];
+let moveCandidates=[];
 // Stage 1 (re-solve loop) — the arrange step's judgement report, rendered as an
 // overlay so infeasibility is visible on the canvas, not only in the console.
 // Null for every step except `arrange`.
@@ -332,6 +361,9 @@ function applyBoundaryEditorState(patch){
   if(Object.prototype.hasOwnProperty.call(patch,'edgeTypes'))edgeTypes=patch.edgeTypes;
   if(Object.prototype.hasOwnProperty.call(patch,'edgeTypeMode'))edgeTypeMode=patch.edgeTypeMode;
   if(Object.prototype.hasOwnProperty.call(patch,'hoveredEdge'))hoveredEdge=patch.hoveredEdge;
+  // mode last — setMode() re-derives entranceMode/edgeTypeMode/measureMode,
+  // so it overrides whatever this same patch set above with the authoritative value.
+  if(Object.prototype.hasOwnProperty.call(patch,'mode'))setMode(patch.mode);
 }
 
 const canvas=document.getElementById('main-canvas');
@@ -2569,7 +2601,7 @@ const {
 }));
 
 const {
-  clearBoundary,
+  clearBoundary: clearBoundaryInner,
   clearEntrance,
   closeBoundary,
   exportLibrary,
@@ -2610,6 +2642,14 @@ const {
   checkReady,
   sync3DSceneIfNeeded,
 });
+
+// Clearing the boundary invalidates any Stage-2 session edits (they were
+// proposed/applied against the plan generated inside that boundary) — same
+// rule as the Stage-0 overlay (selectResult, resetGenerate).
+function clearBoundary(){
+  clearBoundaryInner();
+  resetConnectionEdits();
+}
 
 function setViewTab(tab,opts={}){
   activeTab=tab;
@@ -2747,6 +2787,11 @@ function getActiveFPState(){
     generatedRooms,
     generatedNodes,
     generatedGrid,
+    generatedEdges,
+    measureMode,
+    measureA,
+    measureB,
+    mode,
   }),
   getActiveFPState,
   n2c,
@@ -2763,6 +2808,7 @@ render=()=>{
   updateTopoFlagsPanel();
   updateSwapPanel();
   updateGeneratePanel();
+  updateMovesPanel();
   if(activeTab==='fit')_fitSyncRunButton();
 };
 
@@ -2785,7 +2831,7 @@ function updateCanvasHud(){
   if(!el)return;
   const lines=[];
   const areaM2=boundaryAreaM2();
-  if(areaM2!=null)lines.push(['boundary: '+areaM2.toFixed(1)+' m²','#1e293b']);
+  if(areaM2!=null)lines.push(['boundary: '+areaM2.toFixed(2)+' m²','#1e293b']);
   if(graphSelection.length===1)lines.push(['swap: pick a 2nd room','#2563eb']);
   else if(graphSelection.length===2)lines.push(['swap: '+graphSelection.join(' ↔ '),'#2563eb']);
   const rep=arapDebugReport;
@@ -2860,15 +2906,15 @@ function renderRoomAreas(report, sensors){
     const edgeBad=minEdgeM>0&&shortM!=null&&shortM<minEdgeM-1e-6;
     const areaBad=minAreaM2>0&&m2<minAreaM2-1e-6;
     const dims=(shortM==null)?'—':`${shortM.toFixed(1)}×${longM.toFixed(1)} m`;
-    const sub=dims+(edgeBad?` ⚠ edge<${minEdgeM.toFixed(1)}`:'')+(areaBad?` · area<${minAreaM2.toFixed(0)}`:'');
+    const sub=dims+(edgeBad?` ⚠ edge<${minEdgeM.toFixed(1)}`:'')+(areaBad?` · area<${minAreaM2.toFixed(2)}`:'');
     return `<div style="margin-bottom:4px">`+
       `<div style="display:flex;justify-content:space-between"><span>${r.label||r.id}</span>`+
-      `<span style="color:${areaBad?RED:TXT}">${m2.toFixed(1)} m²${areaBad?' ⚠':''}</span></div>`+
+      `<span style="color:${areaBad?RED:TXT}">${m2.toFixed(2)} m²${areaBad?' ⚠':''}</span></div>`+
       `<div style="font-size:9px;color:${edgeBad?RED:MUT}">${sub}</div>`+
     `</div>`;
   }).join('');
   el.innerHTML=rows+'<div style="display:flex;justify-content:space-between;color:var(--muted);'+
-    `border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span>total</span><span>${total.toFixed(1)} m²</span></div>`;
+    `border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span>total</span><span>${total.toFixed(2)} m²</span></div>`;
 }
 
 // Resizable left sidebar — drag the divider; width persists per browser.
@@ -2923,18 +2969,56 @@ const EDGE_TYPE_LABELS={external:'exterior',shared_wall:'inter-tenancy',facing_c
 const EDGE_TYPE_ORDER=['external','shared_wall','facing_corridor'];
 const EDGE_TYPE_COLOURS={external:'#22c55e',shared_wall:'#64748b',facing_corridor:'#eab308'};
 
+// ── interaction mode (2026-10-30) ───────────────────────────────────────────
+// setMode() is the only place mode is assigned. It clears the state of the
+// mode being left (so Esc / switching never leaks a stale picker or snap into
+// the next mode), re-derives the three legacy flags, and syncs the mode
+// buttons' active class in one place instead of at every call site.
+function setMode(next){
+  if(mode===next)return;
+  if(mode==='entrance'){entranceSnap=null;}
+  if(mode==='edgeType'){hoveredEdge=null;closeEdgeTypePicker();}
+  mode=next;
+  entranceMode=mode==='entrance';
+  edgeTypeMode=mode==='edgeType';
+  measureMode=mode==='measure';
+  document.getElementById('btn-draw-boundary')?.classList.toggle('active',mode==='draw');
+  document.getElementById('btn-measure-mode')?.classList.toggle('active',mode==='measure');
+  document.getElementById('btn-entrance-mode')?.classList.toggle('active',mode==='entrance');
+  document.getElementById('btn-edge-type-mode')?.classList.toggle('active',mode==='edgeType');
+  updateCursor();render();
+}
+
+// "draw boundary" (2026-10-30) — explicit entry point into draw mode. Replaces
+// the old implicit start-in-draw behaviour: a finished boundary and a new one
+// being drawn can't coexist, so entering draw clears both the same way the
+// clear-boundary button does.
+function enterDrawMode(){
+  clearBoundary();
+  setMode('draw');
+  document.getElementById('canvas-hint').textContent='click to add vertices · shift = lock H/V';
+}
+
 function toggleEdgeTypeMode(){
   if(!closed)return;
-  edgeTypeMode=!edgeTypeMode;
-  if(edgeTypeMode&&entranceMode){        // the two edge modes are mutually exclusive
-    entranceMode=false;entranceSnap=null;
-    document.getElementById('btn-entrance-mode')?.classList.remove('active');
-  }
-  hoveredEdge=null;
-  closeEdgeTypePicker();
-  document.getElementById('btn-edge-type-mode')?.classList.toggle('active',edgeTypeMode);
+  setMode(mode==='edgeType'?'select':'edgeType');
   document.getElementById('canvas-hint').textContent=
-    edgeTypeMode?'click a boundary edge to set its type':'boundary closed · press retrieve';
+    mode==='edgeType'?'click a boundary edge to set its type':'boundary closed · press retrieve';
+}
+
+// ── measure tool (2026-10-30) ───────────────────────────────────────────────
+// Click-click distance readout. Takes priority over every other canvas click
+// action while on (checked first in the click handler), so it never leaks a
+// point into boundary drawing or node selection. Esc or toggling off clears
+// the current line; a 3rd click starts a fresh one (see canvas click handler).
+// Unlike entrance/edgeType, measuring doesn't need a closed boundary.
+function toggleMeasureMode(){
+  measureA=null;measureB=null;
+  setMode(mode==='measure'?'select':'measure');
+}
+function clearMeasure(){
+  if(!measureA&&!measureB)return;
+  measureA=null;measureB=null;
   render();
 }
 
@@ -3099,6 +3183,8 @@ async function runGenerate(useSwap){
       typed_edges:boundaryTypedEdgesPayload(),
       requirements:req||null,
       swap:swapPair,
+      area_lift:document.getElementById('chk-area-lift')?.checked!==false,
+      connections:connectionEdits,
     },{timeoutMs:15000});
     if(resp.error)throw new Error(resp.error);
     // Draw the generated geometry as a target-space overlay (the solver already
@@ -3112,11 +3198,19 @@ async function runGenerate(useSwap){
     generatedRooms=(resp.rooms||[]).map((rm)=>({...rm,source_type:typeById.get(String(rm.id))??rm.type}));
     generatedNodes=resp.node_pos||{};
     generatedGrid=resp.report?.grid_lines||null;
+    // The live room<->room edges — carries connection/separation after any
+    // Stage-2 SetConnection edit, unlike results[selected].fp.edges (the
+    // retrieved source, never edited). Drives the graph's door/open/wall drawing.
+    generatedEdges=resp.edges||null;
     // Refresh the drawn room↔boundary connectors to the ones THIS generate computed.
     // They are otherwise left at whatever /retrieve produced, so after any backend
     // change to the raycast the graph keeps showing stale connectors.
     if(results[selected]?.retrieval)results[selected].retrieval.room_edges=resp.room_edges||{};
     if(useSwap)graphSelection=[];
+    // Candidates were proposed against the plan before this generate; stale now.
+    moveCandidates=[];
+    renderMoveCandidates();
+    renderAppliedEdits();
     render();
     const r=resp.report||{};
     const flag=resp.feasible?'✓ coherent partition':'✗ partition not coherent';
@@ -3129,7 +3223,12 @@ async function runGenerate(useSwap){
     if(brokenConns)issues.push(`${brokenConns} connection${brokenConns>1?'s':''} broken`);
     const cov=((r.coverage||0)*100).toFixed(1);
     const areaFit=(r.area_mae!=null)?` · area Δ ${(r.area_mae*100).toFixed(1)}%/room`:'';
-    if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${issues.length?' · '+issues.join(', '):''}`;
+    // step-3 min_area lift summary (off / skipped when the base solve is infeasible)
+    const s3=(r.debug_steps||[]).find((s)=>s.step==='3_resolve')||{};
+    const liftOn=document.getElementById('chk-area-lift')?.checked!==false;
+    const lift=!liftOn?' · area lift OFF'
+      :` · area lift: ${(s3.area_lifted||[]).length?'lifted '+s3.area_lifted.join(', '):'none'}${(s3.area_unmet||[]).length?' · unmet '+s3.area_unmet.join(', '):''}`;
+    if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${lift}${issues.length?' · '+issues.join(', '):''}`;
     renderStage1Sensors(resp.sensors);
     renderRoomAreas(resp.report,resp.sensors);
   }catch(err){
@@ -3144,6 +3243,11 @@ function resetGenerate(){
   generatedRooms=null;
   generatedNodes=null;
   generatedGrid=null;
+  generatedEdges=null;
+  // "reset generate" discards the overlay the edits were proposed/applied
+  // against — the edits go with it (ARCHITECTURE.md requirement: edits reset
+  // on a new plan, a boundary clear, or reset generate).
+  resetConnectionEdits();
   render();
   const el=document.getElementById('generate-readout');
   if(el)el.textContent='overlay cleared · retrieved view restored';
@@ -3163,6 +3267,131 @@ function updateGeneratePanel(){
   if(gen)gen.disabled=!show;
   if(genSwap)genSwap.disabled=!(show&&graphSelection.length===2);
   if(resetBtn)resetBtn.style.display=generatedRooms?'':'none';
+}
+
+// ── Stage 2 (agent harness) — propose + apply SetConnection moves ───────────
+// "propose moves" calls /moves/propose with the current generate inputs plus the
+// session's connection edits so far, and lists each candidate with its predicted
+// sensor delta. Clicking a candidate appends it to connectionEdits and re-runs
+// /generate (runGenerate), which threads `connections` into the Spec before
+// generate() — the plan, sensors and graph all refresh from that one call.
+
+// `rid (label)` — same display convention as topo_sensors._nm, read off
+// whichever room list is live (the generated overlay, else the source plan).
+function roomLabelFor(rid){
+  const rooms=generatedRooms||results[selected]?.fp?.rooms||[];
+  const r=rooms.find((rm)=>String(rm.id)===String(rid));
+  return `${rid} (${r?(r.type??r.label??'?'):'?'})`;
+}
+
+async function runProposeMoves(){
+  const el=document.getElementById('moves-candidates');
+  if(!el)return;
+  if(selected===null||!closed||!generatedRooms){
+    el.innerHTML='<span style="color:var(--muted)">generate a plan first</span>';
+    return;
+  }
+  el.innerHTML='<span style="color:var(--muted)">proposing…</span>';
+  try{
+    const src=results[selected].fp;
+    const {data:resp}=await postJsonWithTimeout('/moves/propose',{
+      fp:src,
+      boundary:boundary.map(({x,y})=>[x,y]),
+      entrance_point:entrance?[entrance.x,entrance.y]:null,
+      typed_edges:boundaryTypedEdgesPayload(),
+      requirements:req||null,
+      area_lift:document.getElementById('chk-area-lift')?.checked!==false,
+      connections:connectionEdits,
+    },{timeoutMs:15000});
+    if(resp.error)throw new Error(resp.error);
+    moveCandidates=resp.candidates||[];
+    renderMoveCandidates();
+  }catch(err){
+    console.error('[stage2] moves/propose failed:',err);
+    moveCandidates=[];
+    el.innerHTML=`<span style="color:#f87171">propose failed: ${err.message}</span>`;
+  }
+}
+
+function renderMoveCandidates(){
+  const el=document.getElementById('moves-candidates');
+  if(!el)return;
+  if(!moveCandidates.length){
+    el.innerHTML='<span style="color:var(--muted)">no candidates</span>';
+    return;
+  }
+  el.innerHTML=moveCandidates.map((c,i)=>{
+    const e=c.edit||{};
+    // per sensor: rooms fixed / broken, so partial progress shows (a move that
+    // fixes one of two failing rooms) and so does a trade-off (fixes daylight,
+    // breaks depth)
+    const parts=[];
+    for(const d of c.delta||[]){
+      const fx=d.rooms_fixed||[],br=d.rooms_broken||[];
+      if(fx.length)parts.push(`<span style="color:#15803d">${d.cleared?'clears':'fixes'} ${d.sensor} ${fx.map(roomLabelFor).join(', ')}</span>`);
+      if(br.length)parts.push(`<span style="color:#b91c1c">breaks ${d.sensor} ${br.map(roomLabelFor).join(', ')}</span>`);
+    }
+    const tail=parts.length?parts.join(' · '):'no predicted gain';
+    const label=`${e.type} ${roomLabelFor(e.u)} – ${roomLabelFor(e.v)} · ${tail}`;
+    return `<button class="clear-btn" data-move-idx="${i}" `+
+      `style="width:100%;margin-bottom:4px;text-align:left;font-size:10px;white-space:normal">${label}</button>`;
+  }).join('');
+  el.querySelectorAll('[data-move-idx]').forEach((btn)=>{
+    btn.addEventListener('click',()=>applyMoveCandidate(+btn.dataset.moveIdx));
+  });
+}
+
+function applyMoveCandidate(i){
+  const c=moveCandidates[i];
+  if(!c)return;
+  const e=c.edit;
+  connectionEdits=[...connectionEdits,{u:e.u,v:e.v,type:e.type}];
+  moveCandidates=[];
+  renderMoveCandidates();
+  renderAppliedEdits();
+  runGenerate(false);
+}
+
+function undoLastConnectionEdit(){
+  if(!connectionEdits.length)return;
+  connectionEdits=connectionEdits.slice(0,-1);
+  renderAppliedEdits();
+  runGenerate(false);
+}
+
+function clearConnectionEdits(){
+  if(!connectionEdits.length)return;
+  connectionEdits=[];
+  renderAppliedEdits();
+  runGenerate(false);
+}
+
+// Shared by selectResult / clearBoundary / resetGenerate — any point that
+// invalidates the plan the edits were made against (requirement: the edits
+// list resets on a new plan, a cleared boundary, or "reset generate").
+function resetConnectionEdits(){
+  connectionEdits=[];
+  moveCandidates=[];
+  renderAppliedEdits();
+  renderMoveCandidates();
+}
+
+function renderAppliedEdits(){
+  const wrap=document.getElementById('moves-applied-wrap');
+  const el=document.getElementById('moves-applied');
+  if(!wrap||!el)return;
+  if(!connectionEdits.length){wrap.style.display='none';el.innerHTML='';return;}
+  wrap.style.display='';
+  el.innerHTML=connectionEdits.map((c)=>
+    `<div>${c.type} ${roomLabelFor(c.u)} – ${roomLabelFor(c.v)}</div>`
+  ).join('');
+}
+
+// Visible once a generated plan is shown (same gate as the generate-reset button).
+function updateMovesPanel(){
+  const section=document.getElementById('moves-section');
+  if(!section)return;
+  section.style.display=generatedRooms?'':'none';
 }
 
 // Stage 0 pre-analysis — advisory check that the requested program can fit the
@@ -3205,7 +3434,7 @@ canvas.addEventListener('mousedown',e=>{
     canvas.style.cursor='grab';
     return;
   }
-  if(!closed||selected===null||entranceMode||edgeTypeMode)return;
+  if(!closed||selected===null||mode!=='select')return;
   const r=canvas.getBoundingClientRect();
   const rawX=(e.clientX-r.left)*(cW/r.width),rawY=(e.clientY-r.top)*(cH/r.height);
   const [cx,cy]=cssToLogical(rawX,rawY);
@@ -3242,7 +3471,7 @@ canvas.addEventListener('mousedown',e=>{
 document.addEventListener('mouseup',e=>{
   if(e.button===1&&panDrag){
     panDrag=null;
-    canvas.style.cursor=closed?'default':'crosshair';
+    canvas.style.cursor=(mode==='draw'||mode==='measure')?'crosshair':'default';
     return;
   }
   if(dragState){
@@ -3320,14 +3549,14 @@ canvas.addEventListener('mousemove',e=>{
     hoveredEdge=snap?snap.edge:null;
     canvas.style.cursor=snap?'pointer':'default';
   }
-  // ── hover detection for room / entrance editing ─────────────────────
-  else if(selected!==null&&closed&&!entranceMode){
+  // ── hover detection for room / entrance editing — select mode only ────
+  else if(mode==='select'&&selected!==null&&closed){
     hoveredEntrance=hitTestEntrance(cx,cy);
     hoveredRoom=hoveredEntrance?null:hitTestRooms(cx,cy);
     updateCursor();
   }else{
     hoveredRoom=null;hoveredEntrance=false;
-    canvas.style.cursor=closed?'default':'crosshair';
+    canvas.style.cursor=(mode==='draw'||mode==='measure')?'crosshair':'default';
   }
 
   if(entranceMode&&closed){
@@ -3354,12 +3583,25 @@ canvas.addEventListener('click',e=>{
   const rawX=(e.clientX-r.left)*(cW/r.width),rawY=(e.clientY-r.top)*(cH/r.height);
   const [cx,cy]=cssToLogical(rawX,rawY);
 
+  // Measure mode wins over every other click action (graph node pick,
+  // boundary drawing, entrance/edge-type placement) — checked first and
+  // returns, so a measurement click never leaks into them. 1st click = point
+  // A, 2nd = point B, 3rd starts a new line (measureB already set, so this
+  // branch resets instead of appending a 3rd point).
+  if(measureMode){
+    const [mnx,mny]=c2n(cx,cy);
+    if(!measureA||measureB){measureA={x:mnx,y:mny};measureB=null;}
+    else measureB={x:mnx,y:mny};
+    render();
+    return;
+  }
+
   // Topology-graph node selection (room-swap prerequisite) — takes priority
   // over every other click behaviour whenever the graph is showing. Hit-test
   // against the positions the renderer actually drew (getGraphNodes), in the
   // same logical-canvas-px space cssToLogical just produced (pre-viewport
   // transform — matches roomCen/n2c, not CSS px or normalised coords).
-  if(params.showGraph&&selected!==null&&closed){
+  if(params.showGraph&&mode==='select'&&selected!==null&&closed){
     const g=getGraphNodes();
     if(g){
       let hitId=null,hitDist=Infinity;
@@ -3394,12 +3636,10 @@ canvas.addEventListener('click',e=>{
     const snap=snapToEdge(nx,ny);
     if(snap){
       entrance={x:snap.px,y:snap.py};
-      entranceMode=false;
-      entranceSnap=null;
+      setMode('select');
       // The edge the entrance sits on is the hallway-facing one by definition —
       // set it unless the user already classified that edge deliberately.
       if(!edgeTypes[snap.edge])edgeTypes[snap.edge]='facing_corridor';
-      document.getElementById('btn-entrance-mode').classList.remove('active');
       document.getElementById('canvas-hint').textContent='entrance placed · press retrieve';
       updateEntranceInfo();
       checkReady();render();
@@ -3407,7 +3647,7 @@ canvas.addEventListener('click',e=>{
     return;
   }
 
-  if(closed)return;
+  if(mode!=='draw'||closed)return;
   if(e.shiftKey&&boundary.length>0){
     const l=boundary[boundary.length-1];
     const dx=Math.abs(nx-l.x),dy=Math.abs(ny-l.y);
@@ -3425,7 +3665,7 @@ canvas.addEventListener('click',e=>{
 });
 
 canvas.addEventListener('dblclick',e=>{
-  if(closed||boundary.length<3)return;
+  if(mode!=='draw'||closed||boundary.length<3)return;
   e.preventDefault();closeBoundary();
 });
 
@@ -3457,8 +3697,20 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(e.target&&e.target.matches&&e.target.matches('input, textarea, select'))return;
-  if(e.key==='Escape')clearBoundary();
-  if(e.key==='Enter'&&boundary.length>=3&&!closed)closeBoundary();
+  if(e.key==='Escape'){
+    if(mode==='draw'){
+      clearBoundary();setMode('select');            // delete the unfinished boundary, back to select (clearBoundary leaves mode alone)
+    }else if(mode==='measure'){
+      clearMeasure();setMode('select');
+    }else if(mode==='entrance'||mode==='edgeType'){
+      setMode('select');                            // setMode() clears that mode's own transient state
+      document.getElementById('canvas-hint').textContent='boundary closed · press retrieve';
+    }else if(graphSelection.length||selectedRoom!==null){
+      // select mode: clear the current selection only — never touch retrieval results
+      graphSelection=[];selectedRoom=null;render();
+    }
+  }
+  if(e.key==='Enter'&&mode==='draw'&&boundary.length>=3&&!closed)closeBoundary();
   if(e.key==='Shift')shiftDown=true;
   if(e.key==='z'||e.key==='Z'){viewport.zoom=1;viewport.panX=0;viewport.panY=0;render();}
 });
@@ -3574,6 +3826,9 @@ function selectResult(i){
   generatedRooms=null;
   generatedNodes=null;
   generatedGrid=null;
+  generatedEdges=null;
+  // ...and the Stage-2 session edits, which were proposed/applied against it.
+  resetConnectionEdits();
   arapDebugDoor=null;
   arapDebugReport=null;
   arapAlignedIndex=null;
@@ -3591,6 +3846,11 @@ function selectResult(i){
     render,
     sync3DSceneIfNeeded,
   }));
+  // selectResultState's internal render() fires with the stale outer `selected`
+  // (the destructuring assign above only lands after it returns), so the
+  // click painted the old selection — plan only appeared once mousemove's own
+  // render() ran with the now-current `selected`. Re-render here with it set.
+  render();
 }
 
 // Transform query boundary into the retrieved plan's original coordinate space
@@ -3949,6 +4209,20 @@ window.addEventListener('DOMContentLoaded',async ()=>{
   });
 })();
 
+// navigator.clipboard needs a secure context; fall back to the classic
+// hidden-textarea + execCommand trick so copy still works over plain http
+// (the dev server) or in older browsers.
+function copyTextToClipboard(text){
+  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
+  return new Promise((resolve,reject)=>{
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    try{document.execCommand('copy');resolve();}catch(err){reject(err);}
+    document.body.removeChild(ta);
+  });
+}
+
 function wirePhase1UI(){
   setupDevModeUI();
   const on=(id,eventName,handler)=>{
@@ -3975,13 +4249,14 @@ function wirePhase1UI(){
   clickFileTarget('dz-pls','fi-pls');
 
   on('btn-clear-plan-cache','click',()=>clearPlanCache());
+  on('btn-draw-boundary','click',()=>enterDrawMode());
   on('btn-clear-boundary','click',()=>clearBoundary());
   on('btn-save-boundary','click',()=>saveBoundary());
   // Copy the Stage-1 sensor readout as plain text for debugging / pasting.
   on('btn-copy-sensors','click',()=>{
     const t=document.getElementById('stage1-sensors');
     if(!t||!t.innerText.trim())return;
-    navigator.clipboard?.writeText('stage 1 · sensors\n'+t.innerText).then(()=>{
+    copyTextToClipboard('stage 1 · sensors\n'+t.innerText).then(()=>{
       const b=document.getElementById('btn-copy-sensors');
       if(!b)return;
       const o=b.textContent; b.textContent='copied';
@@ -3991,12 +4266,18 @@ function wirePhase1UI(){
   on('btn-entrance-mode','click',()=>toggleEntranceMode());
   on('btn-clear-entrance','click',()=>clearEntrance());
   on('btn-edge-type-mode','click',()=>toggleEdgeTypeMode());
+  on('btn-measure-mode','click',()=>toggleMeasureMode());
   on('btn-feasibility-check','click',()=>runFeasibilityCheck());
   on('btn-swap-nodes','click',()=>runSwapNodes());
   on('btn-swap-reset','click',()=>resetSwap());
   on('btn-generate','click',()=>runGenerate(false));
   on('btn-generate-swap','click',()=>runGenerate(true));
+  // flipping the lift re-derives the shown plan, for a quick before/after
+  on('chk-area-lift','change',()=>{if(generatedRooms)runGenerate(false);});
   on('btn-generate-reset','click',()=>resetGenerate());
+  on('btn-propose-moves','click',()=>runProposeMoves());
+  on('btn-moves-undo','click',()=>undoLastConnectionEdit());
+  on('btn-moves-clear','click',()=>clearConnectionEdits());
   on('btn-export-library','click',()=>exportLibrary());
   on('fi-import-library','change',(e)=>importLibrary(e.target));
 

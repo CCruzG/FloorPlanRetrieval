@@ -389,7 +389,11 @@ details.ss[open] > summary { margin-bottom:8px; }
         <kbd>enter</kbd> or <kbd>dbl-click</kbd> close<br>
         <kbd>esc</kbd> clear
       </div>
+      <button class="mode-btn" id="btn-draw-boundary">&#x270F;&#xFE0F; draw boundary</button>
       <button class="clear-btn" id="btn-clear-boundary">clear boundary</button>
+      <button class="mode-btn" id="btn-measure-mode" title="click two points to measure the distance between them">
+        &#x1F4D0; measure
+      </button>
       <div id="entrance-controls" style="display:none;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
         <div class="sl" style="margin-bottom:4px">entrance</div>
         <button class="mode-btn" id="btn-entrance-mode">
@@ -448,7 +452,7 @@ details.ss[open] > summary { margin-bottom:8px; }
     <div class="ss">
       <div class="sl">retrieve</div>
       <div class="field">
-        <label><input type="checkbox" id="chk-graph">
+        <label><input type="checkbox" id="chk-graph" checked>
         show room graph</label>
         <label><input type="checkbox" id="chk-plan-geom" checked>
         plan geometry</label>
@@ -489,7 +493,20 @@ details.ss[open] > summary { margin-bottom:8px; }
       <button class="clear-btn" id="btn-generate" style="width:100%" disabled>generate geometry from nodes</button>
       <button class="clear-btn" id="btn-generate-swap" style="width:100%;margin-top:4px" disabled>generate + swap selected</button>
       <button class="clear-btn" id="btn-generate-reset" style="width:100%;margin-top:4px;display:none">reset generate</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer"><input type="checkbox" id="chk-area-lift" checked> min_area lift (step 3)</label>
       <div id="generate-readout" style="font-size:10px;margin-top:4px;line-height:1.5"></div>
+    </div>
+
+    <div class="ss" id="moves-section" style="display:none">
+      <div class="sl">stage 2 · moves</div>
+      <button class="clear-btn" id="btn-propose-moves" style="width:100%">propose moves</button>
+      <div id="moves-candidates" style="font-size:10px;margin-top:6px;line-height:1.5"></div>
+      <div id="moves-applied-wrap" style="margin-top:8px;display:none">
+        <div class="sl">applied connections</div>
+        <div id="moves-applied" style="font-size:10px;line-height:1.6;margin-bottom:4px"></div>
+        <button class="clear-btn" id="btn-moves-undo" style="width:48%">undo last</button>
+        <button class="clear-btn" id="btn-moves-clear" style="width:48%;margin-left:4%">clear edits</button>
+      </div>
     </div>
 
     <details class="ss" id="dev-drawer">
@@ -536,7 +553,7 @@ details.ss[open] > summary { margin-bottom:8px; }
         <button id="btn-generate-3d">Generate 3D</button>
         <div id="coord-disp"></div>
         <div id="canvas-hud"></div>
-        <div id="canvas-hint">draw a boundary polygon to begin</div>
+        <div id="canvas-hint">click "draw boundary" to begin</div>
         <div id="shift-ind">SHIFT LOCK</div>
         <div id="canvas-palette">
           <label><input type="checkbox" id="chk-show-bdry" checked> plan boundary</label>

@@ -45,6 +45,12 @@ BEDROOMS = {"master_bedroom", "bedroom", "study"}
 COMMON = {"living", "dining", "kitchen", "living_room"}
 CIRCULATION = {"hallway", "corridor", "entrance", "foyer"}
 TRANSIT = COMMON | CIRCULATION
+
+# Window floor: an external contact narrower than this is not a window. One value
+# for the raycast (which drops narrower contacts) and the D26/D25 sensors (which
+# read the kept ones), so the two cannot disagree. 0.8 m is a project choice
+# (2026-10-30), below the 1.2 m BADS snorkel floor used before.
+WINDOW_MIN_WIDTH_M = 0.8
 PRIVATE = {"bedroom", "master_bedroom", "study", "bathroom", "storage"}
 
 EXTERNAL = "external"
@@ -539,7 +545,7 @@ def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_ed
     types = target_edge_types or []
     EPS2 = 0.02 ** 2   # ponytail: plan-unit tolerance for "wall on plan perimeter"
     SCALE_M = SCALE / 1000.0   # target boundary unit → metres
-    WIN_MIN_M = 1.2            # window floor (external edges): BADS min opening width
+    WIN_MIN_M = WINDOW_MIN_WIDTH_M   # window floor (external edges)
     DOOR_MIN_M = 0.9           # access floor (facing_corridor edges): a door, not a
     #                           window — a corridor contact this wide is a real entry.
     #                           Below the relevant floor a contact is a notch, dropped.
@@ -634,6 +640,93 @@ def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_ed
         def _floor(ti):
             et = types[ti] if 0 <= ti < len(types) else EXTERNAL
             return DOOR_MIN_M if et == "facing_corridor" else WIN_MIN_M
+        kept = {ti: v for ti, v in fronts.items() if v["width_m"] >= _floor(ti)}
+        if kept:
+            total = sum(v["w"] for v in kept.values()) or 1.0
+            room_edges[str(r.get("id"))] = [
+                {
+                    "target_edge_index": tidx,
+                    "edge_index": tidx,
+                    "edge_type": types[tidx] if 0 <= tidx < len(types) else EXTERNAL,
+                    "arc_frac": round(v["w"] / total, 4),
+                    "width_m": round(v["width_m"], 3),
+                    "target_point": v["pt"],
+                }
+                for tidx, v in sorted(kept.items())
+            ]
+    return room_edges
+
+
+def exact_room_edges(plan, target_boundary, target_edge_types):
+    """Room↔target-edge contacts read EXACTLY off generated geometry (2026-10-30).
+
+    Generated rooms already sit in the target boundary, so a contact is simply a
+    room wall lying along a boundary edge — no ray, no transform. The raycast
+    (above) stays for retrieved plans, whose rooms are in the source frame; on
+    generated plans it lost contacts (one hit per ray: a living room fronting a
+    2.6 m window was reported on its 1.6 m one only). Per room and edge: the
+    overlap intervals of its walls with that edge, merged (collinear vertices
+    split one wall into several); width_m = the widest merged run (one window is
+    contiguous), target_point = its midpoint, arc_frac = the room's share of its
+    kept contact. Same floors and output shape as _raycast_room_edges."""
+    tpts = _xy(target_boundary or [])
+    n = len(tpts)
+    if n < 3:
+        return {}
+    types = target_edge_types or []
+    SCALE_M = SCALE / 1000.0
+    DOOR_MIN_M = 0.9
+    _txs = [p[0] for p in tpts]; _tys = [p[1] for p in tpts]
+    eps = 1e-5 * (math.hypot(max(_txs) - min(_txs), max(_tys) - min(_tys)) or 1.0)
+
+    def _floor(ti):
+        et = types[ti] if 0 <= ti < len(types) else EXTERNAL
+        return DOOR_MIN_M if et == "facing_corridor" else WINDOW_MIN_WIDTH_M
+
+    room_edges = {}
+    for r in plan.get("rooms") or []:
+        poly = r.get("polygon")
+        if not poly or len(poly) < 3:
+            continue
+        m = len(poly)
+        runs = {}    # tidx -> [(t0, t1)] intervals along the edge, in edge units
+        for i in range(n):
+            px, py = tpts[i]
+            qx, qy = tpts[(i + 1) % n]
+            ex, ey = qx - px, qy - py
+            L = math.hypot(ex, ey)
+            if L < eps:
+                continue
+            ux, uy = ex / L, ey / L
+            for k in range(m):
+                ax, ay = poly[k]
+                bx, by = poly[(k + 1) % m]
+                # both wall ends on the edge's line (perpendicular offset ~ 0)
+                if (abs((ax - px) * uy - (ay - py) * ux) > eps
+                        or abs((bx - px) * uy - (by - py) * ux) > eps):
+                    continue
+                ta = (ax - px) * ux + (ay - py) * uy
+                tb = (bx - px) * ux + (by - py) * uy
+                lo, hi = max(min(ta, tb), 0.0), min(max(ta, tb), L)
+                if hi - lo > eps:
+                    runs.setdefault(i, []).append((lo, hi))
+        fronts = {}
+        for i, ivs in runs.items():
+            ivs.sort()
+            merged = [list(ivs[0])]
+            for lo, hi in ivs[1:]:
+                if lo <= merged[-1][1] + eps:
+                    merged[-1][1] = max(merged[-1][1], hi)
+                else:
+                    merged.append([lo, hi])
+            lo, hi = max(merged, key=lambda iv: iv[1] - iv[0])
+            px, py = tpts[i]
+            qx, qy = tpts[(i + 1) % n]
+            L = math.hypot(qx - px, qy - py)
+            tm = (lo + hi) / 2.0 / L
+            fronts[i] = {"w": sum(h - l for l, h in merged),
+                         "width_m": (hi - lo) * SCALE_M,
+                         "pt": [round(px + tm * (qx - px), 5), round(py + tm * (qy - py), 5)]}
         kept = {ti: v for ti, v in fronts.items() if v["width_m"] >= _floor(ti)}
         if kept:
             total = sum(v["w"] for v in kept.values()) or 1.0

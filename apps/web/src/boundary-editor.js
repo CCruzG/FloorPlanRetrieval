@@ -88,7 +88,8 @@ export function createBoundaryEditor({
     const { closed, entranceMode }=getState();
     if(!closed)return;
     const nextEntranceMode=!entranceMode;
-    applyState({entranceMode:nextEntranceMode,entranceSnap:nextEntranceMode?getState().entranceSnap:null});
+    applyState({entranceMode:nextEntranceMode,entranceSnap:nextEntranceMode?getState().entranceSnap:null,
+      mode:nextEntranceMode?'entrance':'select'});
     doc.getElementById('btn-entrance-mode').classList.toggle('active',nextEntranceMode);
     if(nextEntranceMode){
       doc.getElementById('canvas-hint').textContent='click on a boundary edge to place entrance';
@@ -100,7 +101,7 @@ export function createBoundaryEditor({
   }
 
   function clearEntrance(){
-    applyState({entrance:null,entranceSnap:null,entranceMode:false});
+    applyState({entrance:null,entranceSnap:null,entranceMode:false,mode:'select'});
     doc.getElementById('btn-entrance-mode').classList.remove('active');
     doc.getElementById('btn-clear-entrance').style.display='none';
     doc.getElementById('entrance-info').style.display='none';
@@ -139,7 +140,7 @@ export function createBoundaryEditor({
     doc.getElementById('entrance-info').style.display='none';
     doc.getElementById('s-ent').textContent='—';
     renderList();
-    doc.getElementById('canvas-hint').textContent='draw a boundary polygon to begin';
+    doc.getElementById('canvas-hint').textContent='click "draw boundary" to begin';
     doc.getElementById('s-bv').textContent='—';
     doc.getElementById('result-count').textContent='';
     checkReady();

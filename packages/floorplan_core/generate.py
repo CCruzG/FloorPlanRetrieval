@@ -23,7 +23,13 @@ Method (node-seeded grid, the arrange-continuous route the build plan calls for)
      non-rectangular rooms;
   3. re-solve the grid-line positions to fill the target boundary, enforcing each
      room's minimum edge via the longest-path solve and handing slack to flexible
-     rooms (reused verbatim from rectangular_arrange);
+     rooms (reused verbatim from rectangular_arrange); once that solve is feasible,
+     an area-lift loop raises a room's per-axis minimum (one axis, or both, picking
+     the worst-off room first) whenever its solved cell area misses min_area, and
+     re-solves — a trial is kept only if both axes stay feasible and the room's
+     bbox long/short ratio does not exceed ASPECT_MAX (or its pre-trial ratio),
+     so a lift cannot turn a room into a sliver, and no room that met min_area
+     before the trial falls below it;
   4. build each room's polygon from its cells and clip to the boundary polygon, so
      a non-rectangular boundary is followed rather than overflowed.
 
@@ -67,6 +73,11 @@ _EDGE_FLOOR_M = {"facing_corridor": 0.9, "external": 1.2}
 # clip. Measured 2026-10-30 on test_boundary_001b/005b (top 3): all pins -> 7
 # failing rooms, 0 clip losses; guard -> 13 (clip losses return); no pins -> 9.
 PIN_MIN_SEG_FACTOR = 0.0
+
+# Area-lift aspect guard (step 3): a lift trial is rejected if it would push a
+# room's bbox long/short ratio above this — a room may already be worse than
+# ASPECT_MAX going in, in which case the cap is that prior ratio (never tighten).
+ASPECT_MAX = 2.5
 
 
 # ── Spec / Plan ──────────────────────────────────────────────────────────────
@@ -661,13 +672,15 @@ def generate(spec):
             return me / mm
         return 0.0                         # no mm scale -> pure partition
 
-    x_spans, y_spans = [], []
+    room_bbox = {}      # rid -> (cmin, cmax, rmin, rmax) grid-cell bbox, fixed
+    min_x, min_y = {}, {}   # rid -> per-axis minimum (boundary units), lifted below
     for rid, cells in cells_by_room.items():
         cmin = min(c[0] for c in cells); cmax = max(c[0] for c in cells) + 1
         rmin = min(c[1] for c in cells); rmax = max(c[1] for c in cells) + 1
+        room_bbox[rid] = (cmin, cmax, rmin, rmax)
         me = _min_edge(rid)
-        x_spans.append((cmin, cmax, me))
-        y_spans.append((rmin, rmax, me))
+        min_x[rid] = me
+        min_y[rid] = me
     # Slack weights per column/row. When the spec carries area_frac (D1), weight
     # each column/row by the target AREA sitting in it: spread each room's target
     # fraction over its cells, then sum per column and per row. With min_edge ~ 0
@@ -698,14 +711,91 @@ def generate(spec):
     # the spans are in. We solve in boundary units with a [0, BW]/[0, BH] extent.
     eps_x = 0.02 * max(BW, 1e-9)
     eps_y = 0.02 * max(BH, 1e-9)
-    # notch lines stay on the boundary; only node-derived cuts move
-    xt, x_ok = _solve_positions(ncol, x_spans, BW, col_flex, eps_x,
-                                fixed={k: xs[k] - bx0 for k in x_pins})
-    yt, y_ok = _solve_positions(nrow, y_spans, BH, row_flex, eps_y,
-                                fixed={k: ys[k] - by0 for k in y_pins})
-    xt = [bx0 + v for v in xt]
-    yt = [by0 + v for v in yt]
-    debug_steps.append({"step": "3_resolve", "min_sizes_met": bool(x_ok and y_ok)})
+
+    # notch lines stay on the boundary; only node-derived cuts move. Factored so
+    # the area-lift loop below can re-solve both axes from new per-room minimums.
+    def _solve_axes(mx, my):
+        x_spans_ = [(room_bbox[r][0], room_bbox[r][1], mx[r]) for r in cells_by_room]
+        y_spans_ = [(room_bbox[r][2], room_bbox[r][3], my[r]) for r in cells_by_room]
+        xt_, x_ok_ = _solve_positions(ncol, x_spans_, BW, col_flex, eps_x,
+                                      fixed={k: xs[k] - bx0 for k in x_pins})
+        yt_, y_ok_ = _solve_positions(nrow, y_spans_, BH, row_flex, eps_y,
+                                      fixed={k: ys[k] - by0 for k in y_pins})
+        return [bx0 + v for v in xt_], [by0 + v for v in yt_], x_ok_, y_ok_
+
+    xt, yt, x_ok, y_ok = _solve_axes(min_x, min_y)
+
+    # ── area lift: min_edge alone can satisfy both bbox edges and still miss
+    # min_area (e.g. a room with width*height < min_area, each edge individually
+    # fine). Only run when the baseline solve is already feasible — a lift must
+    # never be asked to rescue an infeasible layout — and only when mm_per_unit is
+    # known (min_area is in mm², demands[rid]["min_area"] otherwise meaningless).
+    area_rounds = 0
+    area_lifted, area_unmet = [], []
+    lift_factor = {}
+    # spec["area_lift"] = False turns the lift off (the app's before/after toggle)
+    if spec.get("area_lift", True) and mm and mm > 0 and x_ok and y_ok:
+        a_min = {rid: (((demands.get(rid) or {}).get("min_area", 0.0)) / (mm ** 2))
+                for rid in cells_by_room}
+
+        def _area(rid, xt_, yt_):
+            return sum((xt_[i + 1] - xt_[i]) * (yt_[j + 1] - yt_[j])
+                       for (i, j) in cells_by_room[rid])
+
+        area_first = {rid: _area(rid, xt, yt) for rid in cells_by_room}
+        unmet_set = set()
+        for _ in range(3 * len(cells_by_room)):
+            areas = {rid: _area(rid, xt, yt) for rid in cells_by_room}
+            deficient = [rid for rid in cells_by_room
+                        if a_min[rid] > 0 and rid not in unmet_set
+                        and areas[rid] < a_min[rid] * (1 - 1e-6)]
+            if not deficient:
+                break
+            area_rounds += 1
+            # rooms that meet min_area now hold only min_edge as a hard constraint;
+            # a lift must not take area they need (no starving a neighbour)
+            met = [r for r in cells_by_room
+                   if a_min[r] > 0 and areas[r] >= a_min[r] * (1 - 1e-6)]
+            rid = max(deficient, key=lambda r: a_min[r] / areas[r])
+            f = a_min[rid] / areas[rid]
+            cmin, cmax, rmin, rmax = room_bbox[rid]
+            w, h = xt[cmax] - xt[cmin], yt[rmax] - yt[rmin]
+            short, long_ = min(w, h), max(w, h)
+            cap = max(ASPECT_MAX, (long_ / short) if short > 1e-12 else float("inf"))
+            sq = math.sqrt(f)
+            trials = [(max(min_x[rid], w * sq), max(min_y[rid], h * sq)),
+                      (max(min_x[rid], w * f), min_y[rid]),
+                      (min_x[rid], max(min_y[rid], h * f))]
+            accepted = False
+            for tx, ty in trials:
+                trial_x = dict(min_x); trial_x[rid] = tx
+                trial_y = dict(min_y); trial_y[rid] = ty
+                txt, tyt, tok, tok_y = _solve_axes(trial_x, trial_y)
+                if not (tok and tok_y):
+                    continue
+                nw, nh = txt[cmax] - txt[cmin], tyt[rmax] - tyt[rmin]
+                nshort, nlong = min(nw, nh), max(nw, nh)
+                if nshort > 1e-12 and (nlong / nshort) > cap + 1e-9:
+                    continue
+                if any(_area(r, txt, tyt) < a_min[r] * (1 - 1e-6) for r in met):
+                    continue
+                min_x, min_y = trial_x, trial_y
+                xt, yt, x_ok, y_ok = txt, tyt, tok, tok_y
+                accepted = True
+                break
+            if accepted:
+                if rid not in area_lifted:
+                    area_lifted.append(rid)
+                base = area_first[rid]
+                lift_factor[rid] = (_area(rid, xt, yt) / base) if base > 0 else 1.0
+            else:
+                unmet_set.add(rid)
+                area_unmet.append(rid)
+
+    debug_steps.append({"step": "3_resolve", "min_sizes_met": bool(x_ok and y_ok),
+                        "area_rounds": area_rounds,
+                        "area_lifted": [str(r) for r in area_lifted],
+                        "area_unmet": [str(r) for r in area_unmet]})
     # solved grid, for the canvas (drawn under the generated rooms): lines in
     # target space, which are pinned to the boundary, and each cell's owner after
     # the 2b repair (None = outside the boundary)
@@ -795,6 +885,7 @@ def generate(spec):
             "area_rect": round(merged.area, 6),
             "area_clip": round(area_units, 6),
             "arm_donor_to": [],
+            "area_lift": round(lift_factor.get(rid, 1.0), 4),
         })
     # ── 4b. thin-arm carve: for a boundary demand the rectangular partition could
     # not satisfy, let the room annex a thin corridor to reach its demanded edge,

@@ -26,6 +26,7 @@ const API_ROUTES = [
   "/swap_nodes",
   "/topo_check",
   "/generate",
+  "/moves/propose",
 ];
 
 export default defineConfig({

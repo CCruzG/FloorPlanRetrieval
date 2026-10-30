@@ -35,6 +35,7 @@ from packages.floorplan_core.topo_signature import (
     COMMON,
     TRANSIT,
     DAYLIGHT_NEEDING,
+    WINDOW_MIN_WIDTH_M,   # shared with the raycast that drops narrower contacts
 )
 # topo_signature's import (above) already put the fitting-prototype schema
 # module on sys.path — reuse it rather than re-deriving mm sizing rules here.
@@ -48,10 +49,10 @@ from schema import MINIMUM_SIZES, SCALE  # noqa: E402
 HABITABLE = BEDROOMS | COMMON
 
 # ── thresholds (data; see bads-sensor-model.md) ───────────────────────────────
-WINDOW_MIN_WIDTH_M = 1.2        # external contact narrower than this is not a window (BADS snorkel floor)
 CEILING_MM = 2700               # assumed ceiling height (BADS depth is ×ceiling)
 DEPTH_SINGLE_MM = 2.5 * CEILING_MM      # D25 single-aspect habitable room: 6750 mm
 DEPTH_OPENPLAN_LDK_MM = 9000            # D25 open-plan living+dining+kitchen: 9 m
+USABLE_WIDTH_MM = 900           # D24 usable floor: narrower parts are not usable area (door / corridor floor; working value, no BADS source checked)
 
 # ── access rule table (data, not hardcoded) ───────────────────────────────────
 ACCESS_RULES = {
@@ -78,6 +79,55 @@ def _bbox_min_side(poly):
     return min(max(xs) - min(xs), max(ys) - min(ys))
 
 
+def _usable_parts(poly, width):
+    """The parts of a room a width×width square can reach: a morphological opening
+    (erode by width/2, dilate back) with mitred joins, exact for the axis-aligned
+    rooms the grid realiser makes. Arms and necks narrower than `width` drop out,
+    which the bbox proxy cannot see (an L with a 0.6 m arm has a 1.5 m bbox).
+    Returns the opened pieces, largest first ([] = no square fits anywhere)."""
+    g = SPoly(poly)
+    if not g.is_valid:
+        g = g.buffer(0)
+    if width <= 0:
+        return [g]
+    r = width / 2.0
+    opened = g.buffer(-r, join_style=2).buffer(r, join_style=2).intersection(g)
+    tiny = 1e-9 * max(g.area, 1e-12)
+    parts = [p for p in getattr(opened, "geoms", [opened])
+             if p.geom_type == "Polygon" and p.area > tiny]
+    return sorted(parts, key=lambda p: p.area, reverse=True)
+
+
+def _max_square_side(poly, hi):
+    """Largest square side that fits in the room, by bisection on the opening
+    (only called when the room's min_edge does not fit, for a continuous margin)."""
+    lo = 0.0
+    for _ in range(20):
+        mid = (lo + hi) / 2.0
+        if _usable_parts(poly, mid):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def _inward_normal(geom, a, b):
+    """Unit normal of segment a→b pointing into `geom` (tested a hair off the
+    midpoint), or None for a degenerate segment / no side inside."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = math.hypot(dx, dy)
+    if L < 1e-12:
+        return None
+    nx, ny = -dy / L, dx / L
+    mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+    h = 1e-4 * L
+    if geom.contains(SPoint(mx + nx * h, my + ny * h)):
+        return (nx, ny)
+    if geom.contains(SPoint(mx - nx * h, my - ny * h)):
+        return (-nx, -ny)
+    return None
+
+
 def _perp_dist(p, a, b):
     """Perpendicular distance from point p to the infinite line through a, b."""
     dx, dy = b[0] - a[0], b[1] - a[1]
@@ -85,6 +135,23 @@ def _perp_dist(p, a, b):
     if L == 0:
         return 0.0
     return abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / L
+
+
+def _passable(e, has_connection_field):
+    """Is this edge open for movement — door or open, not a wall? `separation`/
+    `wall_type` is authoritative when present (SetConnection writes it); otherwise
+    fall back to `connection` (1=door, 2=open). has_connection_field is a PLAN-WIDE
+    flag: when no edge anywhere in the plan carries `connection` (older fixtures),
+    every edge is treated as passable rather than stranding every room — the
+    ponytail the old single-field check also had."""
+    t = e.get("separation") or e.get("wall_type")
+    if t in ("door", "open"):
+        return True
+    if t == "wall":
+        return False
+    if has_connection_field:
+        return e.get("connection") in (1, 2)
+    return True
 
 
 # ── context ───────────────────────────────────────────────────────────────────
@@ -103,11 +170,7 @@ def _build_ctx(plan, room_edges, requirements, target_boundary=None, spec=None):
         u, v = e.get("u"), e.get("v")
         if u is None or v is None:
             continue
-        # ponytail: some plans omit `connection` entirely (older fixtures) —
-        # fall back to treating every edge as passable rather than stranding
-        # every room. Flagged in ctx so callers/tests can see it happened.
-        passable = (e.get("connection") == 1) if has_connection_field else True
-        if not passable:
+        if not _passable(e, has_connection_field):
             continue
         door_adj.setdefault(u, set()).add(v)
         door_adj.setdefault(v, set()).add(u)
@@ -172,19 +235,17 @@ def _external_edges(ctx, rid):
 
 
 def _is_open_edge(ctx, e, u, v):
-    """Is this a wall-less (open-plan) edge? An explicit edge type wins; otherwise
-    fall back to the open-plan-cluster heuristic — a passable COMMON↔COMMON edge
-    (living/dining/kitchen) is treated as open-plan until edges carry an explicit
-    `open`/`wall` type. Bedrooms are never merged (privacy ⇒ a wall), so they stay
-    their own component. See bads-sensor-model.md §3."""
+    """Is this a wall-less (open-plan) edge? Only when it says so: `separation`/
+    `wall_type` "open", `open: True` or connection 2. A door is a wall with a hole
+    in it, not open plan — even between living, dining and kitchen. (An earlier
+    COMMON↔COMMON inference merged door-linked common rooms, which let a windowless
+    kitchen borrow the living room's daylight and measured depth across the doors;
+    dropped 2026-10-30 now that SetConnection writes explicit open edges.) See
+    bads-sensor-model.md §3."""
     t = e.get("separation") or e.get("wall_type")
-    if e.get("open") is True or e.get("connection") == 2 or t == "open":
-        return True
-    if t == "wall":
-        return False
-    lu, lv = ctx["label_by_id"].get(u), ctx["label_by_id"].get(v)
-    passable = (e.get("connection") == 1) if ("connection" in e) else True
-    return bool(passable and lu in COMMON and lv in COMMON)
+    if t in ("wall", "door", "open"):
+        return t == "open"
+    return e.get("open") is True or e.get("connection") == 2
 
 
 def _open_plan_components(ctx):
@@ -262,12 +323,14 @@ DOOR_MIN_MM = 900   # a shared wall narrower than a door cannot take one
 def _door_candidates(ctx, rid, providers):
     """Provider rooms that share a WALL with `rid` wide enough for a door — where
     SetConnection(rid, nb, door) could restore access. Reads the realised (wall)
-    edges, then checks the shared wall length on the polygons."""
+    edges — excluding any edge already door or open, not just connection==1, so an
+    `open` edge (separation/connection==2) is not re-offered as a door candidate —
+    then checks the shared wall length on the polygons."""
     out = []
     pa = ctx["poly_by_id"].get(rid)
     for e in ctx["plan"].get("edges") or []:
         u, v = e.get("u"), e.get("v")
-        if rid not in (u, v) or e.get("connection") == 1:
+        if rid not in (u, v) or _passable(e, ctx["has_connection_field"]):
             continue
         nb = v if u == rid else u
         if ctx["label_by_id"].get(nb) not in providers:
@@ -352,37 +415,66 @@ def check_daylight(ctx):
 def check_room_depth(ctx):
     """D25: single-aspect habitable room depth ≤ 2.5 × ceiling height (6.75 m at a
     2.7 m ceiling); an open-plan living+dining+kitchen component may reach 9 m.
-    Depth = max perpendicular distance from the component's window edge (its
-    largest external room_edge, mapped to a target-boundary segment) to the far
-    wall of the merged component polygon. margin = limit − depth (mm)."""
+    Judged WALL BY WALL on the merged component outline: a wall OPPOSES a window
+    when the two are parallel and face each other (inward normals antiparallel,
+    the wall on the room side of the window). A wall's depth = the perpendicular
+    distance to its nearest opposing window; the component passes when every wall
+    that opposes a window is within the limit (one near window is enough — several
+    windows are several checks, not one). Walls opposing no window carry no depth
+    claim. Windows = external contacts ≥ WINDOW_MIN_WIDTH_M. One-window rules
+    failed both ways: the largest arc_frac picked a 1.0 m notch, the nearest
+    window measured sideways from a step in the facade. margin = limit − the
+    worst wall's depth (mm)."""
     boundary = ctx["target_boundary"]
     mm = ctx["mm"]
     if not boundary or len(boundary) < 3:
         return {"ok": True, "failing_rooms": [], "margin": 0.0,
                 "detail": "no target_boundary supplied — skipped", "skipped": True}
     n = len(boundary)
+    bpoly = SPoly(boundary)
+    if not bpoly.is_valid:
+        bpoly = bpoly.buffer(0)
     failing, details, worst = [], [], None
     for comp in ctx["components"]:
         habitable = [r for r in comp if ctx["label_by_id"].get(r) in HABITABLE]
         if not habitable:
             continue
-        # window edge = the component's largest external room_edge with a boundary index
-        best_edge, best_arc = None, -1.0
-        for r in comp:
-            for ed in _external_edges(ctx, r):
-                if ed.get("target_edge_index") is not None and ed.get("arc_frac", 0) > best_arc:
-                    best_arc, best_edge = ed["arc_frac"], ed
-        if best_edge is None:
+        win_idx = {ed["target_edge_index"] % n for r in comp for ed in _external_edges(ctx, r)
+                   if ed.get("target_edge_index") is not None
+                   and ed.get("width_m", 0.0) >= WINDOW_MIN_WIDTH_M}
+        if not win_idx:
             continue  # unlit — the daylight sensor owns this failure
-        tidx = best_edge["target_edge_index"] % n
-        a, b = boundary[tidx], boundary[(tidx + 1) % n]
         polys = [SPoly(ctx["poly_by_id"][r]) for r in comp if r in ctx["poly_by_id"]]
         if not polys:
             continue
         merged = unary_union(polys)
-        coords = (merged.exterior.coords if merged.geom_type == "Polygon"
-                  else [c for g in merged.geoms for c in g.exterior.coords])
-        depth_mm = max(_perp_dist(p, a, b) for p in coords) * mm
+        windows = []    # (point on window line, inward unit normal)
+        for t in win_idx:
+            a, b = boundary[t], boundary[(t + 1) % n]
+            nrm = _inward_normal(bpoly, a, b)
+            if nrm:
+                windows.append((a, nrm))
+        depth_mm = 0.0
+        for g in getattr(merged, "geoms", [merged]):
+            ring = list(g.exterior.coords)
+            for k in range(len(ring) - 1):
+                a, b = ring[k], ring[k + 1]
+                wn = _inward_normal(g, a, b)
+                if not wn:
+                    continue
+                mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+                # a wall on a window line IS a window wall: it is lit, so it is not
+                # held to a window across the room (dual aspect)
+                if any(wn[0] * nx + wn[1] * ny > 0.99
+                       and abs((mx - p[0]) * nx + (my - p[1]) * ny) < 1e-6
+                       for p, (nx, ny) in windows):
+                    continue
+                ds = [(mx - p[0]) * nx + (my - p[1]) * ny
+                      for p, (nx, ny) in windows
+                      if wn[0] * nx + wn[1] * ny < -0.99]       # facing each other
+                ds = [d for d in ds if d > 1e-9]                # wall on the room side
+                if ds:
+                    depth_mm = max(depth_mm, min(ds) * mm)
         labels = {ctx["label_by_id"].get(r) for r in comp}
         is_ldk = ("kitchen" in labels) and bool(labels & {"living", "living_room", "dining"})
         limit = DEPTH_OPENPLAN_LDK_MM if is_ldk else DEPTH_SINGLE_MM
@@ -390,8 +482,8 @@ def check_room_depth(ctx):
         worst = m if worst is None else min(worst, m)
         if depth_mm > limit:
             failing.extend(habitable)
-            details.append(f"{_nms(ctx, comp)} — depth {round(depth_mm)}mm "
-                           f"> limit {round(limit)}mm")
+            details.append(f"{_nms(ctx, comp)} — a wall is {round(depth_mm)}mm from its "
+                           f"nearest opposing window > limit {round(limit)}mm")
     ok = not failing
     detail = "all habitable rooms within the depth limit" if ok else "; ".join(details)
     return {"ok": ok, "failing_rooms": failing,
@@ -455,38 +547,71 @@ def check_boundary_capacity(ctx):
 
 def check_min_room_size(ctx):
     """D24: each room meets its minimum internal dimension and area (MINIMUM_SIZES).
-    Reads the Stage-0 polygons; also surfaces slivers. margin = the worst room's
-    shortfall, min(edge − min_edge, area − min_area), in mm / mm²."""
+    Two tests, two thresholds, neither on the bbox:
+      core — a min_edge square fits somewhere in the room (BADS sets a minimum
+             rectangle; its area is that rectangle's area);
+      area — the room's USABLE area meets min_area. Usable = reachable by a
+             USABLE_WIDTH_MM square (furniture / circulation), one threshold for
+             every room — a 1.2 m arm off a bedroom is usable, a 0.6 m one is not.
+             The usable piece that holds the core counts (the largest when no core
+             fits). Parts narrower than USABLE_WIDTH_MM are reported as below min
+             width; a usable footprint that splits into pieces (a neck narrower
+             than USABLE_WIDTH_MM) is reported as pinched.
+    margin = the worst room's shortfall, min(edge − min_edge, area − min_area), in
+    mm / mm²."""
     if not ctx["poly_by_id"]:
         return {"ok": True, "failing_rooms": [], "margin": 0.0,
                 "detail": "no room polygons — skipped", "skipped": True}
     mm = ctx["mm"]
     failing, details, skipped, worst = [], [], [], None
+    pinched, slivers = [], []
+    # 1 mm of slack on each square: the solver places spans at exactly min_edge,
+    # and float error must not read as a violation
+    use_units = (USABLE_WIDTH_MM - 1.0) / mm
     for rid, poly in ctx["poly_by_id"].items():
         req = MINIMUM_SIZES.get(ctx["label_by_id"].get(rid))
         if not req:
             skipped.append(rid)
             continue
-        edge_mm = _bbox_min_side(poly) * mm
         area_mm2 = _poly_area(poly) * mm * mm
+        core = _usable_parts(poly, max(req["min_edge"] - 1.0, 0.0) / mm)
+        if core:
+            edge_mm = max(_bbox_min_side(list(core[0].exterior.coords)) * mm,
+                          req["min_edge"])
+        else:
+            edge_mm = _max_square_side(poly, _bbox_min_side(poly)) * mm
+        use = _usable_parts(poly, use_units)
+        home = next((p for p in use if core and p.intersects(core[0])),
+                    use[0] if use else None)
+        usable_mm2 = home.area * mm * mm if home is not None else 0.0
+        dropped_mm2 = area_mm2 - sum(p.area for p in use) * mm * mm
+        if len(use) > 1:
+            pinched.append(rid)
+        if dropped_mm2 > 1e4:
+            slivers.append(f"{_nm(ctx, rid)} {dropped_mm2 / 1e6:.2f}m²")
         m_edge = edge_mm - req["min_edge"]
-        m_area = area_mm2 - req["area"]
+        m_area = usable_mm2 - req["area"]
         # normalise the two margins to mm so one scalar is comparable: area margin
         # expressed as the edge it would add at the room's min width.
         m = min(m_edge, m_area / max(req["min_edge"], 1))
         worst = m if worst is None else min(worst, m)
-        # 1 mm / 0.01 m² tolerance: the solver places spans at exactly min_edge,
-        # and float error must not read as a violation
+        # 0.01 m² area tolerance (float error)
         if m_edge < -1.0 or m_area < -1e4:
             failing.append(rid)
             details.append(f"{_nm(ctx, rid)}: edge {round(edge_mm)}mm"
-                           f"/{req['min_edge']}, area {round(area_mm2)}mm²/{req['area']}")
+                           f"/{req['min_edge']}, usable area {usable_mm2 / 1e6:.2f}m²"
+                           f"/{req['area'] / 1e6:.2f} (of {area_mm2 / 1e6:.2f})")
     ok = not failing
     detail = "all rooms meet minimum size" if ok else "undersized: " + "; ".join(details)
+    if pinched:
+        detail += f" · pinched: {_nms(ctx, pinched)}"
+    if slivers:
+        detail += f" · below min width: {', '.join(slivers)}"
     if skipped:
         detail += f" (no MINIMUM_SIZES entry, skipped: {_nms(ctx, skipped)})"
     return {"ok": ok, "failing_rooms": failing,
-            "margin": 0.0 if worst is None else worst, "detail": detail}
+            "margin": 0.0 if worst is None else worst, "detail": detail,
+            "pinched_rooms": pinched}
 
 
 # ── node-in-room (soft, diagnostic) ─────────────────────────────────────────────
@@ -526,13 +651,33 @@ REGISTRY = [
 ]
 
 
-def run_sensors(plan, room_edges, requirements=None, target_boundary=None, spec=None):
+# Sensors that read realised room polygons. At the topology stage (a retrieved
+# plan, before /generate) the polygons are the SOURCE plan's, not geometry in the
+# target boundary, so these say nothing about the design yet — layer="topology"
+# skips them.
+GEOMETRIC_SENSORS = {"room_depth", "min_room_size", "node_in_room"}
+# Pre-geometry feasibility questions, asked of the retrieved plan only. Once
+# geometry exists the realised result is judged directly (D26 daylight, D24 size):
+# boundary_capacity pins each daylight room's min width to ONE edge, so a room
+# spread along a stepped facade read as over-subscribing it — layer="geometry"
+# skips these.
+TOPOLOGY_ONLY_SENSORS = {"boundary_capacity"}
+
+
+def run_sensors(plan, room_edges, requirements=None, target_boundary=None, spec=None,
+                layer=None):
     """Run the scored sensor registry. Returns {summary, checks}. Each check:
     {sensor, kind, ok, failing_rooms, rooms (legacy alias), margin, detail}.
-    summary: {passed, total, gates_pass (all hard ok), soft_score (Σ soft margins)}."""
+    summary: {passed, total, gates_pass (all hard ok), soft_score (Σ soft margins)}.
+    layer="topology" (a retrieved plan) skips GEOMETRIC_SENSORS; layer="geometry"
+    (a generated plan) skips TOPOLOGY_ONLY_SENSORS; None runs everything."""
     ctx = _build_ctx(plan, room_edges, requirements, target_boundary, spec)
     checks = []
     for name, fn, kind in REGISTRY:
+        if layer == "topology" and name in GEOMETRIC_SENSORS:
+            continue
+        if layer == "geometry" and name in TOPOLOGY_ONLY_SENSORS:
+            continue
         res = fn(ctx)
         res["sensor"] = name
         res["kind"] = kind

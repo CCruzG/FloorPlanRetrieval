@@ -221,7 +221,8 @@ def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
             # view draws these instead of re-deriving placement client-side.
             p["retrieval"]["node_pos"] = topo.get("node_pos", {})
             p["retrieval"]["flags"] = run_sensors(
-                p, p["retrieval"]["room_edges"], requirements, target_boundary=boundary)
+                p, p["retrieval"]["room_edges"], requirements, target_boundary=boundary,
+                layer="topology")
         result_list.sort(
             key=lambda p: (-p["retrieval"]["topo"]["score"], p["retrieval"]["dist"])
         )
