@@ -38,10 +38,9 @@ clipped signals, NOT daylight or access — those are Stage-1 sensors
 (topo_sensors) that read this Plan.
 
 Public API:
-    spec_from_plan(plan, boundary, edge_types=None, entrance=None,
-                   mm_per_unit=None) -> Spec
-    generate(spec) -> Plan
+    generate(spec, options=None) -> Plan          # validates the Spec first
     reassign(spec, room_a, room_b) -> Spec        # swap two rooms' nodes (seam demo)
+The Spec itself (builder, options, validator) lives in spec.py.
 """
 
 import math
@@ -58,6 +57,9 @@ from packages.floorplan_core.rectangular_arrange import (
 # rectangular_arrange._label passes the raw spelling through, which missed every
 # MINIMUM_SIZES / FLEX key, so the solver ran with zero minimums.
 from packages.floorplan_core.topo_signature import _label
+from packages.floorplan_core.spec import (
+    build_options, validate_spec, CPSAT_SEED, CPSAT_WORKERS, CPSAT_TIME_S,
+)
 
 # Minimum room edges (mm) live in the fitting-prototype schema; rectangular_arrange
 # puts that dir on sys.path at import time, so this import resolves after it.
@@ -80,23 +82,50 @@ PIN_MIN_SEG_FACTOR = 0.0
 ASPECT_MAX = 2.5
 
 
+def _core_block(cells, node_cell, xs, ys, min_edge):
+    """The room's core block: the rectangle of its own grid cells that step 3
+    holds to min_edge on both axes, in place of the cell bbox. A bbox span lets an
+    L pass with a one-column arm (D24 core fails: no min_edge square fits); a core
+    span guarantees a min_edge rectangle somewhere in the room.
+
+    Picks, over every all-owned rectangle [c0, c1) x [r0, r1): contains the node
+    cell first, then pre-solve min side capped at min_edge (the block needing the
+    least stretch), then pre-solve area. Returns (c0, c1, r0, r1)."""
+    cs = set(cells)
+    cmin = min(c[0] for c in cs); cmax = max(c[0] for c in cs) + 1
+    rmin = min(c[1] for c in cs); rmax = max(c[1] for c in cs) + 1
+    best, best_key = None, None
+    for c0 in range(cmin, cmax):
+        for r0 in range(rmin, rmax):
+            if (c0, r0) not in cs:
+                continue
+            c1_lim = cmax
+            for r1 in range(r0 + 1, rmax + 1):
+                # widest run of owned cells along row r1-1 from c0, capped by rows above
+                c1 = c0
+                while c1 < c1_lim and (c1, r1 - 1) in cs:
+                    c1 += 1
+                c1_lim = c1
+                if c1_lim == c0:
+                    break
+                w = xs[c1_lim] - xs[c0]
+                h = ys[r1] - ys[r0]
+                has_node = (node_cell is not None and c0 <= node_cell[0] < c1_lim
+                            and r0 <= node_cell[1] < r1)
+                cap = min_edge if min_edge > 0 else float("inf")
+                key = (has_node, min(w, h, cap), w * h)
+                if best_key is None or key > best_key:
+                    best, best_key = (c0, c1_lim, r0, r1), key
+    return best
+
+
 # ── Spec / Plan ──────────────────────────────────────────────────────────────
-# Both are plain dicts to stay continuous with the app's dict-centric plan format
-# (apps/web <-> apps/api send dicts). The Spec is the ONLY thing the agent writes.
-#
-# Spec = {
-#   "boundary":        [[x, y], ...],              target boundary polygon
-#   "node_assignment": [{"id", "label", "pos":[x,y]}],  room -> node (editable)
-#   "adjacencies":     [{"u", "v", ...}],          room<->room graph (fixed)
-#   "demands":         {room_id: {"min_edge": mm, "min_area": mm2}},  per-room
-#   "edge_types":      [str] | None,               boundary typed edges (context)
-#   "entrance":        [x0,y0,x1,y1] | None,
-#   "mm_per_unit":     float | None,               boundary-units -> mm (min-size scale)
-#   "boundary_demands":{room_id: [target_edge_index]} | None,  room↔boundary fronts
-#                       the realiser must honour (topology -> geometry, step 2b)
-# }
-# Plan = {"rooms":[{id,type,polygon}], "edges", "entrance", "node_pos",
-#         "feasible", "report"}
+# The Spec (spec.py: build_spec, build_options, validate_spec; field table in
+# ARCHITECTURE.md "The Spec") is a plain dict. It is the ONLY thing a move writes.
+# Switches that are not part of the description (core_placement, core_block,
+# area_lift, source_rooms, pair_weights, CP-SAT seed/workers/time) travel in
+# `options`. Plan = {"rooms":[{id,type,polygon}], "edges", "entrance", "node_pos",
+#                    "feasible", "report"}
 
 
 def _poly_area(poly):
@@ -106,55 +135,13 @@ def _poly_area(poly):
                    for i in range(n))) / 2.0
 
 
-def spec_from_plan(plan, boundary, edge_types=None, entrance=None,
-                   mm_per_unit=None):
-    """Extract an editable Spec from a retrieved + topo-ranked plan.
-
-    node positions come from the topo layer (`node_pos`, placed in the target
-    frame by topo_signature); when absent, each room's node falls back to its
-    polygon centroid. Demands come from MINIMUM_SIZES by label, plus `area_frac`
-    — the room's share of the source plan's total room area (a dimensional demand,
-    D1): the solver sizes the generated room toward the same proportion.
-    """
-    node_pos = plan.get("node_pos") or (plan.get("retrieval") or {}).get("node_pos") or {}
-    nodes, demands = [], {}
-    for r in plan.get("rooms") or []:
-        rid = r.get("id")
-        poly = r.get("polygon")
-        if not poly or len(poly) < 3:
-            continue
-        label = _label(r)
-        pos = node_pos.get(str(rid))
-        if pos is None:
-            pos = [sum(p[0] for p in poly) / len(poly),
-                   sum(p[1] for p in poly) / len(poly)]
-        nodes.append({"id": rid, "label": label, "pos": [float(pos[0]), float(pos[1])]})
-        ms = MINIMUM_SIZES.get(label, {})
-        demands[rid] = {"min_edge": ms.get("min_edge", 0.0),
-                        "min_area": ms.get("area", 0.0),
-                        "_src_area": _poly_area(poly)}
-    # area_frac: each room's share of the source plan's total room area.
-    total_area = sum(d["_src_area"] for d in demands.values()) or 1.0
-    for d in demands.values():
-        d["area_frac"] = d.pop("_src_area") / total_area
-    return {
-        "boundary": [[float(x), float(y)] for x, y in boundary],
-        "node_assignment": nodes,
-        "adjacencies": plan.get("edges") or [],
-        "demands": demands,
-        "edge_types": edge_types,
-        "entrance": entrance if entrance is not None else plan.get("entrance"),
-        "mm_per_unit": mm_per_unit,
-    }
-
-
 def reassign(spec, room_a, room_b):
     """Return a new Spec with rooms a and b swapped onto each other's node
     positions — the minimal spec edit that re-derives geometry through the seam
     (the Stage-0 preview of Stage-2's SwapNodes move). Pure; does not mutate."""
     new_nodes = []
-    pos_by_id = {n["id"]: n["pos"] for n in spec["node_assignment"]}
-    for n in spec["node_assignment"]:
+    pos_by_id = {n["id"]: n["pos"] for n in spec["nodes"]}
+    for n in spec["nodes"]:
         m = dict(n)
         if n["id"] == room_a:
             m["pos"] = list(pos_by_id[room_b])
@@ -162,7 +149,7 @@ def reassign(spec, room_a, room_b):
             m["pos"] = list(pos_by_id[room_a])
         new_nodes.append(m)
     out = dict(spec)
-    out["node_assignment"] = new_nodes
+    out["nodes"] = new_nodes
     return out
 
 
@@ -366,16 +353,41 @@ def _bfs_cell_path(starts, goals, ncol, nrow, allowed=None):
     return None
 
 
-def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nrow):
+def _entrance_cell(boundary, entrance, xs, ys, ncol, nrow, edge_cell_sets):
+    """Grid cell in front of the entrance: of the cells that front the boundary edge
+    nearest the entrance's midpoint, the one whose span contains it (else the nearest)."""
+    if not entrance or len(entrance) < 4:
+        return None
+    pt = SPoint((entrance[0] + entrance[2]) / 2.0, (entrance[1] + entrance[3]) / 2.0)
+    nb = len(boundary)
+    E = min(range(nb), key=lambda k: LineString([boundary[k], boundary[(k + 1) % nb]]).distance(pt))
+    cells = edge_cell_sets.get(E) or set()
+    if not cells:
+        return None
+    return min(cells, key=lambda c: (sbox(xs[c[0]], ys[c[1]], xs[c[0] + 1], ys[c[1] + 1]).distance(pt), c))
+
+
+def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nrow,
+                              core_cells=None, first=None):
     """Make each room front its demanded target edges by transferring border cells
     (topology -> geometry). A transfer is committed only if it keeps every donor
     non-empty and 4-connected AND keeps each donor's own fronts; rooms process
     most-constrained-first for determinism. Returns (owner, report); report lists
     satisfied / unmet demands and the cells moved. Demands it cannot satisfy are
-    reported, not forced — the guarantee is conditional on a feasible transfer."""
+    reported, not forced — the guarantee is conditional on a feasible transfer.
+
+    core_cells: {cell: rid} — step 0's placed-core cells. A cell step 0 placed
+    inside a room's core can never be moved OUT of it here: that promise (a
+    min_edge rectangle somewhere in the room) is step 0's contract with step 3,
+    and 2b stealing from it silently breaks a DIFFERENT room's core without
+    the repair's own `valid()` check (donor connected + keeps its own fronts)
+    ever seeing it (2026-11-02 finding — see generate()'s 2b call site).
+
+    first: a room to process before all others (the entry room, 2026-11-04)."""
     report = {"satisfied": [], "unmet": [], "transfers": []}
     if not boundary_demands:
         return owner, report
+    core_cells = core_cells or {}
 
     def fronts(rid, E, own):
         return any(own.get(c) == rid for c in (edge_cell_sets.get(E) or set()))
@@ -389,7 +401,7 @@ def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nro
                 return False
         return True
 
-    order = sorted(boundary_demands, key=lambda r: (-len(boundary_demands[r]), str(r)))
+    order = sorted(boundary_demands, key=lambda r: (r != first, -len(boundary_demands[r]), str(r)))
     for rid in order:
         for E in boundary_demands[rid]:
             if fronts(rid, E, owner):
@@ -411,6 +423,8 @@ def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nro
             committed = False
             for path in cands:
                 moved = [c for c in path if owner.get(c) != rid]
+                if any(core_cells.get(c) not in (None, rid) for c in moved):
+                    continue   # would steal a cell from another room's placed core
                 trial = dict(owner)
                 for c in moved:
                     trial[c] = rid
@@ -423,6 +437,138 @@ def _repair_boundary_contacts(owner, boundary_demands, edge_cell_sets, ncol, nro
                     break
             if not committed:
                 report["unmet"].append([str(rid), E])
+    return owner, report
+
+
+def _precedence_claims(owner, precedence, contain, xs, ys, min_edge_of,
+                       boundary_demands, edge_cell_sets, choice=None, edge_types=None):
+    """Step 2c — precedence core claim (the SetPrecedence move's realisation).
+    For each [winner, loser] pair, the winner is re-cut as one rectangle of grid
+    cells drawn from its own cells and the loser's: the rectangle may sit anywhere
+    over the two rooms (never on the loser's node cell; when it leaves out the
+    winner's node cell, the winner's node moves to the rectangle — the move
+    relocates the room — and the entry reports node_moved),
+    and the winner's cells left outside it go back to the loser (or, when a
+    leftover piece does not touch the loser, to the neighbour it shares most sides
+    with). An S- or L-shaped room becomes a rectangle at its neighbour's expense,
+    and returns the area it does not use.
+
+    A rectangle is valid only if every room it touches stays non-empty and
+    4-connected and keeps its demanded fronts — except that the winner may drop a
+    facing_corridor / shared_wall front (the precedence trades its corridor
+    contact for a usable rectangle; reachability / access re-judge it). The
+    winner keeps its external (window) fronts. Dropped fronts are reported. Pre-solve widths cannot rank the
+    valid ones — the step-3 solve re-sizes whichever rectangle becomes the core —
+    so this function lists them (report[k]["candidates"], fewest cells moved
+    first) and applies the one `choice[k]` names; generate() picks it by trial
+    solve. A pair absent from `choice` (or mapped to None) is not applied.
+    Returns (owner, report)."""
+    report = []
+    if not precedence:
+        return owner, report
+    choice = choice or {}
+    id_by_str = {str(r): r for r in set(owner.values())}
+
+    def holds(rid, E, own):
+        return any(own.get(c) == rid for c in (edge_cell_sets.get(E) or set()))
+
+    def etype(E):
+        return edge_types[E] if (edge_types and 0 <= E < len(edge_types)) else "external"
+
+    def fronts(rid, own, winner=False):
+        return all(holds(rid, E, own) for E in boundary_demands.get(rid, [])
+                   if not (winner and etype(E) in ("facing_corridor", "shared_wall")))
+
+    def claim(own, w, l, rect):
+        """Apply one rectangle; returns (trial owner, leftover) or None if invalid."""
+        cw = {c for c, r in own.items() if r == w}
+        trial = dict(own)
+        for c in rect:
+            trial[c] = w
+        leftover = cw - rect
+        pieces, seen = [], set()
+        for c in leftover:
+            if c in seen:
+                continue
+            comp, q = set(), deque([c])
+            seen.add(c)
+            while q:
+                i, j = q.popleft()
+                comp.add((i, j))
+                for nb in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                    if nb in leftover and nb not in seen:
+                        seen.add(nb)
+                        q.append(nb)
+            pieces.append(comp)
+        touched = {l}
+        for comp in pieces:
+            votes = {}
+            for i, j in comp:
+                for nb in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                    r = trial.get(nb)
+                    if nb not in comp and r is not None and r != w:
+                        votes[r] = votes.get(r, 0) + 1
+            if not votes:
+                return None
+            to = l if l in votes else max(votes, key=lambda r: (votes[r], str(r)))
+            for c in comp:
+                trial[c] = to
+            touched.add(to)
+        for r in touched | {w}:
+            rc = [c for c, o in trial.items() if o == r]
+            if not rc or _num_components(rc) != 1 or not fronts(r, trial, winner=(r == w)):
+                return None
+        return trial, leftover
+
+    for k, pair in enumerate(precedence):
+        w_s, l_s = str(pair[0]), str(pair[1])
+        w, l = id_by_str.get(w_s), id_by_str.get(l_s)
+        entry = {"winner": w_s, "loser": l_s, "applied": False, "candidates": []}
+        report.append(entry)
+        if w is None or l is None or w == l:
+            entry["reason"] = "unknown room"
+            continue
+        cw = {c for c, r in owner.items() if r == w}
+        cl = {c for c, r in owner.items() if r == l}
+        pool = cw | cl
+        nw, nl = contain.get(w), contain.get(l)
+        cmin = min(c[0] for c in pool); cmax = max(c[0] for c in pool) + 1
+        rmin = min(c[1] for c in pool); rmax = max(c[1] for c in pool) + 1
+        cands = []
+        for c0 in range(cmin, cmax):
+            for c1 in range(c0 + 1, cmax + 1):
+                for r0 in range(rmin, rmax):
+                    for r1 in range(r0 + 1, rmax + 1):
+                        rect = {(i, j) for i in range(c0, c1) for j in range(r0, r1)}
+                        if rect == cw or not rect <= pool:
+                            continue
+                        if nl is not None and nl in rect:
+                            continue
+                        if claim(owner, w, l, rect) is None:
+                            continue
+                        moved = len(rect - cw) + len(cw - rect)
+                        cands.append((moved, -len(rect), (c0, c1, r0, r1)))
+        cands.sort()
+        entry["candidates"] = [list(t[2]) for t in cands]
+        pick = choice.get(k)
+        if pick is None:
+            entry["reason"] = ("no valid rectangle" if not cands
+                               else "not chosen" if k in choice else "pending trial")
+            continue
+        c0, c1, r0, r1 = pick
+        rect = {(i, j) for i in range(c0, c1) for j in range(r0, r1)}
+        res = claim(owner, w, l, rect)
+        if res is None:
+            entry["reason"] = "chosen rectangle no longer valid"
+            continue
+        before = owner
+        owner, leftover = res
+        entry.update({"applied": True, "rect": [c0, c1, r0, r1],
+                      "node_moved": nw not in rect,
+                      "fronts_dropped": [E for E in boundary_demands.get(w, [])
+                                         if holds(w, E, before) and not holds(w, E, owner)],
+                      "taken": [list(c) for c in sorted(rect - cw)],
+                      "returned": [list(c) for c in sorted(leftover)]})
     return owner, report
 
 
@@ -556,13 +702,68 @@ def _carve_unmet_arms(poly_by_id, boundary, bpoly, bd, unmet, edge_types):
     return satisfied, donors_of
 
 
-def generate(spec):
+# Step-2c trial solves: at most this many candidate rectangles are re-solved per
+# precedence pair (candidates are listed fewest-cells-moved first).
+CLAIM_TRIALS = 16
+
+
+def _claim_score(plan, w, l):
+    """Rank a trial generate for a precedence pair: winner core ok, loser core ok,
+    rooms with a core ok, step-3 min sizes met (ok = meets min_edge and intact)."""
+    rep = plan.get("report") or {}
+    cores = (rep.get("grid_lines") or {}).get("cores") or {}
+    ok = {k: bool(v.get("meets") and v.get("intact")) for k, v in cores.items()}
+    return (ok.get(str(w), False), ok.get(str(l), False), sum(ok.values()),
+            bool(rep.get("min_sizes_met")))
+
+
+def _generate_with_claims(spec, options):
+    """Resolve spec["precedence"] pair by pair: list the valid rectangles (a probe
+    generate), re-solve each (up to CLAIM_TRIALS), keep the best by _claim_score
+    if it is no worse than not claiming, then generate once with every choice."""
+    prec = spec.get("precedence") or []
+    choice, trials_log = {}, []
+    for k, pair in enumerate(prec):
+        probe = _realise(spec, options, dict(choice))
+        entries = (probe.get("report") or {}).get("precedence") or []
+        cands = entries[k]["candidates"] if k < len(entries) else []
+        base = _claim_score(probe, pair[0], pair[1])
+        best, best_score = None, None
+        for rect in cands[:CLAIM_TRIALS]:
+            trial = _realise(spec, options, {**choice, k: tuple(rect)})
+            sc = _claim_score(trial, pair[0], pair[1])
+            if best_score is None or sc > best_score:
+                best, best_score = tuple(rect), sc
+        choice[k] = best if (best is not None and best_score >= base) else None
+        trials_log.append({"pair": [str(pair[0]), str(pair[1])], "tried": min(len(cands), CLAIM_TRIALS),
+                           "baseline": list(base), "best": list(best_score) if best_score else None})
+    final = _realise(spec, options, choice)
+    for e, t in zip((final.get("report") or {}).get("precedence") or [], trials_log):
+        e["trial"] = t
+        if not e["applied"] and e.get("reason") == "not chosen":
+            e["reason"] = "no rectangle scored at least as well as not claiming"
+    return final
+
+
+def generate(spec, options=None):
     """Realise a Plan from a Spec: room polygons from node positions + boundary.
 
-    See the module docstring for the four steps. Returns the Plan dict.
+    Validates the Spec first (spec.validate_spec) and raises ValueError on a
+    malformed one. Does not change `spec` or `options`. See the module docstring
+    for the four steps. Returns the Plan dict.
     """
+    validate_spec(spec)
+    options = build_options() if options is None else options
+    if spec.get("precedence"):
+        return _generate_with_claims(spec, options)
+    return _realise(spec, options, None)
+
+
+def _realise(spec, options, claim_choice):
+    """The Generator proper. `claim_choice` is internal: the step-2c rectangle
+    chosen per precedence pair (None = not resolved yet)."""
     boundary = spec["boundary"]
-    nodes = [n for n in spec.get("node_assignment", []) if n.get("pos")]
+    nodes = [n for n in spec.get("nodes", []) if n.get("pos")]
     if not nodes or len(boundary) < 3:
         return {"rooms": [], "edges": spec.get("adjacencies", []),
                 "entrance": spec.get("entrance"), "node_pos": {},
@@ -575,6 +776,55 @@ def generate(spec):
     mm = spec.get("mm_per_unit")           # boundary-units -> mm, for min-size
     debug_steps = []
 
+    # ── 0. core placement (SPIKE, options["core_placement"], default off): a core
+    # block per room, sized by use and placed inside the boundary; nodes move into
+    # their blocks. The block edges become pinned grid lines and its cells are
+    # seeded to the room, so every placed room starts from a min_edge rectangle.
+    placed_cores, placement_report = {}, None
+    _cp_mode = options.get("core_placement")
+    if _cp_mode in (False, None, "", "off"):
+        _cp_mode = False
+    if _cp_mode and mm and mm > 0:
+        if _cp_mode == "cpsat":
+            from packages.floorplan_core.layout_cpsat import solve_layout as _place
+            _pl = _place(nodes, spec.get("demands", {}) or {}, mm, boundary,
+                        spec.get("boundary_demands") or {}, spec.get("edge_types"),
+                        spec.get("adjacencies") or [], spec.get("precedence") or [],
+                        pair_weights=options.get("pair_weights"),
+                        entry_room=spec.get("entry_room"),
+                        entrance=spec.get("entrance"),
+                        cpsat_seed=options.get("cpsat_seed", CPSAT_SEED),
+                        cpsat_workers=options.get("cpsat_workers", CPSAT_WORKERS),
+                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S))
+        elif _cp_mode == "cpsat_dim":
+            # Sizes rooms on the RETRIEVED arrangement — the source plan supplies
+            # the layout, CP-SAT only sizes/places each room's rectangle around it
+            # (see layout_cpsat.solve_layout_dim docstring for the constraint set).
+            from packages.floorplan_core.layout_cpsat import solve_layout_dim as _place
+            _pl = _place(nodes, spec.get("demands", {}) or {}, mm, boundary,
+                        spec.get("boundary_demands") or {}, spec.get("edge_types"),
+                        spec.get("adjacencies") or [], spec.get("precedence") or [],
+                        pair_weights=options.get("pair_weights"),
+                        source_rooms=options.get("source_rooms"),
+                        entry_room=spec.get("entry_room"),
+                        entrance=spec.get("entrance"),
+                        cpsat_seed=options.get("cpsat_seed", CPSAT_SEED),
+                        cpsat_workers=options.get("cpsat_workers", CPSAT_WORKERS),
+                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S))
+        else:
+            from packages.floorplan_core.core_placement import place_cores as _place
+            _pl = _place(nodes, spec.get("demands", {}) or {}, mm, boundary,
+                        spec.get("boundary_demands") or {}, spec.get("edge_types"),
+                        spec.get("adjacencies") or [], spec.get("precedence") or [])
+        nodes = _pl["nodes"]
+        id_of = {str(n["id"]): n["id"] for n in nodes}
+        placed_cores = {id_of[k]: v for k, v in _pl["cores"].items() if k in id_of}
+        placement_report = _pl["report"]
+        debug_steps.append({"step": "0_core_placement", "mode": _cp_mode,
+                            "placed": len(placed_cores),
+                            "unplaced": [k for k, v in placement_report.get("rooms", {}).items()
+                                         if not v.get("placed")]})
+
     # ── 1. node-seeded grid ──────────────────────────────────────────────────
     tol_x = 0.04 * max(BW, 1e-9)
     tol_y = 0.04 * max(BH, 1e-9)
@@ -584,10 +834,13 @@ def generate(spec):
     _edges = [d.get("min_edge", 0.0) for d in _dem.values() if d.get("min_edge")]
     min_seg = (min(_edges) / mm) if (_edges and mm and mm > 0) else 0.0
     min_seg *= PIN_MIN_SEG_FACTOR
+    # placed core edges are pinned like boundary vertices: the solve keeps them
+    _cx = [v for c in placed_cores.values() for v in (c[0], c[2])]
+    _cy = [v for c in placed_cores.values() for v in (c[1], c[3])]
     xs, x_pins = _grid_lines([n["pos"][0] for n in nodes], bx0, bx1, tol_x,
-                             fixed=[p[0] for p in boundary], min_seg=min_seg)
+                             fixed=[p[0] for p in boundary] + _cx, min_seg=min_seg)
     ys, y_pins = _grid_lines([n["pos"][1] for n in nodes], by0, by1, tol_y,
-                             fixed=[p[1] for p in boundary], min_seg=min_seg)
+                             fixed=[p[1] for p in boundary] + _cy, min_seg=min_seg)
     ncol, nrow = len(xs) - 1, len(ys) - 1
     debug_steps.append({"step": "1_grid", "ncol": ncol, "nrow": nrow,
                         "nodes": len(nodes),
@@ -615,9 +868,24 @@ def generate(spec):
     contain = {n["id"]: (_cell_index(n["pos"][0], xs), _cell_index(n["pos"][1], ys))
                for n in nodes}
     owner = {}
+    # step 0's cores: every cell whose centre lies in a placed core is its room's.
+    # core_cells records WHICH room's core each such cell belongs to, so 2b's
+    # repair (below) can never transfer a cell step 0 already promised to a
+    # room away from it — see core_cells' docstring note at the 2b call.
+    core_cells = {}
+    for rid, (cx0, cy0, cx1, cy1) in placed_cores.items():
+        for i in range(ncol):
+            if not cx0 < (xs[i] + xs[i + 1]) / 2.0 < cx1:
+                continue
+            for j in range(nrow):
+                if cy0 < (ys[j] + ys[j + 1]) / 2.0 < cy1 and (i, j) in inside:
+                    owner[(i, j)] = rid
+                    core_cells[(i, j)] = rid
     node_conflicts = []          # nodes sharing one grid cell — only one can own it
     for n in nodes:
         cell = contain[n["id"]]
+        if owner.get(cell) == n["id"]:
+            continue
         if cell in owner:
             node_conflicts.append(n["id"])
         else:
@@ -630,8 +898,15 @@ def generate(spec):
             ccy = (ys[j] + ys[j + 1]) / 2.0
             best, bd = None, float("inf")
             for n in nodes:
-                px, py = n["pos"]
-                d = (px - ccx) ** 2 + (py - ccy) ** 2
+                # rooms with a placed core grow from the core, not the node point
+                c = placed_cores.get(n["id"])
+                if c is not None:
+                    dx = max(c[0] - ccx, 0.0, ccx - c[2])
+                    dy = max(c[1] - ccy, 0.0, ccy - c[3])
+                    d = dx * dx + dy * dy
+                else:
+                    px, py = n["pos"]
+                    d = (px - ccx) ** 2 + (py - ccy) ** 2
                 if d < bd:
                     best, bd = n["id"], d
             owner[(i, j)] = best
@@ -639,21 +914,88 @@ def generate(spec):
     # ── 2b. boundary-contact repair (topology -> geometry): honour each room's
     # demanded room↔boundary fronts by transferring border cells, preserving
     # contiguity and every donor's own fronts. Demand keys are normalized to the
-    # owner's room-id type. Unmet demands are reported, not forced.
+    # owner's room-id type. Unmet demands are reported, not forced. core_cells
+    # (step 0's placed-core cells, keyed by the room they were placed for) is
+    # threaded in so a transfer can never take a cell OUT of another room's
+    # placed core — the step-0/2b seam gap found 2026-11-02 (test_boundary_003
+    # rank 1, test_boundary_004 rank 2, cpsat mode): a cell inside r_5's placed
+    # core was reassigned to r_4 to satisfy r_4's boundary front, because
+    # `valid()` only checked the donor stayed connected and kept ITS OWN
+    # fronts — not that step 0's min_edge promise to it survived. The grid
+    # solve (step 3) then re-pinned r_5's core edges but the *interior* cell
+    # was gone, so the clipped room no longer contained its node
+    # (report.all_nodes_inside False, report.node_relocated=["r_5"]).
+    #
+    # Entrance (2026-11-04): the entry room claims the cell in front of the drawn
+    # entrance, first, as a demand on a pseudo-edge. Nearest-node fill alone gives
+    # that cell to whichever node is closest (005b: a hallway arm, not the primary
+    # the entrance opens onto). The pseudo-edge stays local to this call.
     raw_bd = spec.get("boundary_demands") or {}
     bd = {}
-    if raw_bd:
-        id_by_str = {str(r): r for r in set(owner.values())}
-        bd = {id_by_str[k]: list(v) for k, v in raw_bd.items() if k in id_by_str}
-        edge_cell_sets = _edge_border_cells(boundary, xs, ys, ncol, nrow)
+    id_by_str = {str(r): r for r in set(owner.values())}
+    entry_id = id_by_str.get(str(spec.get("entry_room")))
+    edge_cell_sets = _edge_border_cells(boundary, xs, ys, ncol, nrow) if (raw_bd or entry_id is not None) else {}
+    ent_cell = (_entrance_cell(boundary, spec.get("entrance"), xs, ys, ncol, nrow, edge_cell_sets)
+                if entry_id is not None else None)
+    bd = {id_by_str[k]: list(v) for k, v in raw_bd.items() if k in id_by_str}
+    if bd or ent_cell is not None:
+        repair_bd, repair_cells = {k: list(v) for k, v in bd.items()}, edge_cell_sets
+        if ent_cell is not None:
+            repair_bd[entry_id] = ["entrance"] + repair_bd.get(entry_id, [])
+            repair_cells = {**edge_cell_sets, "entrance": {ent_cell}}
         owner, contacts_report = _repair_boundary_contacts(
-            owner, bd, edge_cell_sets, ncol, nrow)
+            owner, repair_bd, repair_cells, ncol, nrow, core_cells=core_cells, first=entry_id)
     else:
         contacts_report = {"satisfied": [], "unmet": [], "transfers": []}
+    entrance_met = ent_cell is not None and owner.get(ent_cell) == entry_id
+    contacts_report["unmet"] = [u for u in contacts_report["unmet"] if u[1] != "entrance"]
+    contacts_report["satisfied"] = [u for u in contacts_report["satisfied"] if u[1] != "entrance"]
+    contacts_report["entrance"] = {"entry_room": str(spec.get("entry_room")), "met": entrance_met,
+                                   "applied": ent_cell is not None}
     debug_steps.append({"step": "2b_contacts",
                         "satisfied": len(contacts_report["satisfied"]),
                         "unmet": len(contacts_report["unmet"]),
                         "transfers": len(contacts_report["transfers"])})
+
+    # ── 2c. precedence core claim (SetPrecedence): spec["precedence"] is a list
+    # of [winner, loser]; each winner is re-cut as a rectangle over its own and the
+    # loser's cells, returning what it does not use. Empty by default (no claims).
+    _dem2 = spec.get("demands", {}) or {}
+    owner, precedence_report = _precedence_claims(
+        owner, spec.get("precedence") or [], contain, xs, ys,
+        lambda r: (((_dem2.get(r) or {}).get("min_edge", 0.0) / mm) if (mm and mm > 0) else 0.0),
+        bd, edge_cell_sets if raw_bd else {}, choice=claim_choice,
+        edge_types=spec.get("edge_types"))
+    # a claimed rectangle that left out the winner's node cell takes the node with
+    # it: centre of the rectangle (pre-solve), on a copy — never the caller's spec
+    for e in precedence_report:
+        if e.get("applied") and e.get("node_moved"):
+            c0, c1, r0, r1 = e["rect"]
+            nid = next((n["id"] for n in nodes if str(n["id"]) == e["winner"]), None)
+            if nid is None:
+                continue
+            pos = [(xs[c0] + xs[c1]) / 2.0, (ys[r0] + ys[r1]) / 2.0]
+            nodes = [dict(n, pos=pos) if n["id"] == nid else n for n in nodes]
+            contain[nid] = (min(max(_cell_index(pos[0], xs), c0), c1 - 1),
+                            min(max(_cell_index(pos[1], ys), r0), r1 - 1))
+    # a claim moves cells across edges, so re-read every demand against the new
+    # ownership (a returned corridor cell can satisfy the loser's unmet demand)
+    if raw_bd and any(e.get("applied") for e in precedence_report):
+        # a front a winner traded away is "dropped", not unmet — 4b must not
+        # carve an arm back to it and undo the claim
+        dropped_fronts = {(e["winner"], E) for e in precedence_report
+                          if e.get("applied") for E in e.get("fronts_dropped") or []}
+        contacts_report["satisfied"], contacts_report["unmet"] = [], []
+        contacts_report["dropped_by_precedence"] = []
+        for rid in sorted(bd, key=lambda r: (-len(bd[r]), str(r))):
+            for E in bd[rid]:
+                held = any(owner.get(c) == rid for c in (edge_cell_sets.get(E) or set()))
+                key = ("satisfied" if held else
+                       "dropped_by_precedence" if (str(rid), E) in dropped_fronts else "unmet")
+                contacts_report[key].append([str(rid), E])
+    debug_steps.append({"step": "2c_precedence",
+                        "pairs": len(precedence_report),
+                        "applied": sum(1 for e in precedence_report if e["applied"])})
 
     cells_by_room = {}
     for cell, rid in owner.items():
@@ -681,6 +1023,14 @@ def generate(spec):
         me = _min_edge(rid)
         min_x[rid] = me
         min_y[rid] = me
+    # core block per room (options["core_block"], default on; the app's toggle): the
+    # min_edge spans bind on this rectangle of the room's own cells, not its bbox,
+    # so every room keeps a min_edge rectangle (D24 core). Off = bbox spans.
+    use_core = options.get("core_block", True)
+    core_box = {rid: _core_block(cells, contain.get(rid), xs, ys, _min_edge(rid))
+                for rid, cells in cells_by_room.items()}
+    span_box = {rid: (core_box[rid] if use_core and core_box[rid] else room_bbox[rid])
+                for rid in cells_by_room}
     # Slack weights per column/row. When the spec carries area_frac (D1), weight
     # each column/row by the target AREA sitting in it: spread each room's target
     # fraction over its cells, then sum per column and per row. With min_edge ~ 0
@@ -714,14 +1064,54 @@ def generate(spec):
 
     # notch lines stay on the boundary; only node-derived cuts move. Factored so
     # the area-lift loop below can re-solve both axes from new per-room minimums.
+    # per-axis span ranges the min constraints bind on (core block, or bbox)
+    span_x = {r: (span_box[r][0], span_box[r][1]) for r in cells_by_room}
+    span_y = {r: (span_box[r][2], span_box[r][3]) for r in cells_by_room}
+
+    def _solve_x(mx, sx):
+        xt_, ok_ = _solve_positions(ncol, [(sx[r][0], sx[r][1], mx[r]) for r in cells_by_room],
+                                    BW, col_flex, eps_x,
+                                    fixed={k: xs[k] - bx0 for k in x_pins})
+        return [bx0 + v for v in xt_], ok_
+
+    def _solve_y(my, sy):
+        yt_, ok_ = _solve_positions(nrow, [(sy[r][0], sy[r][1], my[r]) for r in cells_by_room],
+                                    BH, row_flex, eps_y,
+                                    fixed={k: ys[k] - by0 for k in y_pins})
+        return [by0 + v for v in yt_], ok_
+
     def _solve_axes(mx, my):
-        x_spans_ = [(room_bbox[r][0], room_bbox[r][1], mx[r]) for r in cells_by_room]
-        y_spans_ = [(room_bbox[r][2], room_bbox[r][3], my[r]) for r in cells_by_room]
-        xt_, x_ok_ = _solve_positions(ncol, x_spans_, BW, col_flex, eps_x,
-                                      fixed={k: xs[k] - bx0 for k in x_pins})
-        yt_, y_ok_ = _solve_positions(nrow, y_spans_, BH, row_flex, eps_y,
-                                      fixed={k: ys[k] - by0 for k in y_pins})
-        return [bx0 + v for v in xt_], [by0 + v for v in yt_], x_ok_, y_ok_
+        xt_, x_ok_ = _solve_x(mx, span_x)
+        yt_, y_ok_ = _solve_y(my, span_y)
+        return xt_, yt_, x_ok_, y_ok_
+
+    # core relaxation: side-by-side cores can need more than the boundary's width.
+    # Per axis, while infeasible, revert one room's core span to its bbox span —
+    # the one whose revert alone makes the axis feasible, else the one with the
+    # narrowest pre-solve core (furthest from min_edge) — so cores bind wherever
+    # they fit and an infeasible solve never shrinks the whole grid for them.
+    core_relaxed = {"x": [], "y": []}
+    if use_core:
+        for axis, solve, spans, lines, k0, k1 in (
+                ("x", _solve_x, span_x, xs, 0, 1), ("y", _solve_y, span_y, ys, 2, 3)):
+            mins = min_x if axis == "x" else min_y
+            _, ok = solve(mins, spans)
+            while not ok:
+                cands = [r for r in cells_by_room
+                         if spans[r] != (room_bbox[r][k0], room_bbox[r][k1])]
+                if not cands:
+                    break
+                pick = None
+                for r in sorted(cands, key=lambda r: lines[spans[r][1]] - lines[spans[r][0]]):
+                    trial = dict(spans); trial[r] = (room_bbox[r][k0], room_bbox[r][k1])
+                    if solve(mins, trial)[1]:
+                        pick = r
+                        break
+                if pick is None:
+                    pick = min(cands, key=lambda r: lines[spans[r][1]] - lines[spans[r][0]])
+                spans[pick] = (room_bbox[pick][k0], room_bbox[pick][k1])
+                core_relaxed[axis].append(pick)
+                _, ok = solve(mins, spans)
 
     xt, yt, x_ok, y_ok = _solve_axes(min_x, min_y)
 
@@ -733,8 +1123,8 @@ def generate(spec):
     area_rounds = 0
     area_lifted, area_unmet = [], []
     lift_factor = {}
-    # spec["area_lift"] = False turns the lift off (the app's before/after toggle)
-    if spec.get("area_lift", True) and mm and mm > 0 and x_ok and y_ok:
+    # options["area_lift"] = False turns the lift off (the app's before/after toggle)
+    if options.get("area_lift", True) and mm and mm > 0 and x_ok and y_ok:
         a_min = {rid: (((demands.get(rid) or {}).get("min_area", 0.0)) / (mm ** 2))
                 for rid in cells_by_room}
 
@@ -758,7 +1148,8 @@ def generate(spec):
                    if a_min[r] > 0 and areas[r] >= a_min[r] * (1 - 1e-6)]
             rid = max(deficient, key=lambda r: a_min[r] / areas[r])
             f = a_min[rid] / areas[rid]
-            cmin, cmax, rmin, rmax = room_bbox[rid]
+            # the spans the solve binds (core block, or bbox with core_block off)
+            (cmin, cmax), (rmin, rmax) = span_x[rid], span_y[rid]
             w, h = xt[cmax] - xt[cmin], yt[rmax] - yt[rmin]
             short, long_ = min(w, h), max(w, h)
             cap = max(ASPECT_MAX, (long_ / short) if short > 1e-12 else float("inf"))
@@ -795,7 +1186,8 @@ def generate(spec):
     debug_steps.append({"step": "3_resolve", "min_sizes_met": bool(x_ok and y_ok),
                         "area_rounds": area_rounds,
                         "area_lifted": [str(r) for r in area_lifted],
-                        "area_unmet": [str(r) for r in area_unmet]})
+                        "area_unmet": [str(r) for r in area_unmet],
+                        "core_relaxed": {a: [str(r) for r in v] for a, v in core_relaxed.items()}})
     # solved grid, for the canvas (drawn under the generated rooms): lines in
     # target space, which are pinned to the boundary, and each cell's owner after
     # the 2b repair (None = outside the boundary)
@@ -804,7 +1196,29 @@ def generate(spec):
         "pinned_x": sorted(x_pins), "pinned_y": sorted(y_pins),
         "cells": [[i, j, (str(owner[(i, j)]) if (i, j) in owner else None)]
                   for i in range(ncol) for j in range(nrow)],
+        # per-room core block on the solved grid, for the canvas: rect in target
+        # space, size in mm against min_edge; "intact" is added after step 4b
+        "core_block_on": bool(use_core),
+        "cores": {},
     }
+    for rid, cb in core_box.items():
+        if not cb:
+            continue
+        c0, c1, r0, r1 = cb
+        w_u, h_u = xt[c1] - xt[c0], yt[r1] - yt[r0]
+        me_mm = (demands.get(rid) or {}).get("min_edge", 0.0)
+        grid_lines["cores"][str(rid)] = {
+            "cells": [c0, c1, r0, r1],
+            "rect": [round(xt[c0], 6), round(yt[r0], 6), round(xt[c1], 6), round(yt[r1], 6)],
+            "w_mm": round(w_u * mm, 1) if mm else None,
+            "h_mm": round(h_u * mm, 1) if mm else None,
+            "min_edge_mm": me_mm,
+            "meets": bool(mm and me_mm and min(w_u, h_u) * mm >= me_mm - 1.0),
+            "contains_node": bool(contain.get(rid) and c0 <= contain[rid][0] < c1
+                                  and r0 <= contain[rid][1] < r1),
+            # axes on which the core span was reverted to the bbox to stay feasible
+            "relaxed": [a for a in ("x", "y") if rid in core_relaxed[a]],
+        }
 
     # ── 3b. remap node positions through the same warp the grid underwent, so a
     # node keeps its fractional spot inside its (re-dimensioned) cell — i.e. stays
@@ -949,6 +1363,21 @@ def generate(spec):
     # a Stage-0 gate, so it is reported (min_sizes_met) but not gated here.
     feasible = (not dropped and not clipped_out and splits == 0
                 and all_nodes_inside and not node_relocated)
+    # core block intact = the final room (after clip + 4b carve) still covers it
+    final_by_id = {str(r["id"]): r["polygon"] for r in out_rooms
+                   if len(r.get("polygon") or []) >= 3}
+    for rid, cb in grid_lines["cores"].items():
+        poly = final_by_id.get(rid)
+        if poly is None:
+            cb["intact"] = False
+            continue
+        g = SPoly(poly)
+        if not g.is_valid:
+            g = g.buffer(0)
+        x0c, y0c, x1c, y1c = cb["rect"]
+        rect = SPoly([(x0c, y0c), (x1c, y0c), (x1c, y1c), (x0c, y1c)])
+        cb["intact"] = bool(rect.area > 0
+                            and g.intersection(rect).area >= rect.area * (1 - 1e-3))
     debug_steps.append({"step": "4_polygons", "rooms": len(out_rooms),
                         "coverage": round(coverage, 4), "splits": splits,
                         "clipped_out": clipped_out,
@@ -963,6 +1392,8 @@ def generate(spec):
         "report": {
             "grid": [ncol, nrow],
             "grid_lines": grid_lines,
+            "precedence": precedence_report,
+            "placement": placement_report,
             "coverage": round(coverage, 4),
             "min_sizes_met": bool(x_ok and y_ok),
             "dropped_rooms": dropped,
@@ -990,11 +1421,11 @@ if __name__ == "__main__":
     _boundary = [[0, 0], [1, 0], [1, 1], [0, 1]]
     _spec = {
         "boundary": _boundary,
-        "node_assignment": [
-            {"id": "bed",  "label": "bedroom", "pos": [0.25, 0.25]},
-            {"id": "bath", "label": "bathroom", "pos": [0.75, 0.25]},
-            {"id": "kit",  "label": "kitchen", "pos": [0.25, 0.75]},
-            {"id": "liv",  "label": "living", "pos": [0.75, 0.75]},
+        "nodes": [
+            {"id": "bed", "room_id": "bed", "kind": "whole", "label": "bedroom", "pos": [0.25, 0.25]},
+            {"id": "bath", "room_id": "bath", "kind": "whole", "label": "bathroom", "pos": [0.75, 0.25]},
+            {"id": "kit", "room_id": "kit", "kind": "whole", "label": "kitchen", "pos": [0.25, 0.75]},
+            {"id": "liv", "room_id": "liv", "kind": "whole", "label": "living", "pos": [0.75, 0.75]},
         ],
         "adjacencies": [], "demands": {}, "edge_types": None,
         "entrance": None, "mm_per_unit": None,
@@ -1006,7 +1437,7 @@ if __name__ == "__main__":
     assert len(plan["rooms"]) == 4, plan["rooms"]
     # every node sits inside its own room
     poly_by_id = {r["id"]: SPoly(r["polygon"]) for r in plan["rooms"]}
-    for n in _spec["node_assignment"]:
+    for n in _spec["nodes"]:
         assert poly_by_id[n["id"]].buffer(1e-9).contains(_P(*n["pos"])), n
 
     # reassignment re-derives: swap bed <-> liv, the bedroom's polygon must move

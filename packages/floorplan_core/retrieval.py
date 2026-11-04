@@ -14,6 +14,7 @@ from .geo_ent_num_retrieval import (
 from .topo_signature import (
     topological_fitness, default_edge_types, filter_corner_adjacencies,
 )
+from .node_graph import display_graph
 from .topo_sensors import run_sensors
 
 
@@ -79,7 +80,7 @@ def _req_to_room_desc(requirements):
 
 def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
                   topn=5, shape_w=1.0, ent_w=2.0, room_w=1.0, logger=None,
-                  topo_rerank=True, pool_n=60, typed_edges=None):
+                  topo_rerank=True, pool_n=60, typed_edges=None, node_graphs=None):
     """Run retrieval for one query and return response payload dict.
 
     topo_rerank (Step 1, topology → generate → select): when True, shape
@@ -90,7 +91,12 @@ def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
     so `typed_edges` (the target's [{edge_index, type}] list; defaulted when
     absent) is passed through. Each returned plan carries its topo breakdown at
     retrieval.topo. Shape distance only gates the pool and breaks ties. Set False
-    for the original shape-only ranking."""
+    for the original shape-only ranking.
+
+    node_graphs ({plan_id: node graph}, optional, 2026-11-03): when given, the
+    daylight term scores each candidate on its node graph (circulation/storage
+    nodes excluded from a room's daylight). Other topo terms stay room-level and
+    the returned plan is unchanged."""
     bdry_segs = [[v[0], v[1]] for v in boundary]
 
     # Normalize winding so descriptor output is draw-order invariant.
@@ -206,12 +212,16 @@ def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
             if i is not None and 0 <= i < n_edges and e.get("type"):
                 resolved_types[i] = e["type"]
         for p in result_list:
+            ng = None
+            if node_graphs is not None:
+                ng = node_graphs.get(Path(p["retrieval"]["source_id"]).stem)
             topo = topological_fitness(
                 p,
                 target_boundary=boundary,
                 target_edge_types=resolved_types,
                 entrance_point=entrance_point,
                 requirements=requirements,
+                node_graph=ng,
             )
             p["retrieval"]["topo"] = topo
             # Additive: the room<->boundary-edge structure topo's daylight_fit
@@ -230,6 +240,14 @@ def run_retrieval(index_store, boundary, entrance_point=None, requirements=None,
         result_list.sort(key=lambda p: (p.get("retrieval") or {}).get("dist", float("inf")))
 
     result_list = result_list[:topn]
+
+    if node_graphs is not None:
+        # Display only: the drawn node graph of each returned plan (scoring read
+        # the sidecar above). Absent when the sidecar has no entry for the plan.
+        for p in result_list:
+            ng = node_graphs.get(Path(p["retrieval"]["source_id"]).stem)
+            if ng is not None:
+                p["retrieval"]["node_graph"] = display_graph(p, ng)
 
     return {
         "status": "ok",

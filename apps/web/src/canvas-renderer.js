@@ -76,6 +76,7 @@ export function createCanvasRenderer({
       generatedNodes,
       generatedGrid,
       generatedEdges,
+      generatedRoomEdges,
       measureMode,
       measureA,
       measureB,
@@ -362,7 +363,8 @@ export function createCanvasRenderer({
         ctx.beginPath();
         room.polygon.forEach((p,i)=>{const[px,py]=toPx(p);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);});
         ctx.closePath();
-        ctx.fillStyle=GPAL[ri%GPAL.length]+'99';ctx.fill();
+        // Hallways are amber, as in the node graph, so generated circulation reads at once.
+        ctx.fillStyle=(room.label==='Hallway'||room.type==='hallway')?'#f59e0bcc':GPAL[ri%GPAL.length]+'99';ctx.fill();
         ctx.strokeStyle='#1e293b';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
         const cx=room.polygon.reduce((a,p)=>a+p[0],0)/room.polygon.length;
         const cy=room.polygon.reduce((a,p)=>a+p[1],0)/room.polygon.length;
@@ -370,6 +372,48 @@ export function createCanvasRenderer({
         ctx.fillStyle='#0f172a';ctx.font='10px monospace';ctx.textAlign='center';
         ctx.fillText(String(room.type??room.id),lx,ly);
       });
+      // Core blocks over the rooms (report.grid_lines.cores): the rectangle of each
+      // room's cells that step 3 holds to min_edge. Green dashed = at least
+      // min_edge on both sides and still whole after clip + arms; red = short or
+      // cut. Label = core size in m against min_edge. Drawn whether or not the
+      // core constraint is on, so the toggle shows what the bbox solve leaves.
+      const cores=G&&G.cores?G.cores:null;
+      if(cores){
+        ctx.save();
+        Object.values(cores).forEach((cb)=>{
+          if(!cb||!cb.rect)return;
+          const[ax,ay]=toPx([cb.rect[0],cb.rect[1]]),[bx,by]=toPx([cb.rect[2],cb.rect[3]]);
+          const good=cb.meets&&cb.intact;
+          ctx.strokeStyle=good?'rgba(22,163,74,0.95)':'rgba(220,38,38,0.95)';
+          ctx.fillStyle=good?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.10)';
+          ctx.lineWidth=2;ctx.setLineDash([6,3]);
+          const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+          ctx.fillRect(x+2,y+2,w-4,h-4);ctx.strokeRect(x+2,y+2,w-4,h-4);
+          if(cb.w_mm!=null&&cb.h_mm!=null){
+            const txt=`${(cb.w_mm/1000).toFixed(2)}×${(cb.h_mm/1000).toFixed(2)} / ${(cb.min_edge_mm/1000).toFixed(1)}${cb.intact?'':' cut'}${(cb.relaxed||[]).length?' relaxed '+cb.relaxed.join(''):''}`;
+            ctx.font='9px monospace';ctx.textAlign='left';
+            ctx.fillStyle=good?'rgba(21,128,61,1)':'rgba(185,28,28,1)';
+            ctx.fillText(txt,x+5,y+12);
+          }
+        });
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+      // Step-0 placement (spike): an arrow from each node's retrieved position to
+      // where its placed core moved it — how far placement departs from retrieval.
+      const PL=G&&G.placement&&G.placement.rooms;
+      if(PL){
+        ctx.save();ctx.strokeStyle='rgba(124,58,237,0.9)';ctx.fillStyle='rgba(124,58,237,0.9)';ctx.lineWidth=1.5;
+        Object.values(PL).forEach((v)=>{
+          if(!v||!v.from||!v.to||(v.moved_m||0)<0.05)return;
+          const[ax,ay]=toPx(v.from),[bx,by]=toPx(v.to);
+          ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();ctx.setLineDash([]);
+          ctx.beginPath();ctx.arc(ax,ay,3,0,Math.PI*2);ctx.stroke();
+          const t=Math.atan2(by-ay,bx-ax);
+          ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx-7*Math.cos(t-0.4),by-7*Math.sin(t-0.4));ctx.lineTo(bx-7*Math.cos(t+0.4),by-7*Math.sin(t+0.4));ctx.closePath();ctx.fill();
+        });
+        ctx.restore();
+      }
       // redraw the topology graph over the generated geometry: adjacency edges
       // between the (re-placed) nodes, so the graph matches the new layout.
       // Three-valued now (moves.py SetConnection): door (connection 1) solid dark,
@@ -399,7 +443,7 @@ export function createCanvasRenderer({
       // data the sensors read, so the realised frontage of each room is visible here
       // too (the graph view only draws them when the overlay is off).
       const _etc={external:'#22c55e',shared_wall:'#64748b',facing_corridor:'#eab308'};
-      const genRE=results[selected]?.retrieval?.room_edges||{};
+      const genRE=generatedRoomEdges||{};
       Object.entries(genRE).forEach(([rid,conns])=>{
         const node=generatedNodes?.[String(rid)];
         if(!Array.isArray(node)||node.length<2)return;
@@ -1283,6 +1327,42 @@ export function createCanvasRenderer({
       roomCen[String(room.id)]=useTarget?scalePt(t([mx,my])):t([mx,my]);
     });
 
+    // Node graph (primary graph, attached by /retrieve): nodes at their own label
+    // points. A room keeps one anchor node (its whole/primary node, else its
+    // largest), and room ids stay the key for connectors, sensor flags and click
+    // selection, so swap keeps working on rooms. Absent (legacy plan, sidecar off,
+    // swapped plan) falls back to the room graph.
+    const gNodes=Array.isArray(retrieval?.node_graph?.nodes)&&retrieval.node_graph.nodes.length?retrieval.node_graph.nodes:null;
+    const gEdges=gNodes&&Array.isArray(retrieval.node_graph.edges)?retrieval.node_graph.edges:[];
+    const toDisp=(p)=>useTarget?scalePt(t(p)):t(p);
+    const nodeCen={},anchorIds=new Set();
+    if(gNodes){
+      gNodes.forEach((n)=>{if(Array.isArray(n?.pos))nodeCen[n.id]=toDisp(n.pos);});
+      rooms.forEach((room)=>{
+        const own=gNodes.filter((n)=>String(n?.room_id)===String(room?.id)&&nodeCen[n.id]);
+        if(!own.length)return;
+        const anchor=own.find((n)=>n.kind==='primary'||n.kind==='whole')
+          ||own.reduce((a,b)=>((b.area_m2||0)>(a.area_m2||0)?b:a));
+        anchorIds.add(anchor.id);
+        roomCen[String(room.id)]=nodeCen[anchor.id];
+      });
+      // Split rooms: tint each block so the primary and the hallway arms read as
+      // shapes. Whole rooms get no tint.
+      const TINT={primary:['rgba(59,130,246,0.10)','rgba(59,130,246,0.55)'],circ:['rgba(245,158,11,0.28)','rgba(180,83,9,0.75)']};
+      gNodes.forEach((n)=>{
+        if(n?.kind==='whole'||!Array.isArray(n?.polygon))return;
+        const [fill,stroke]=TINT[n.kind]||['rgba(100,116,139,0.18)','rgba(71,85,105,0.6)'];
+        c.beginPath();
+        n.polygon.forEach((ring)=>{
+          if(!Array.isArray(ring)||ring.length<3)return;
+          ring.forEach((p,i)=>{const [x,y]=toDisp(p);if(i)c.lineTo(x,y);else c.moveTo(x,y);});
+          c.closePath();
+        });
+        c.fillStyle=fill;c.fill();
+        c.strokeStyle=stroke;c.lineWidth=1;c.stroke();
+      });
+    }
+
     // Room <-> boundary connectors — drawn from the backend room_edges, which the
     // sensors ALSO consume, so a connector and a sensor can never disagree about
     // which edge a room fronts. room_edges is now raycast against the TARGET
@@ -1315,8 +1395,22 @@ export function createCanvasRenderer({
     // rooms (edge.connection===1) is the real access relationship the sensors
     // reason over, so it reads solid, dark and thick; a plain shared-wall
     // adjacency (no door) is drawn thin, light and dashed as a weaker relation.
+    // Node mode replaces these with node edges: wall (thin, dashed), door (solid,
+    // dark), open/block (solid, teal) -- open space between or within rooms.
+    const NODE_EDGE_ORDER={wall:0,door:1,block:2,open:2};
+    if(gNodes)[...gEdges].sort((p,q)=>(NODE_EDGE_ORDER[p?.kind]??0)-(NODE_EDGE_ORDER[q?.kind]??0)).forEach((e)=>{
+      const a=nodeCen[e?.a],b=nodeCen[e?.b];
+      if(!a||!b)return;
+      const open=e.kind==='block'||e.kind==='open',door=e.kind==='door';
+      c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);
+      c.strokeStyle=open?'#0d9488':door?'rgba(15,15,15,0.85)':'rgba(15,15,15,0.28)';
+      c.lineWidth=open||door?2.5:1;
+      c.setLineDash(open||door?[]:[3,3]);
+      c.stroke();
+      c.setLineDash([]);
+    });
     let drawnEdges=0;
-    edges.forEach((edge)=>{
+    if(!gNodes)edges.forEach((edge)=>{
       const a=roomCen[String(edge?.u)],b=roomCen[String(edge?.v)];
       if(!a||!b)return;
       drawnEdges++;
@@ -1355,6 +1449,32 @@ export function createCanvasRenderer({
       c.restore();
     });
 
+    // Entrance link: the node the entrance opens onto, from the node graph.
+    const entryPos=gNodes?nodeCen[retrieval.node_graph.entry_node]:null;
+    if(entryPos&&Array.isArray(fp.entrance)&&fp.entrance.length===4){
+      const [e1x,e1y]=toDisp([fp.entrance[0],fp.entrance[1]]),[e2x,e2y]=toDisp([fp.entrance[2],fp.entrance[3]]);
+      c.beginPath();c.moveTo(entryPos[0],entryPos[1]);c.lineTo((e1x+e2x)/2,(e1y+e2y)/2);
+      c.strokeStyle='#ea580c';c.lineWidth=2.5;c.setLineDash([]);c.stroke();
+    }
+
+    // Non-anchor nodes (hallway arms, storage, nooks): small squares, so they read
+    // as parts of a room and not as rooms.
+    if(gNodes){
+      const NODE_ABBR={circ:'Hw',stor:'St',nook:'Nk'};
+      const hs=nr*0.85;
+      gNodes.forEach((n)=>{
+        const pos=nodeCen[n?.id];
+        if(!pos||anchorIds.has(n.id))return;
+        c.fillStyle=n.kind==='circ'?'#fcd34d':'#e2e8f0';
+        c.fillRect(pos[0]-hs,pos[1]-hs,hs*2,hs*2);
+        c.strokeStyle='#222';c.lineWidth=1;c.strokeRect(pos[0]-hs,pos[1]-hs,hs*2,hs*2);
+        c.save();
+        c.font=`${Math.max(6,nr*0.85)}px sans-serif`;c.textAlign='center';c.textBaseline='middle';
+        c.fillStyle='#111';c.fillText(NODE_ABBR[n.kind]??'·',pos[0],pos[1]);
+        c.restore();
+      });
+    }
+
     // Entrance marker (optional). Skipped in useTarget mode: it would draw the
     // plan's OWN entrance via t(), out of frame with the target-placed nodes;
     // the drawn boundary's entrance is already shown by the boundary overlay.
@@ -1368,7 +1488,7 @@ export function createCanvasRenderer({
 
     if(drawnNodes!==rooms.length)
       console.warn(`drawTopologyGraph: drew ${drawnNodes}/${rooms.length} room nodes (missing/invalid polygon)`);
-    if(drawnEdges!==edges.length)
+    if(!gNodes&&drawnEdges!==edges.length)
       console.warn(`drawTopologyGraph: drew ${drawnEdges}/${edges.length} adjacency edges (unresolved room id)`);
     if(badConnectors)
       console.warn(`drawTopologyGraph: ${badConnectors}/${connectorCount+badConnectors} room_edges connector(s) had an invalid/out-of-range edge_index`);

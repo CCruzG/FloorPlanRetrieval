@@ -22,6 +22,7 @@ POST /topo_check        Topology-only sensor registry (reachability, typed acces
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
@@ -204,6 +205,12 @@ def retrieve():
     except RequestValidationError as exc:
         return jsonify({"error": str(exc)}), 400
 
+    # node-graph daylight (2026-11-03): request "node_daylight" wins, else env NODE_DAYLIGHT (default "1" = on; "0" = off)
+    want_nodes = body.get("node_daylight")
+    if want_nodes is None:
+        want_nodes = os.environ.get("NODE_DAYLIGHT", "1") == "1"  # default on since 2026-11-03
+    node_graphs = _node_graphs() if want_nodes else None
+
     try:
         payload = run_retrieval(
             index_store=INDEX_STORE,
@@ -216,12 +223,38 @@ def retrieve():
             room_w=parsed["room_w"],
             logger=logger,
             typed_edges=parsed.get("typed_edges"),
+            node_graphs=node_graphs,
         )
     except RetrievalError as exc:
         logger.exception("Retrieval failed")
         return jsonify({"error": str(exc)}), 500
 
+    payload["node_daylight"] = node_graphs is not None
     return jsonify(payload)
+
+
+NODE_GRAPH_SIDECAR = os.environ.get(
+    "NODE_GRAPH_SIDECAR",
+    str(Path.home() / "Documents/Work_FBI/Artefacts/project-44/data/RPlan-node-graph/node_graph_v1.2.jsonl.gz"))
+_NODE_GRAPHS = None
+
+
+def _node_graphs():
+    """Load the node-graph sidecar once (about 5 s); None if absent. Warns when stale."""
+    global _NODE_GRAPHS
+    if _NODE_GRAPHS is None:
+        try:
+            from packages.floorplan_core.node_graph import is_stale, load_sidecar
+            meta, graphs = load_sidecar(NODE_GRAPH_SIDECAR)
+            if is_stale(meta):
+                logger.warning("node-graph sidecar %s is stale (built with other rules/parameters)",
+                               NODE_GRAPH_SIDECAR)
+            _NODE_GRAPHS = graphs
+            logger.info("node-graph sidecar loaded: %d plans", len(graphs))
+        except Exception as exc:
+            logger.warning("node-graph sidecar unavailable (%s); node_daylight ignored", exc)
+            _NODE_GRAPHS = {}
+    return _NODE_GRAPHS or None
 
 
 # ── /fit endpoint ─────────────────────────────────────────────────────────────
@@ -1138,8 +1171,8 @@ def topo_check_route():
 # ── /generate + /moves/propose: shared Spec/generate/sensors pipeline ────────
 
 def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=None,
-                    swap=None, mm_per_unit=None, area_lift=True, connections=None,
-                    node_pos=None):
+                    swap=None, mm_per_unit=None, area_lift=True, core_block=True, core_placement=False, connections=None, precedence=None,
+                    node_pos=None, expand_nodes=None):
     """
     Build the Spec from `fp`, thread boundary_demands, apply an optional swap and
     optional SetConnection edits, run the Stage-0 generator, re-derive room_edges
@@ -1155,11 +1188,23 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
     Raises ValueError for an invalid connection type — the caller maps this to 400.
     """
     from packages.floorplan_core.generate import (
-        spec_from_plan, generate, reassign, SCALE as _PLAN_SCALE,
+        generate, reassign, SCALE as _PLAN_SCALE,
     )
-    from packages.floorplan_core.topo_signature import exact_room_edges
+    from packages.floorplan_core.spec import build_options, describe, fit
+    from packages.floorplan_core.topo_signature import exact_room_edges, map_rooms_to_target
     from packages.floorplan_core.topo_sensors import run_sensors as _run_sensors
     from packages.floorplan_core.moves import SetConnectionMove, _TYPE_TO_CONNECTION
+
+    # Node-level generation (2026-11-03): expand the plan so every node of its
+    # node graph is a room (circulation arms as Hallway, open to the living
+    # primary; doors on the node they open onto). Request flag wins, else env
+    # NODE_GENERATE (default "0" = off). An already expanded plan passes through.
+    if expand_nodes is None:
+        expand_nodes = os.environ.get("NODE_GENERATE", "0") == "1"
+    if expand_nodes and not fp.get("node_graph_expanded"):
+        from packages.floorplan_core.node_graph import build_node_graph, expand_plan
+        fp = expand_plan(fp, build_node_graph(fp))
+        node_pos = None   # node positions are re-derived for the expanded rooms
 
     # The frontend does not send mm_per_unit; without it the solver drops every
     # min_edge to 0. Default to the plan scale (boundary units -> mm).
@@ -1177,33 +1222,33 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
         fp, target_boundary=boundary, target_edge_types=resolved_types,
         entrance_point=entrance_point, requirements=requirements,
     )
-    fp_with_nodes = dict(fp)
-    fp_with_nodes["node_pos"] = node_pos or topo.get("node_pos", {})
-
     # Score against the DRAWN entrance (target frame), not the source plan's
     # entrance (source frame): the generated geometry sits in the drawn
     # boundary, so entry-room detection must use where the user put the door.
     drawn_entrance = ([entrance_point[0], entrance_point[1],
                        entrance_point[0], entrance_point[1]]
                       if entrance_point else fp.get("entrance"))
-    spec = spec_from_plan(
-        fp_with_nodes, boundary, edge_types=resolved_types,
-        entrance=drawn_entrance, mm_per_unit=mm_per_unit,
+    # describe: the retrieved plan as a Spec. fit: replace the given fields with the
+    # input, re-derive pos and boundary_demands from the topology layer.
+    spec = fit(
+        describe(fp), boundary, edge_types=resolved_types, entrance=drawn_entrance,
+        mm_per_unit=mm_per_unit, node_pos=node_pos or topo.get("node_pos", {}), topo=topo,
     )
-    # Thread the room↔boundary target (which target edge each room should front,
-    # from the topo-rank ring alignment) into the Spec so the realiser honours it
-    # (generate step 2b). Keyed by room id; survives a swap (demand follows
-    # identity, which is what the swap edits the node of, not the id).
-    boundary_demands = {}
-    for rid, contacts in (topo.get("room_edges") or {}).items():
-        idxs = sorted({c.get("target_edge_index") for c in contacts
-                       if c.get("target_edge_index") is not None})
-        if idxs:
-            boundary_demands[str(rid)] = idxs
-    spec["boundary_demands"] = boundary_demands
-    # before/after toggle for the step-3 min_area lift (default on)
-    spec["area_lift"] = area_lift is not False
+    # Generator switches: step-0 core placement (False/None/""/"off" -> off;
+    # True/"greedy" -> greedy place_cores; "cpsat"/"cpsat_dim" -> CP-SAT, passed
+    # through as-is), step-3 core block and min_area lift toggles, and cpsat_dim's
+    # source arrangement — the retrieved plan's rooms mapped into the target frame
+    # by the SAME display transform node_pos uses (topo["mirror"]).
+    options = build_options(
+        core_placement=core_placement, core_block=core_block, area_lift=area_lift,
+        source_rooms=map_rooms_to_target(fp, boundary, entrance_point,
+                                         topo.get("mirror", False)),
+    )
     if swap and len(swap) == 2:
+        # The retrieved graph selects rooms; an expanded plan's ids are nodes.
+        if fp.get("node_graph_expanded"):
+            from packages.floorplan_core.node_graph import anchor_node
+            swap = [anchor_node(fp, s) for s in swap]
         spec = reassign(spec, swap[0], swap[1])
 
     # Stage-2: apply the session's connection edits (SetConnection) to the Spec —
@@ -1216,8 +1261,17 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
         move_edit = {"move": "SetConnection", "u": edit.get("u"), "v": edit.get("v"), "type": etype}
         spec = SetConnectionMove().apply(spec, move_edit)
         connections_applied.append(move_edit)
+    # Stage-2: the session's SetPrecedence edits ([{winner, loser}]), in order —
+    # generate() step 2c realises them.
+    from packages.floorplan_core.moves import SetPrecedenceMove
+    for edit in precedence or []:
+        if not edit.get("winner") or not edit.get("loser"):
+            raise ValueError("precedence edit needs winner and loser")
+        move_edit = {"move": "SetPrecedence", "winner": edit["winner"], "loser": edit["loser"]}
+        spec = SetPrecedenceMove().apply(spec, move_edit)
+        connections_applied.append(move_edit)
 
-    plan = generate(spec)
+    plan = generate(spec, options)
     # Re-derive room↔boundary from the GENERATED geometry. The solver re-tiles
     # the boundary, so the source's room_edges are stale (a room drawn off an
     # edge still carried the source contact — the LR→west phantom). Polygons are
@@ -1229,7 +1283,7 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
                            requirements=requirements, target_boundary=boundary,
                            spec=spec, layer="geometry")
     return {
-        "spec": spec, "plan": plan, "resolved_types": resolved_types,
+        "spec": spec, "options": options, "plan": plan, "resolved_types": resolved_types,
         "room_edges": gen_room_edges, "sensors": sensors,
         "connections_applied": connections_applied,
     }
@@ -1238,7 +1292,7 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
 def _parse_generate_body(body):
     """Shared request-field extraction + validation for /generate and
     /moves/propose (identical bodies). Returns (fp, boundary, entrance_point,
-    typed_edges, requirements, swap, mm_per_unit, area_lift, connections, node_pos)
+    typed_edges, requirements, swap, mm_per_unit, area_lift, core_block, core_placement, connections, precedence, node_pos)
     or (None, error_response) on a validation failure."""
     fp = body.get("fp")
     boundary = body.get("boundary")
@@ -1248,7 +1302,10 @@ def _parse_generate_body(body):
     swap = body.get("swap")
     mm_per_unit = body.get("mm_per_unit")
     area_lift = body.get("area_lift", True)
+    core_block = body.get("core_block", True)
+    core_placement = body.get("core_placement", False)
     connections = body.get("connections")
+    precedence = body.get("precedence")
     node_pos = body.get("node_pos")
 
     if not isinstance(fp, dict) or not fp.get("rooms"):
@@ -1259,7 +1316,7 @@ def _parse_generate_body(body):
         return None, (jsonify({"error": "missing entrance_point"}), 400)
 
     return (fp, boundary, entrance_point, typed_edges, requirements, swap,
-            mm_per_unit, area_lift, connections, node_pos), None
+            mm_per_unit, area_lift, core_block, core_placement, connections, precedence, node_pos), None
 
 
 # ── /generate endpoint (Stage 0 — node-driven geometric solver) ───────────────
@@ -1287,6 +1344,10 @@ def generate_route():
         mm_per_unit    : optional float — boundary-units -> mm (enables min-size);
                          defaults to the plan SCALE when omitted
         area_lift      : optional bool — step-3 min_area lift (default true)
+        core_block     : optional bool — step-3 min_edge on a per-room core block (default true)
+        core_placement : optional False|True|"greedy"|"cpsat" — step-0 core
+                         placement, moves nodes (default false; True/"greedy"
+                         is the original greedy pass, "cpsat" the CP-SAT solver)
         connections    : optional [{u, v, type}], type in wall|door|open — Stage-2
                          SetConnection edits applied to the Spec before generate()
 
@@ -1304,13 +1365,14 @@ def generate_route():
     if err:
         return err
     (fp, boundary, entrance_point, typed_edges, requirements, swap,
-     mm_per_unit, area_lift, connections, node_pos) = parsed
+     mm_per_unit, area_lift, core_block, core_placement, connections, precedence, node_pos) = parsed
 
     try:
         gen = _generate_plan(
             fp, boundary, entrance_point, typed_edges=typed_edges,
             requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
-            area_lift=area_lift, connections=connections, node_pos=node_pos,
+            area_lift=area_lift, core_block=core_block, core_placement=core_placement, connections=connections, precedence=precedence, node_pos=node_pos,
+            expand_nodes=body.get("expand_nodes"),
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -1328,7 +1390,7 @@ def generate_route():
         "edges": plan.get("edges", []),
         "node_pos": plan.get("node_pos", {}),
         "room_edges": gen["room_edges"],
-        "spec_nodes": spec["node_assignment"],
+        "spec_nodes": spec["nodes"],
         "feasible": plan["feasible"],
         "report": report,
         "sensors": gen["sensors"],
@@ -1367,13 +1429,14 @@ def moves_propose_route():
     if err:
         return err
     (fp, boundary, entrance_point, typed_edges, requirements, swap,
-     mm_per_unit, area_lift, connections, node_pos) = parsed
+     mm_per_unit, area_lift, core_block, core_placement, connections, precedence, node_pos) = parsed
 
     try:
         gen = _generate_plan(
             fp, boundary, entrance_point, typed_edges=typed_edges,
             requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
-            area_lift=area_lift, connections=connections, node_pos=node_pos,
+            area_lift=area_lift, core_block=core_block, core_placement=core_placement, connections=connections, precedence=precedence, node_pos=node_pos,
+            expand_nodes=body.get("expand_nodes"),
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -1383,7 +1446,8 @@ def moves_propose_route():
 
     plan, spec, sensors = gen["plan"], gen["spec"], gen["sensors"]
     ctx_inputs = {"room_edges": gen["room_edges"], "requirements": requirements,
-                  "target_boundary": boundary, "spec": spec}
+                  "target_boundary": boundary, "spec": spec,
+                  "options": gen["options"], "resolved_types": gen["resolved_types"]}
     cur_checks = {c["sensor"]: c for c in sensors.get("checks", [])}
 
     try:
@@ -1413,6 +1477,7 @@ def moves_propose_route():
                                      "rooms_broken": sorted(after - before)})
                 candidates.append({
                     "edit": edit,
+                    "realised": predicted.get("realised", True),
                     "predicted": {
                         "summary": predicted.get("summary", {}),
                         "failing": {c["sensor"]: c["failing_rooms"]
@@ -1423,8 +1488,124 @@ def moves_propose_route():
     except Exception as exc:
         logger.exception("moves/propose: move evaluation failed")
         return jsonify({"error": str(exc)}), 500
+    # one list across moves, best predicted outcome first (stable: each move's own
+    # order breaks ties) — SetPrecedence rollouts can lose sensors, so rank them
+    candidates.sort(key=lambda c: -(c["predicted"]["summary"].get("passed") or 0))
 
     return jsonify({"candidates": candidates, "sensors": sensors})
+
+
+# ── RPlan load + rectangle decomposition (harness view) ──────────────────────
+
+_RPLAN_IDS_CACHE = None
+
+
+def _rplan_ids():
+    """Cached sorted list of plan ids present in RPLAN_DATASET_DIR."""
+    global _RPLAN_IDS_CACHE
+    if _RPLAN_IDS_CACHE is None:
+        ids = []
+        if RPLAN_DATASET_DIR.is_dir():
+            for f in RPLAN_DATASET_DIR.iterdir():
+                if f.suffix == ".json" and f.stem.isdigit():
+                    ids.append(int(f.stem))
+        _RPLAN_IDS_CACHE = sorted(ids)
+    return _RPLAN_IDS_CACHE
+
+
+def _read_rplan(plan_id):
+    """Return the plan dict for plan_id, or None if the file is absent."""
+    import json as _json
+    path = RPLAN_DATASET_DIR / f"{int(plan_id)}.json"
+    if not path.is_file():
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        return _json.load(fh)
+
+
+@app.route("/rplan/random")
+def rplan_random():
+    import random
+    ids = _rplan_ids()
+    if not ids:
+        return jsonify({"error": "no RPlan plans found"}), 404
+    plan = _read_rplan(random.choice(ids))
+    if plan is None:
+        return jsonify({"error": "plan file vanished"}), 404
+    return jsonify(plan)
+
+
+@app.route("/rplan/<int:plan_id>")
+def rplan_get(plan_id):
+    plan = _read_rplan(plan_id)
+    if plan is None:
+        return jsonify({"error": f"plan {plan_id} not found"}), 404
+    return jsonify(plan)
+
+
+@app.route("/decompose", methods=["POST"])
+def decompose():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "invalid JSON body"}), 400
+
+    plan = body.get("plan")
+    plan_id = body.get("plan_id")
+    if plan is None and plan_id is None:
+        return jsonify({"error": "give 'plan' (object) or 'plan_id' (int)"}), 400
+    if plan is not None:
+        if not isinstance(plan, dict) or not isinstance(plan.get("rooms"), list):
+            return jsonify({"error": "'plan' must be an object with a 'rooms' list"}), 400
+    else:
+        if isinstance(plan_id, bool) or not isinstance(plan_id, int) or plan_id < 0:
+            return jsonify({"error": "'plan_id' must be a non-negative integer"}), 400
+        plan = _read_rplan(plan_id)
+        if plan is None:
+            return jsonify({"error": f"plan {plan_id} not found"}), 404
+
+    kwargs = {}
+    for key in ("sliver_max_m", "merge_min_contact_m"):
+        if body.get(key) is not None:
+            val = body[key]
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or val < 0:
+                return jsonify({"error": f"'{key}' must be a non-negative number"}), 400
+            kwargs[key] = float(val)
+
+    try:
+        from packages.floorplan_core.rect_decompose import decompose_plan  # lazy: module may be absent
+    except ImportError as exc:
+        return jsonify({"error": f"decompose module unavailable: {exc}"}), 503
+
+    try:
+        result = decompose_plan(plan, **kwargs)
+    except (ValueError, KeyError, TypeError) as exc:
+        return jsonify({"error": f"decompose failed: {exc}"}), 400
+    except Exception as exc:
+        logger.exception("decompose failed")
+        return jsonify({"error": f"decompose failed: {exc}"}), 500
+
+    label_kwargs = {}
+    for key in ("door_contact_frac", "absorb_nodoor_max_m", "absorb_door_max_m", "circ_max_short_m",
+                "storage_max_short_m", "nook_min_short_m", "ext_min_m", "connect_min_m", "absorb_contact_frac"):
+        if body.get(key) is not None:
+            val = body[key]
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or val < 0:
+                return jsonify({"error": f"'{key}' must be a non-negative number"}), 400
+            label_kwargs[key] = float(val)
+
+    try:
+        from packages.floorplan_core.part_labels import label_parts  # lazy, as for decompose
+    except ImportError as exc:
+        return jsonify({"error": f"part_labels module unavailable: {exc}"}), 503
+
+    try:
+        result["labels"] = label_parts(plan, result, **label_kwargs)
+    except Exception as exc:
+        logger.exception("label_parts failed")
+        return jsonify({"error": f"label_parts failed: {exc}"}), 500
+
+    result["plan_id"] = plan_id if plan_id is not None else plan.get("id")
+    return jsonify(result)
 
 
 # ── CLI / entry point ─────────────────────────────────────────────────────────

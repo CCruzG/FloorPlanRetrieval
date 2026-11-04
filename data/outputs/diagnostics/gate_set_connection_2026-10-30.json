@@ -1,0 +1,407 @@
+{
+  "generated_at": "2026-10-30",
+  "mm_per_unit_used": 18000.0,
+  "boundaries": [
+    {
+      "name": "test_boundary_001b",
+      "results": [
+        {
+          "rank": 1,
+          "source_id": "18610.png",
+          "applicable": true,
+          "n_candidates": 0,
+          "candidates": [],
+          "predicted_clears": []
+        },
+        {
+          "rank": 2,
+          "source_id": "26152.png",
+          "applicable": true,
+          "n_candidates": 2,
+          "candidates": [
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_5",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_5",
+                "v": "r_0",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            }
+          ],
+          "predicted_clears": []
+        },
+        {
+          "rank": 3,
+          "source_id": "79188.png",
+          "applicable": true,
+          "n_candidates": 2,
+          "candidates": [
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_5",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_5",
+                "v": "r_0",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            }
+          ],
+          "predicted_clears": []
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_005b",
+      "results": [
+        {
+          "rank": 1,
+          "source_id": "26135.png",
+          "applicable": true,
+          "n_candidates": 5,
+          "candidates": [
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_1",
+                "type": "door",
+                "reason": "access_typed"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_5",
+                "type": "door",
+                "reason": "access_typed"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_3",
+                "type": "door",
+                "reason": "reachability"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_5",
+                "v": "r_1",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_5",
+                "v": "r_2",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            }
+          ],
+          "predicted_clears": [
+            {
+              "sensor": "access_typed",
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_1",
+                "type": "door",
+                "reason": "access_typed"
+              }
+            },
+            {
+              "sensor": "reachability",
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_1",
+                "type": "door",
+                "reason": "access_typed"
+              }
+            },
+            {
+              "sensor": "access_typed",
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_5",
+                "type": "door",
+                "reason": "access_typed"
+              }
+            },
+            {
+              "sensor": "reachability",
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_5",
+                "type": "door",
+                "reason": "access_typed"
+              }
+            },
+            {
+              "sensor": "reachability",
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_0",
+                "v": "r_3",
+                "type": "door",
+                "reason": "reachability"
+              }
+            }
+          ]
+        },
+        {
+          "rank": 2,
+          "source_id": "80772.png",
+          "applicable": true,
+          "n_candidates": 2,
+          "candidates": [
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_3",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_5",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            }
+          ],
+          "predicted_clears": []
+        },
+        {
+          "rank": 3,
+          "source_id": "37312.png",
+          "applicable": true,
+          "n_candidates": 2,
+          "candidates": [
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_5",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            },
+            {
+              "edit": {
+                "move": "SetConnection",
+                "u": "r_4",
+                "v": "r_2",
+                "type": "open",
+                "reason": "daylight"
+              },
+              "predicted_eq_actual": true,
+              "edge_present_with_edited_connection": true,
+              "diffs": []
+            }
+          ],
+          "predicted_clears": []
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "plans": 6,
+    "candidates_proposed": 13,
+    "predicted_eq_actual": 13,
+    "mismatches": []
+  },
+  "predicted_clears_by_plan": {
+    "test_boundary_001b#1": [],
+    "test_boundary_001b#2": [],
+    "test_boundary_001b#3": [],
+    "test_boundary_005b#1": [
+      {
+        "sensor": "access_typed",
+        "edit": {
+          "move": "SetConnection",
+          "u": "r_0",
+          "v": "r_1",
+          "type": "door",
+          "reason": "access_typed"
+        }
+      },
+      {
+        "sensor": "reachability",
+        "edit": {
+          "move": "SetConnection",
+          "u": "r_0",
+          "v": "r_1",
+          "type": "door",
+          "reason": "access_typed"
+        }
+      },
+      {
+        "sensor": "access_typed",
+        "edit": {
+          "move": "SetConnection",
+          "u": "r_0",
+          "v": "r_5",
+          "type": "door",
+          "reason": "access_typed"
+        }
+      },
+      {
+        "sensor": "reachability",
+        "edit": {
+          "move": "SetConnection",
+          "u": "r_0",
+          "v": "r_5",
+          "type": "door",
+          "reason": "access_typed"
+        }
+      },
+      {
+        "sensor": "reachability",
+        "edit": {
+          "move": "SetConnection",
+          "u": "r_0",
+          "v": "r_3",
+          "type": "door",
+          "reason": "reachability"
+        }
+      }
+    ],
+    "test_boundary_005b#2": [],
+    "test_boundary_005b#3": []
+  },
+  "before_after_a_diffs": [
+    {
+      "plan": "test_boundary_001b#1",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: margin predicted=-1.2 actual=-0.8 (\u0394=0.4)",
+        "room_depth: margin predicted=2547.3095650012237 actual=609.100095245245 (\u0394=1938.21)"
+      ]
+    },
+    {
+      "plan": "test_boundary_001b#2",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: ok predicted=True actual=False",
+        "daylight: failing_rooms predicted=[] actual=['r_4', 'r_5']",
+        "daylight: margin predicted=1.9269999999999998 actual=-0.8 (\u0394=2.727)",
+        "room_depth: ok predicted=False actual=True",
+        "room_depth: failing_rooms predicted=['r_4', 'r_5', 'r_0'] actual=[]",
+        "room_depth: margin predicted=-1593.0888349130582 actual=1243.5913726282515 (\u0394=2836.68)"
+      ]
+    },
+    {
+      "plan": "test_boundary_001b#3",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: ok predicted=True actual=False",
+        "daylight: failing_rooms predicted=[] actual=['r_4', 'r_5']",
+        "daylight: margin predicted=1.9269999999999998 actual=-0.8 (\u0394=2.727)",
+        "room_depth: ok predicted=False actual=True",
+        "room_depth: failing_rooms predicted=['r_4', 'r_5', 'r_0'] actual=[]",
+        "room_depth: margin predicted=-1593.0888349130582 actual=1243.5913726282515 (\u0394=2836.68)"
+      ]
+    },
+    {
+      "plan": "test_boundary_005b#1",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: ok predicted=True actual=False",
+        "daylight: failing_rooms predicted=[] actual=['r_5', 'r_1']",
+        "daylight: margin predicted=1.413 actual=-0.8 (\u0394=2.213)",
+        "room_depth: margin predicted=237.24798664385344 actual=2050.2367197280946 (\u0394=1812.99)"
+      ]
+    },
+    {
+      "plan": "test_boundary_005b#2",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: ok predicted=True actual=False",
+        "daylight: failing_rooms predicted=[] actual=['r_3', 'r_4']",
+        "daylight: margin predicted=1.413 actual=-0.8 (\u0394=2.213)",
+        "room_depth: margin predicted=237.24798664385344 actual=2104.6856796666225 (\u0394=1867.44)"
+      ]
+    },
+    {
+      "plan": "test_boundary_005b#3",
+      "diffs": [
+        "boundary_capacity: present in only one of predicted/actual",
+        "daylight: ok predicted=True actual=False",
+        "daylight: failing_rooms predicted=[] actual=['r_4', 'r_5']",
+        "daylight: margin predicted=0.938 actual=-0.8 (\u0394=1.738)",
+        "room_depth: ok predicted=True actual=False",
+        "room_depth: failing_rooms predicted=[] actual=['r_2']",
+        "room_depth: margin predicted=501.2170444881085 actual=-1748.7829555118915 (\u0394=2250)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,273 @@
+{
+  "generated_at": "2026-11-02",
+  "mm_per_unit_used": 18000.0,
+  "boundaries": [
+    {
+      "name": "test_boundary_001b",
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_003",
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_005b",
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.818
+              ]
+            ],
+            "relaxed_pairs": [
+              {
+                "room": "r_5",
+                "shared_m": 0.0
+              }
+            ]
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.52
+              ]
+            ]
+          },
+          "on": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.755
+              ]
+            ],
+            "relaxed_pairs": []
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 7,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "on": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_4",
+                "shared_m": 0.0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

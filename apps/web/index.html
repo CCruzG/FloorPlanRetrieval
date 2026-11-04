@@ -453,7 +453,7 @@ details.ss[open] > summary { margin-bottom:8px; }
       <div class="sl">retrieve</div>
       <div class="field">
         <label><input type="checkbox" id="chk-graph" checked>
-        show room graph</label>
+        show graph</label>
         <label><input type="checkbox" id="chk-plan-geom" checked>
         plan geometry</label>
       </div>
@@ -493,7 +493,17 @@ details.ss[open] > summary { margin-bottom:8px; }
       <button class="clear-btn" id="btn-generate" style="width:100%" disabled>generate geometry from nodes</button>
       <button class="clear-btn" id="btn-generate-swap" style="width:100%;margin-top:4px" disabled>generate + swap selected</button>
       <button class="clear-btn" id="btn-generate-reset" style="width:100%;margin-top:4px;display:none">reset generate</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer" title="one rectangle per node: hallway arms become spaces open to the living area. Off: one rectangle per room."><input type="checkbox" id="chk-node-generate" checked> generate from node graph</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer"><input type="checkbox" id="chk-area-lift" checked> min_area lift (step 3)</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:4px;cursor:pointer"><input type="checkbox" id="chk-core-block" checked> core block (step 3 · min_edge on a room rectangle)</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:4px;cursor:pointer">core placement (step 0 places cores, moves nodes)
+        <select id="sel-core-placement" style="font-size:10px">
+          <option value="off" selected>off</option>
+          <option value="greedy">greedy</option>
+          <option value="cpsat">cpsat</option>
+          <option value="cpsat_dim">cpsat_dim</option>
+        </select>
+      </label>
       <div id="generate-readout" style="font-size:10px;margin-top:4px;line-height:1.5"></div>
     </div>
 
@@ -508,6 +518,52 @@ details.ss[open] > summary { margin-bottom:8px; }
         <button class="clear-btn" id="btn-moves-clear" style="width:48%;margin-left:4%">clear edits</button>
       </div>
     </div>
+
+    <details class="ss" id="decompose-section">
+      <summary>decompose (RPlan)</summary>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px">plan id
+        <input type="number" id="dc-plan-id" min="0" max="80790" value="0" style="width:90px;font-family:var(--mono);font-size:11px">
+      </label>
+      <button class="clear-btn" id="dc-load" style="width:48%">load plan</button>
+      <button class="clear-btn" id="dc-random" style="width:48%;margin-left:4%">random</button>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:8px">sliver &le; (m)
+        <input type="number" id="dc-sliver" min="0" step="0.05" value="0.2" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">merge contact &ge; (m)
+        <input type="number" id="dc-merge" min="0" step="0.1" value="1.2" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">door contact &ge; (frac)
+        <input type="number" id="dc-door-frac" min="0" max="1" step="0.05" value="0.5" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">absorb no-door &lt; (m)
+        <input type="number" id="dc-absorb-nodoor" min="0" step="0.05" value="0.5" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">absorb door &lt; (m)
+        <input type="number" id="dc-absorb-door" min="0" step="0.05" value="0.85" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">circulation short &le; (m)
+        <input type="number" id="dc-circ-max" min="0" step="0.1" value="2.0" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">storage short &le; (m)
+        <input type="number" id="dc-storage-max" min="0" step="0.1" value="1.0" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">nook short &ge; (m)
+        <input type="number" id="dc-nook-min" min="0" step="0.1" value="1.5" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">facade &ge; (m)
+        <input type="number" id="dc-ext-min" min="0" step="0.1" value="0.9" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">connect &ge; (m)
+        <input type="number" id="dc-connect-min" min="0" step="0.05" value="0.85" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;margin-top:4px">absorb contact &ge; (frac)
+        <input type="number" id="dc-absorb-frac" min="0" step="0.05" value="0.5" style="width:70px;font-family:var(--mono);font-size:11px">
+      </label>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">measure: use the main &quot;measure&quot; button; click two points on the plan (snaps to part corners), Esc clears.</div>
+      <button class="clear-btn" id="dc-run" style="width:100%" disabled>decompose plan</button>
+      <button class="clear-btn" id="dc-close" style="width:100%;display:none">close view</button>
+      <div id="dc-readout" style="font-size:10px;margin-top:6px;line-height:1.5;white-space:pre-wrap;max-height:260px;overflow:auto"></div>
+    </details>
 
     <details class="ss" id="dev-drawer">
       <summary>dev / legacy</summary>
@@ -550,6 +606,7 @@ details.ss[open] > summary { margin-bottom:8px; }
     <div id="panel-2d" class="view-panel">
       <div id="canvas-wrap">
         <canvas id="main-canvas"></canvas>
+        <canvas id="decompose-canvas" style="display:none;position:absolute;inset:0;width:100%;height:100%;background:var(--bg);z-index:5"></canvas>
         <button id="btn-generate-3d">Generate 3D</button>
         <div id="coord-disp"></div>
         <div id="canvas-hud"></div>

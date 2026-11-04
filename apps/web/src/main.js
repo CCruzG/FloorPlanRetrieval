@@ -45,6 +45,7 @@ import {
 import { createRenderPipeline } from './render-pipeline.js';
 import { createViewer3D } from './viewer-3d.js';
 import { initPlanDrawingPanel, loadFixtureData } from './plan-drawing-panel.js';
+import { initDecomposePanel } from './decompose-panel.js';
 import {
   analyse_boundary,
   check_typology_viability,
@@ -110,6 +111,7 @@ let generatedGrid=null;
 // distinct from results[selected].fp.edges, which stays the retrieved source and
 // never reflects an edit. null when nothing is generated.
 let generatedEdges=null;
+let generatedRoomEdges=null;
 
 // Stage 2 (agent harness, moves) — the session's SetConnection edits, applied
 // (in order) to the Spec on every /generate call via `connections`, and the
@@ -2788,6 +2790,7 @@ function getActiveFPState(){
     generatedNodes,
     generatedGrid,
     generatedEdges,
+    generatedRoomEdges,
     measureMode,
     measureA,
     measureB,
@@ -3133,7 +3136,8 @@ async function runSwapNodes(){
       results[selected].__preswap={fp:results[selected].fp,retrieval:results[selected].retrieval};
     }
     results[selected].fp=swappedPlan;
-    results[selected].retrieval={...results[selected].retrieval,room_edges:tc.room_edges,flags:{summary:tc.summary,checks:tc.checks}};
+    // node_graph describes the unswapped geometry: drop it so the graph falls back to the swapped plan's rooms (undo restores it from __preswap).
+    results[selected].retrieval={...results[selected].retrieval,room_edges:tc.room_edges,flags:{summary:tc.summary,checks:tc.checks},node_graph:undefined};
     graphSelection=[];
     render();
     renderList();  // card badge (flagsBadgeHtml) is baked HTML — needs a rebuild to reflect the new flags
@@ -3184,7 +3188,11 @@ async function runGenerate(useSwap){
       requirements:req||null,
       swap:swapPair,
       area_lift:document.getElementById('chk-area-lift')?.checked!==false,
-      connections:connectionEdits,
+      core_block:document.getElementById('chk-core-block')?.checked!==false,
+      core_placement:(()=>{const v=document.getElementById('sel-core-placement')?.value||'off';return v==='off'?false:v;})(),
+      expand_nodes:document.getElementById('chk-node-generate')?.checked!==false,
+      connections:connectionPayload(),
+      precedence:precedencePayload(),
     },{timeoutMs:15000});
     if(resp.error)throw new Error(resp.error);
     // Draw the generated geometry as a target-space overlay (the solver already
@@ -3195,17 +3203,19 @@ async function runGenerate(useSwap){
     // colouring to the normal preview. Ids are preserved through the solver (a
     // swap moves a room's node, not its id), so a bedroom stays a bedroom colour.
     const typeById=new Map((results[selected].fp.rooms||[]).map((rm)=>[String(rm.id),rm.source_type??rm.type]));
-    generatedRooms=(resp.rooms||[]).map((rm)=>({...rm,source_type:typeById.get(String(rm.id))??rm.type}));
+    // Node ids (r_2/primary) take the colour of their source room.
+    generatedRooms=(resp.rooms||[]).map((rm)=>({...rm,source_type:typeById.get(String(rm.id))??typeById.get(String(rm.id).split('/')[0])??rm.type}));
     generatedNodes=resp.node_pos||{};
-    generatedGrid=resp.report?.grid_lines||null;
+    // step-0 placement (spike) rides along with the grid for the canvas: node moves
+    generatedGrid=resp.report?.grid_lines?{...resp.report.grid_lines,placement:resp.report.placement||null}:null;
     // The live room<->room edges — carries connection/separation after any
     // Stage-2 SetConnection edit, unlike results[selected].fp.edges (the
     // retrieved source, never edited). Drives the graph's door/open/wall drawing.
     generatedEdges=resp.edges||null;
-    // Refresh the drawn room↔boundary connectors to the ones THIS generate computed.
-    // They are otherwise left at whatever /retrieve produced, so after any backend
-    // change to the raycast the graph keeps showing stale connectors.
-    if(results[selected]?.retrieval)results[selected].retrieval.room_edges=resp.room_edges||{};
+    // The generated plan's own room↔boundary connectors. Kept apart from the
+    // retrieved plan's: writing them onto retrieval.room_edges made the retrieved
+    // graph show generated contacts after a reset (005b: a hallway on the entrance).
+    generatedRoomEdges=resp.room_edges||{};
     if(useSwap)graphSelection=[];
     // Candidates were proposed against the plan before this generate; stale now.
     moveCandidates=[];
@@ -3228,7 +3238,24 @@ async function runGenerate(useSwap){
     const liftOn=document.getElementById('chk-area-lift')?.checked!==false;
     const lift=!liftOn?' · area lift OFF'
       :` · area lift: ${(s3.area_lifted||[]).length?'lifted '+s3.area_lifted.join(', '):'none'}${(s3.area_unmet||[]).length?' · unmet '+s3.area_unmet.join(', '):''}`;
-    if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${lift}${issues.length?' · '+issues.join(', '):''}`;
+    // step-3 core blocks: how many rooms keep a min_edge rectangle after clip + arms
+    const cores=Object.values(r.grid_lines?.cores||{});
+    const coreOk=cores.filter((c)=>c.meets&&c.intact).length;
+    const core=r.grid_lines?.core_block_on===false?' · core block OFF':` · cores ${coreOk}/${cores.length} ok`;
+    // step-2c precedence claims: applied ones, and the corridor fronts they traded
+    const prec=(r.precedence||[]).map((p)=>p.applied
+      ?`${p.winner}>${p.loser}${p.node_moved?' (moved)':''}${(p.fronts_dropped||[]).length?' drops edge '+p.fronts_dropped.join(','):''}`
+      :`${p.winner}>${p.loser} not applied`);
+    if(prec.length)issues.push('precedence '+prec.join('; '));
+    // step-0 placement (spike): rooms placed, nodes moved, unplaced
+    const pl=r.placement?.rooms;
+    if(pl){
+      const vals=Object.entries(pl);
+      const moved=vals.filter(([,v])=>(v.moved_m||0)>0.05).map(([k,v])=>`${k} ${v.moved_m.toFixed(1)}m`);
+      const unpl=vals.filter(([,v])=>!v.placed).map(([k])=>k);
+      issues.push(`placement: moved ${moved.length?moved.join(', '):'none'}${unpl.length?' · unplaced '+unpl.join(', '):''}`);
+    }
+    if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${lift}${core}${issues.length?' · '+issues.join(', '):''}`;
     renderStage1Sensors(resp.sensors);
     renderRoomAreas(resp.report,resp.sensors);
   }catch(err){
@@ -3244,6 +3271,7 @@ function resetGenerate(){
   generatedNodes=null;
   generatedGrid=null;
   generatedEdges=null;
+  generatedRoomEdges=null;
   // "reset generate" discards the overlay the edits were proposed/applied
   // against — the edits go with it (ARCHITECTURE.md requirement: edits reset
   // on a new plan, a boundary clear, or reset generate).
@@ -3284,6 +3312,20 @@ function roomLabelFor(rid){
   return `${rid} (${r?(r.type??r.label??'?'):'?'})`;
 }
 
+// The session's edits hold both move kinds; the request carries them as two
+// fields — SetConnection as `connections`, SetPrecedence as `precedence`.
+function connectionPayload(){
+  return connectionEdits.filter((c)=>c.move!=='SetPrecedence').map(({u,v,type})=>({u,v,type}));
+}
+function precedencePayload(){
+  return connectionEdits.filter((c)=>c.move==='SetPrecedence').map(({winner,loser})=>({winner,loser}));
+}
+function editLabel(e){
+  return e.move==='SetPrecedence'
+    ?`precedence ${roomLabelFor(e.winner)} over ${roomLabelFor(e.loser)}`
+    :`${e.type} ${roomLabelFor(e.u)} – ${roomLabelFor(e.v)}`;
+}
+
 async function runProposeMoves(){
   const el=document.getElementById('moves-candidates');
   if(!el)return;
@@ -3301,8 +3343,12 @@ async function runProposeMoves(){
       typed_edges:boundaryTypedEdgesPayload(),
       requirements:req||null,
       area_lift:document.getElementById('chk-area-lift')?.checked!==false,
-      connections:connectionEdits,
-    },{timeoutMs:15000});
+      core_block:document.getElementById('chk-core-block')?.checked!==false,
+      core_placement:(()=>{const v=document.getElementById('sel-core-placement')?.value||'off';return v==='off'?false:v;})(),
+      expand_nodes:document.getElementById('chk-node-generate')?.checked!==false,
+      connections:connectionPayload(),
+      precedence:precedencePayload(),
+    },{timeoutMs:60000});
     if(resp.error)throw new Error(resp.error);
     moveCandidates=resp.candidates||[];
     renderMoveCandidates();
@@ -3332,7 +3378,10 @@ function renderMoveCandidates(){
       if(br.length)parts.push(`<span style="color:#b91c1c">breaks ${d.sensor} ${br.map(roomLabelFor).join(', ')}</span>`);
     }
     const tail=parts.length?parts.join(' · '):'no predicted gain';
-    const label=`${e.type} ${roomLabelFor(e.u)} – ${roomLabelFor(e.v)} · ${tail}`;
+    // SetPrecedence is predicted by a rollout; realised=false = step 2c found no
+    // rectangle at least as good as not claiming (the edit would change nothing)
+    const unreal=c.realised===false?' · <span style="color:var(--muted)">not realised</span>':'';
+    const label=`${editLabel(e)} · ${tail}${unreal}`;
     return `<button class="clear-btn" data-move-idx="${i}" `+
       `style="width:100%;margin-bottom:4px;text-align:left;font-size:10px;white-space:normal">${label}</button>`;
   }).join('');
@@ -3345,7 +3394,9 @@ function applyMoveCandidate(i){
   const c=moveCandidates[i];
   if(!c)return;
   const e=c.edit;
-  connectionEdits=[...connectionEdits,{u:e.u,v:e.v,type:e.type}];
+  connectionEdits=[...connectionEdits,e.move==='SetPrecedence'
+    ?{move:'SetPrecedence',winner:e.winner,loser:e.loser}
+    :{u:e.u,v:e.v,type:e.type}];
   moveCandidates=[];
   renderMoveCandidates();
   renderAppliedEdits();
@@ -3382,9 +3433,7 @@ function renderAppliedEdits(){
   if(!wrap||!el)return;
   if(!connectionEdits.length){wrap.style.display='none';el.innerHTML='';return;}
   wrap.style.display='';
-  el.innerHTML=connectionEdits.map((c)=>
-    `<div>${c.type} ${roomLabelFor(c.u)} – ${roomLabelFor(c.v)}</div>`
-  ).join('');
+  el.innerHTML=connectionEdits.map((c)=>`<div>${editLabel(c)}</div>`).join('');
 }
 
 // Visible once a generated plan is shown (same gate as the generate-reset button).
@@ -3749,6 +3798,7 @@ setupDrop('dz-pls','fi-pls','lbl-pls',(files,lbl)=>{
 });
 
 initPlanDrawingPanel();
+initDecomposePanel();
 
 function tryFinalise(){
   return tryFinalizeIndex({
@@ -3827,6 +3877,7 @@ function selectResult(i){
   generatedNodes=null;
   generatedGrid=null;
   generatedEdges=null;
+  generatedRoomEdges=null;
   // ...and the Stage-2 session edits, which were proposed/applied against it.
   resetConnectionEdits();
   arapDebugDoor=null;
@@ -4274,6 +4325,9 @@ function wirePhase1UI(){
   on('btn-generate-swap','click',()=>runGenerate(true));
   // flipping the lift re-derives the shown plan, for a quick before/after
   on('chk-area-lift','change',()=>{if(generatedRooms)runGenerate(false);});
+  on('chk-core-block','change',()=>{if(generatedRooms)runGenerate(false);});
+  on('chk-node-generate','change',()=>{if(generatedRooms)runGenerate(false);});
+  on('sel-core-placement','change',()=>{if(generatedRooms)runGenerate(false);});
   on('btn-generate-reset','click',()=>resetGenerate());
   on('btn-propose-moves','click',()=>runProposeMoves());
   on('btn-moves-undo','click',()=>undoLastConnectionEdit());

@@ -95,6 +95,15 @@ _LABEL_ALIAS = {
 
 def _label(room: dict) -> str:
     t = room.get("type")
+    # 2026-11-03: prefer the room's own string label. schema.ROOM_TYPE_MAP is
+    # off by one from type 6 for the RPlan v2.1.0 JSONs (6 is StudyRoom, 7
+    # Storage, 9 Entrance; the map says storage / hallway / balcony), which made
+    # studies non-daylight rooms and storage rooms transit. The int map is
+    # only the fallback for rooms without a label.
+    lab = room.get("label")
+    if isinstance(lab, str) and lab.strip():
+        s = lab.strip().lower().replace(" ", "_")
+        return _LABEL_ALIAS.get(s.replace("_", ""), s)
     if isinstance(t, int) and t in ROOM_TYPE_MAP:
         return ROOM_TYPE_MAP[t]
     # generated plans (generate.py) carry the label as a STRING in `type`;
@@ -242,7 +251,7 @@ def _entrance_point_of_plan(plan):
     return ((ent[0] + ent[2]) / 2.0, (ent[1] + ent[3]) / 2.0)
 
 
-def _source_ring_rooms(plan, n=N_SAMPLES):
+def _source_ring_rooms(plan, n=N_SAMPLES, node_graph=None):
     """The source plan's perimeter as a ring of room ids, anchored at the
     entrance, CCW. Each sample is the room whose polygon sits on that boundary
     arc (nearest room) — the geometric room↔boundary augmentation, computed
@@ -250,7 +259,14 @@ def _source_ring_rooms(plan, n=N_SAMPLES):
     (room_ids, source_edge_idxs, label_by_id) — source_edge_idxs is, per
     sample, the edge index into the plan's own boundary polygon (pre-anchor-
     rotation) that sample sits on — or (None, None, {}) if the plan has no
-    usable entrance/boundary."""
+    usable entrance/boundary.
+
+    node_graph (node_graph.build_node_graph output, optional, 2026-11-03): when
+    given, samples are assigned to NODE polygons. Primary / whole / nook nodes
+    keep their room id; circulation and storage nodes keep their own id with
+    label "circulation" / "storage" (not daylight-needing), so facade that a
+    room only touches through its circulation band no longer counts as that
+    room's daylight."""
     bpts = _xy(plan.get("boundary") or [])
     if len(bpts) < 3:
         return None, None, {}
@@ -263,13 +279,32 @@ def _source_ring_rooms(plan, n=N_SAMPLES):
 
     rooms = [r for r in (plan.get("rooms") or []) if len(r.get("polygon", [])) >= 3]
     polys, ids, label_by_id = [], [], {}
-    for r in rooms:
-        try:
-            polys.append(SPoly(r["polygon"]))
-        except Exception:
-            continue
-        ids.append(r["id"])
-        label_by_id[r["id"]] = _label(r)
+    if node_graph is not None:
+        lab_of_room = {r["id"]: _label(r) for r in rooms}
+        for nd in node_graph.get("nodes", []):
+            if nd["kind"] in ("circ", "stor"):
+                nid, lab = nd["id"], ("circulation" if nd["kind"] == "circ" else "storage")
+            else:
+                nid, lab = nd["room_id"], lab_of_room.get(nd["room_id"])
+            if lab is None:
+                continue
+            for ring in nd.get("polygon") or []:
+                if len(ring) < 3:
+                    continue
+                try:
+                    polys.append(SPoly(ring))
+                except Exception:
+                    continue
+                ids.append(nid)
+                label_by_id[nid] = lab
+    else:
+        for r in rooms:
+            try:
+                polys.append(SPoly(r["polygon"]))
+            except Exception:
+                continue
+            ids.append(r["id"])
+            label_by_id[r["id"]] = _label(r)
 
     ring_ids, ring_edge_idxs = [], []
     for (px, py, _t, orig_idx) in samples:
@@ -508,6 +543,28 @@ def _place_nodes_in_target(plan, target_boundary, entrance_point, mirror):
     return node_pos
 
 
+def map_rooms_to_target(plan, target_boundary, entrance_point, mirror):
+    """Every room's full polygon mapped into the TARGET boundary's frame, by the
+    SAME display transform `_place_nodes_in_target` uses for node_pos — so a
+    CP-SAT mode that wants the source ARRANGEMENT (not just node points) reads
+    the retrieved rooms' true rectangles, side-by-side the same way nodes agree.
+    Returns {str(room_id): [[x, y], ...]}; a room with no usable polygon is
+    omitted (caller falls back to node_pos for it)."""
+    bpts = _xy(plan.get("boundary") or [])
+    tpts = _xy(target_boundary or [])
+    if len(bpts) < 3 or len(tpts) < 3:
+        return {}
+    to_target, _ = _display_transform(
+        bpts, tpts, _entrance_point_of_plan(plan), entrance_point, mirror)
+    out = {}
+    for r in plan.get("rooms") or []:
+        poly = r.get("polygon")
+        if not poly or len(poly) < 3:
+            continue
+        out[str(r.get("id"))] = [to_target(x, y) for x, y in poly]
+    return out
+
+
 def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_edge_types,
                         node_pos=None, in_target_space=False):
     """Room↔target-edge adjacency by RAYCAST (2026-09-16), the single source both
@@ -744,7 +801,7 @@ def exact_room_edges(plan, target_boundary, target_edge_types):
     return room_edges
 
 
-def _daylight_fit(plan, target_boundary, target_edge_types, entrance_point):
+def _daylight_fit(plan, target_boundary, target_edge_types, entrance_point, node_graph=None):
     """Fraction of the source's daylight-needing rooms that land on `external`
     edges of the target boundary, matched by OUTWARD-NORMAL DIRECTION rather
     than arc-length position — arc-length stretching doesn't preserve which
@@ -756,7 +813,7 @@ def _daylight_fit(plan, target_boundary, target_edge_types, entrance_point):
     target edge has the closest normal angle. Tries this direct mapping and
     its mirror (reflection about the entrance anchor); returns
     (score, detail, mirror, room_edges)."""
-    ring_ids, ring_edge_idxs, label_by_id = _source_ring_rooms(plan)
+    ring_ids, ring_edge_idxs, label_by_id = _source_ring_rooms(plan, node_graph=node_graph)
     if ring_ids is None:
         return 0.5, {"reason": "no source entrance"}, False, {}
 
@@ -837,13 +894,15 @@ def _daylight_fit(plan, target_boundary, target_edge_types, entrance_point):
 # ── public entry ─────────────────────────────────────────────────────────────
 
 def topological_fitness(plan, target_boundary=None, target_edge_types=None,
-                        entrance_point=None, requirements=None):
+                        entrance_point=None, requirements=None, node_graph=None):
     """Topological fitness of a retrieved plan to the target boundary, in [0, 1].
 
     Components (combined by WEIGHTS):
       • program         — room multiset vs requested bedrooms/bathrooms
       • daylight_fit    — perimeter-ring alignment: fraction of daylight-needing
-                          rooms landing on external arcs of the target (approach B)
+                          rooms landing on external arcs of the target (approach B);
+                          with node_graph, a room's circulation/storage nodes are
+                          excluded from its daylight (2026-11-03)
       • entrance_access — common areas reachable from the entrance through transit
       • private_access  — private rooms adjacent to a transit provider
     """
@@ -861,7 +920,9 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
         # one the frontend draws with) so nodes, raycast connectors and sensors
         # all agree — the ring mirror is a ranking-internal choice and diverged.
         dfit, dfit_detail, _ring_mirror, _ring_edges = _daylight_fit(
-            plan, target_boundary, target_edge_types, entrance_point)
+            plan, target_boundary, target_edge_types, entrance_point, node_graph=node_graph)
+        if isinstance(dfit_detail, dict):
+            dfit_detail["basis"] = "node" if node_graph is not None else "room"
         mirror = bool((plan.get("retrieval") or {}).get("mirror", False))
         node_pos = _place_nodes_in_target(plan, target_boundary, entrance_point, mirror)
         room_edges = _raycast_room_edges(
@@ -922,6 +983,11 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
         "mirror": mirror,
         "room_edges": room_edges,
         "node_pos": node_pos,
+        # source entry room (nearest the SOURCE entrance), already computed
+        # above for entrance_access — exposed so a caller (cpsat_dim) can pin
+        # the retrieved entry room against the TARGET entrance without
+        # recomputing the same nearest-room-to-point test.
+        "entry_room": entry,
     }
 
 

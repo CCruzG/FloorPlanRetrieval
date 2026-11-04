@@ -1,0 +1,898 @@
+{
+  "generated_at": "2026-11-02",
+  "mm_per_unit_used": 18000.0,
+  "modes": [
+    "off",
+    "greedy",
+    "cpsat"
+  ],
+  "boundaries": [
+    {
+      "name": "test_boundary_001",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_2",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.227,
+              "objective": 135969.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_3",
+                0.525
+              ]
+            ]
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 5,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_1"
+              ],
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              },
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.014,
+              "objective": 135483.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "OPTIMAL",
+              "relaxation": "soft",
+              "solve_time_s": 4.077,
+              "objective": 133836.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_002",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.011,
+              "objective": 141123.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.009,
+              "objective": 137878.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": false,
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_1"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": false,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.011,
+              "objective": 141145.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_003",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": false,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.007,
+              "objective": 153367.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_1",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "OPTIMAL",
+              "relaxation": "hard",
+              "solve_time_s": 0.007,
+              "objective": 150337.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.007,
+              "objective": 153567.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_004",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_3",
+                0.898
+              ]
+            ],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_3",
+                0.888
+              ]
+            ],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.013,
+              "objective": 148392.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_3",
+                "r_4"
+              ]
+            ],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_4",
+                0.898
+              ]
+            ],
+            "relaxed_pairs": [
+              {
+                "room": "r_4",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": false,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.009,
+              "objective": 148838.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_4"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_4",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.008,
+              "objective": 146904.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_001b",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "OPTIMAL",
+              "relaxation": "soft",
+              "solve_time_s": 3.918,
+              "objective": 137253.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.011,
+              "objective": 138127.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 9,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.025,
+              "objective": 138127.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_005b",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_2"
+              ]
+            ],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.818
+              ]
+            ],
+            "relaxed_pairs": [
+              {
+                "room": "r_5",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "OPTIMAL",
+              "relaxation": "soft",
+              "solve_time_s": 2.086,
+              "objective": 130616.0
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 8,
+          "off": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.52
+              ]
+            ]
+          },
+          "greedy": {
+            "feasible": false,
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.755
+              ]
+            ],
+            "relaxed_pairs": []
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "FEASIBLE",
+              "relaxation": "soft",
+              "solve_time_s": 5.064,
+              "objective": 134879.0
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 7,
+          "off": {
+            "feasible": true,
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": []
+          },
+          "greedy": {
+            "feasible": true,
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "door_open_under_0.9m": [],
+            "relaxed_pairs": [
+              {
+                "room": "r_4",
+                "shared_m": 0.0
+              }
+            ]
+          },
+          "cpsat": {
+            "feasible": true,
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "door_open_under_0.9m": [],
+            "cpsat": {
+              "status": "OPTIMAL",
+              "relaxation": "soft",
+              "solve_time_s": 0.996,
+              "objective": 133222.0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "off": {
+      "d24_failing": 27,
+      "lost_source_edges": 9,
+      "door_open_under_0.9m": 2,
+      "infeasible": 1,
+      "reachability_fail": 10,
+      "plans": 18
+    },
+    "greedy": {
+      "d24_failing": 40,
+      "lost_source_edges": 27,
+      "door_open_under_0.9m": 4,
+      "infeasible": 7,
+      "reachability_fail": 9,
+      "plans": 18
+    },
+    "cpsat": {
+      "d24_failing": 25,
+      "lost_source_edges": 14,
+      "door_open_under_0.9m": 1,
+      "infeasible": 3,
+      "reachability_fail": 2,
+      "plans": 18
+    }
+  }
+}

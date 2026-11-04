@@ -4,7 +4,7 @@ reality?
 
 Reuses tools/diag_min_size.py's in-process app setup (load the index into
 server.INDEX_STORE, test_client, the two fixed test boundaries, top 3 retrieved
-plans each) and reproduces server.py's /generate route body (spec_from_plan +
+plans each) and reproduces server.py's /generate route body (describe + fit +
 boundary_demands + re-derived room_edges) so this tool can run sensors, propose
 SetConnection candidates, and apply one without a second HTTP round trip.
 
@@ -78,7 +78,8 @@ def build_generation(server_mod, fp, boundary, entrance_point, typed_edges, requ
     boundary_demands, generate(), re-derive room_edges on the generated geometry,
     run sensors. Returns (spec, plan, gen_room_edges, sensors) — everything a
     candidate's apply()/predict_effect() needs."""
-    from packages.floorplan_core.generate import spec_from_plan, generate
+    from packages.floorplan_core.generate import generate
+    from packages.floorplan_core.spec import build_options, describe, fit
     from packages.floorplan_core.topo_signature import (
         default_edge_types, topological_fitness, exact_room_edges,
     )
@@ -93,25 +94,15 @@ def build_generation(server_mod, fp, boundary, entrance_point, typed_edges, requ
         fp, target_boundary=boundary, target_edge_types=resolved_types,
         entrance_point=entrance_point, requirements=requirements,
     )
-    fp_with_nodes = dict(fp)
-    fp_with_nodes["node_pos"] = topo.get("node_pos", {})
-
     drawn_entrance = [entrance_point[0], entrance_point[1],
                       entrance_point[0], entrance_point[1]]
-    spec = spec_from_plan(
-        fp_with_nodes, boundary, edge_types=resolved_types,
-        entrance=drawn_entrance, mm_per_unit=mm_per_unit,
+    spec = fit(
+        describe(fp), boundary, edge_types=resolved_types, entrance=drawn_entrance,
+        mm_per_unit=mm_per_unit, node_pos=topo.get("node_pos", {}), topo=topo,
     )
-    boundary_demands = {}
-    for rid, contacts in (topo.get("room_edges") or {}).items():
-        idxs = sorted({c.get("target_edge_index") for c in contacts
-                       if c.get("target_edge_index") is not None})
-        if idxs:
-            boundary_demands[str(rid)] = idxs
-    spec["boundary_demands"] = boundary_demands
-    spec["area_lift"] = True
+    options = build_options()
 
-    plan = generate(spec)
+    plan = generate(spec, options)
     gen_room_edges = exact_room_edges(plan, boundary, resolved_types)
     sensors = run_sensors(plan, gen_room_edges, requirements=requirements,
                           target_boundary=boundary, spec=spec, layer="geometry")

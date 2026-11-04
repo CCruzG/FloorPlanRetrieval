@@ -1,0 +1,1917 @@
+{
+ "meta": {
+  "sidecar": "/Users/camilo/Documents/Work_FBI/Artefacts/project-44/data/RPlan-node-graph/node_graph_v1.2.jsonl.gz",
+  "sidecar_meta": {
+   "schema": "node_graph/1",
+   "rules_version": "1.2",
+   "decompose_params": {
+    "scale_m": 18.0,
+    "sliver_max_m": 0.2,
+    "merge_min_contact_m": 1.2,
+    "skip_labels": [
+     "Balcony",
+     "Kitchen",
+     "Bathroom"
+    ]
+   },
+   "label_params": {
+    "scale_m": 18.0,
+    "door_contact_frac": 0.5,
+    "absorb_nodoor_max_m": 0.5,
+    "absorb_door_max_m": 0.85,
+    "circ_max_short_m": 2.0,
+    "storage_max_short_m": 1.0,
+    "nook_min_short_m": 1.5,
+    "ext_min_m": 0.9,
+    "connect_min_m": 0.85,
+    "absorb_contact_frac": 0.5,
+    "dining_min_wall_m": 0.85,
+    "jog_min_m": 0.25,
+    "jog_max_cover": 0.9,
+    "jog_project_frac": 0.5
+   },
+   "source": "/Users/camilo/Documents/Work_FBI/Artefacts/project-44/data/RPlan-dataset-json"
+  },
+  "n_plans": 80791,
+  "wall_min_m": 0.3,
+  "seed": 44,
+  "sample": 10000,
+  "shuffles": 20,
+  "bootstrap": 2000,
+  "runtime_s": 27.3
+ },
+ "type_pairs": [
+  {
+   "type_a": "dining",
+   "type_b": "kitchen",
+   "plans": 1234,
+   "pairs": 1239,
+   "adjacent": 1120,
+   "obs_rate": 0.903954802259887,
+   "door_rate": 0.4348214285714286,
+   "null_all": 0.44018583042973286,
+   "lift_all": 2.0535754214927775,
+   "ci_all": [
+    2.0162858313907317,
+    2.090392799387182
+   ],
+   "null_living_fixed": 0.3595673256247669,
+   "lift_living_fixed": 2.514007079729001,
+   "ci_living_fixed": [
+    2.4683567994736064,
+    2.5590792731896665
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "entrance",
+   "plans": 18,
+   "pairs": 18,
+   "adjacent": 11,
+   "obs_rate": 0.6111111111111112,
+   "door_rate": 0.45454545454545453,
+   "null_all": 0.65,
+   "lift_all": 0.9401709401709402,
+   "ci_all": [
+    0.5982905982905983,
+    1.2820512820512822
+   ],
+   "null_living_fixed": 0.25,
+   "lift_living_fixed": 2.4444444444444446,
+   "ci_living_fixed": [
+    1.5555555555555556,
+    3.3333333333333335
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "dining",
+   "plans": 22,
+   "pairs": 22,
+   "adjacent": 9,
+   "obs_rate": 0.4090909090909091,
+   "door_rate": 0.1111111111111111,
+   "null_all": 0.3888888888888889,
+   "lift_all": 1.051948051948052,
+   "ci_all": [
+    0.4675324675324675,
+    1.6363636363636362
+   ],
+   "null_living_fixed": 0.2222222222222222,
+   "lift_living_fixed": 1.840909090909091,
+   "ci_living_fixed": [
+    0.8181818181818182,
+    2.8636363636363638
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "kitchen",
+   "plans": 140,
+   "pairs": 140,
+   "adjacent": 88,
+   "obs_rate": 0.6285714285714286,
+   "door_rate": 0.5,
+   "null_all": 0.3835616438356164,
+   "lift_all": 1.6387755102040817,
+   "ci_all": [
+    1.4339285714285717,
+    1.843622448979592
+   ],
+   "null_living_fixed": 0.3508771929824561,
+   "lift_living_fixed": 1.7914285714285716,
+   "ci_living_fixed": [
+    1.5675000000000001,
+    2.0153571428571433
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "circulation",
+   "plans": 67166,
+   "pairs": 134466,
+   "adjacent": 76267,
+   "obs_rate": 0.5671842696294974,
+   "door_rate": 0.7636330260794315,
+   "null_all": 0.3795370744976531,
+   "lift_all": 1.4944107117340513,
+   "ci_all": [
+    1.488603616758068,
+    1.500174510726773
+   ],
+   "null_living_fixed": 0.32277194599269043,
+   "lift_living_fixed": 1.7572291417245476,
+   "ci_living_fixed": [
+    1.7504007668738886,
+    1.7640066062311426
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "circulation",
+   "plans": 9628,
+   "pairs": 15122,
+   "adjacent": 7767,
+   "obs_rate": 0.5136225367014945,
+   "door_rate": 0.7764902793871508,
+   "null_all": 0.3559014908162425,
+   "lift_all": 1.443159272874993,
+   "ci_all": [
+    1.4263140212501344,
+    1.4599401137002597
+   ],
+   "null_living_fixed": 0.3119184583658125,
+   "lift_living_fixed": 1.6466564351223067,
+   "ci_living_fixed": [
+    1.6274358663945956,
+    1.6658035106052789
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "circulation",
+   "plans": 65511,
+   "pairs": 139206,
+   "adjacent": 71623,
+   "obs_rate": 0.5145108687843915,
+   "door_rate": 0.6298116526814013,
+   "null_all": 0.38144181655632037,
+   "lift_all": 1.3488580602657214,
+   "ci_all": [
+    1.3425929182677006,
+    1.3547860553820854
+   ],
+   "null_living_fixed": 0.32302204637081666,
+   "lift_living_fixed": 1.5928041895745813,
+   "ci_living_fixed": [
+    1.5854059727297625,
+    1.599804285237176
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "kitchen",
+   "plans": 284,
+   "pairs": 285,
+   "adjacent": 158,
+   "obs_rate": 0.5543859649122806,
+   "door_rate": 0.10126582278481013,
+   "null_all": 0.4491803278688525,
+   "lift_all": 1.2342169291842744,
+   "ci_all": [
+    1.1052996812994755,
+    1.3639868407525444
+   ],
+   "null_living_fixed": 0.35748031496062993,
+   "lift_living_fixed": 1.5508153644021947,
+   "ci_living_fixed": [
+    1.3888285661103184,
+    1.7138735496680522
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "master_bedroom",
+   "plans": 79405,
+   "pairs": 96743,
+   "adjacent": 48851,
+   "obs_rate": 0.5049564309562449,
+   "door_rate": 0.014656813575975926,
+   "null_all": 0.40838903075385813,
+   "lift_all": 1.2364593388420104,
+   "ci_all": [
+    1.2299202502151878,
+    1.2433850482382214
+   ],
+   "null_living_fixed": 0.328567692815529,
+   "lift_living_fixed": 1.5368413937147118,
+   "ci_living_fixed": [
+    1.5287137167558547,
+    1.5454496160367692
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "storage",
+   "plans": 3710,
+   "pairs": 6059,
+   "adjacent": 2773,
+   "obs_rate": 0.45766628156461464,
+   "door_rate": 0.7078975838442121,
+   "null_all": 0.36752712308267865,
+   "lift_all": 1.2452585205845021,
+   "ci_all": [
+    1.2142841091317238,
+    1.2730128662851106
+   ],
+   "null_living_fixed": 0.30356885882860846,
+   "lift_living_fixed": 1.5076193366165,
+   "ci_living_fixed": [
+    1.470118993615751,
+    1.541221185197898
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "study",
+   "plans": 13391,
+   "pairs": 22522,
+   "adjacent": 10202,
+   "obs_rate": 0.4529793091199716,
+   "door_rate": 0.6485983140560675,
+   "null_all": 0.369587089901162,
+   "lift_all": 1.225636180206162,
+   "ci_all": [
+    1.210090829014498,
+    1.2413765065766031
+   ],
+   "null_living_fixed": 0.3151178444794175,
+   "lift_living_fixed": 1.4374917734928807,
+   "ci_living_fixed": [
+    1.4192593527998854,
+    1.4559528715210053
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "master_bedroom",
+   "plans": 65279,
+   "pairs": 94428,
+   "adjacent": 43072,
+   "obs_rate": 0.4561358918964714,
+   "door_rate": 0.7820161589895989,
+   "null_all": 0.3872099412485735,
+   "lift_all": 1.178006665907501,
+   "ci_all": [
+    1.1710385836858226,
+    1.1848821012805233
+   ],
+   "null_living_fixed": 0.3311042475418662,
+   "lift_living_fixed": 1.3776201763729887,
+   "ci_living_fixed": [
+    1.3694713509571197,
+    1.3856606559096025
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "storage",
+   "plans": 202,
+   "pairs": 211,
+   "adjacent": 71,
+   "obs_rate": 0.33649289099526064,
+   "door_rate": 0.056338028169014086,
+   "null_all": 0.3185378590078329,
+   "lift_all": 1.056367026649056,
+   "ci_all": [
+    0.8655201470813544,
+    1.255737704918033
+   ],
+   "null_living_fixed": 0.24438902743142144,
+   "lift_living_fixed": 1.3768739723377503,
+   "ci_living_fixed": [
+    1.128123211901583,
+    1.636734693877551
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "living",
+   "plans": 1310,
+   "pairs": 1311,
+   "adjacent": 1121,
+   "obs_rate": 0.855072463768116,
+   "door_rate": 0.8447814451382694,
+   "null_all": 0.43798882681564244,
+   "lift_all": 1.9522700384501628,
+   "ci_all": [
+    1.9084456301604613,
+    1.9940670776319682
+   ],
+   "null_living_fixed": 0.623253903040263,
+   "lift_living_fixed": 1.3719488311216836,
+   "ci_living_fixed": [
+    1.3411514288445958,
+    1.4013215090404352
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "closet",
+   "plans": 839,
+   "pairs": 1132,
+   "adjacent": 440,
+   "obs_rate": 0.38869257950530034,
+   "door_rate": 0.020454545454545454,
+   "null_all": 0.3407421184785641,
+   "lift_all": 1.1407236101038467,
+   "ci_all": [
+    1.0634349567735517,
+    1.2183513003523094
+   ],
+   "null_living_fixed": 0.28897169727619554,
+   "lift_living_fixed": 1.3450887514904022,
+   "ci_living_fixed": [
+    1.2539535305730787,
+    1.4366237491292104
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "bedroom",
+   "plans": 78279,
+   "pairs": 130183,
+   "adjacent": 54313,
+   "obs_rate": 0.4172050114070194,
+   "door_rate": 0.023033159648702888,
+   "null_all": 0.39980680087302267,
+   "lift_all": 1.0435165447311197,
+   "ci_all": [
+    1.0372956908080828,
+    1.0497286195535436
+   ],
+   "null_living_fixed": 0.3207554384366108,
+   "lift_living_fixed": 1.300695051159575,
+   "ci_living_fixed": [
+    1.2929410448119656,
+    1.308438114764802
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "study",
+   "plans": 219,
+   "pairs": 220,
+   "adjacent": 104,
+   "obs_rate": 0.4727272727272727,
+   "door_rate": 0.20192307692307693,
+   "null_all": 0.3629807692307692,
+   "lift_all": 1.3023479831426852,
+   "ci_all": [
+    1.1195984154343948,
+    1.4776640577965081
+   ],
+   "null_living_fixed": 0.37471264367816093,
+   "lift_living_fixed": 1.2615727830451757,
+   "ci_living_fixed": [
+    1.0845449197411545,
+    1.4313998884551031
+   ]
+  },
+  {
+   "type_a": "master_bedroom",
+   "type_b": "storage",
+   "plans": 4225,
+   "pairs": 4387,
+   "adjacent": 1707,
+   "obs_rate": 0.38910417141554593,
+   "door_rate": 0.03632103104862332,
+   "null_all": 0.38931535269709544,
+   "lift_all": 0.9994575572730783,
+   "ci_all": [
+    0.9628651363758852,
+    1.0365911029830932
+   ],
+   "null_living_fixed": 0.30901028018544646,
+   "lift_living_fixed": 1.2591949082795326,
+   "ci_living_fixed": [
+    1.2130929105107793,
+    1.3059786574684344
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "living",
+   "plans": 10786,
+   "pairs": 11112,
+   "adjacent": 8426,
+   "obs_rate": 0.7582793376529877,
+   "door_rate": 0.5386897697602658,
+   "null_all": 0.3889114249254198,
+   "lift_all": 1.949748166432499,
+   "ci_all": [
+    1.9286906556199557,
+    1.9700120888033739
+   ],
+   "null_living_fixed": 0.6262739360643338,
+   "lift_living_fixed": 1.2107790121655226,
+   "ci_living_fixed": [
+    1.1977024556239018,
+    1.2233627562270437
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "closet",
+   "plans": 20,
+   "pairs": 21,
+   "adjacent": 6,
+   "obs_rate": 0.2857142857142857,
+   "door_rate": 0.0,
+   "null_all": 0.41935483870967744,
+   "lift_all": 0.6813186813186812,
+   "ci_all": [
+    0.22710622710622708,
+    1.1923076923076923
+   ],
+   "null_living_fixed": 0.2366412213740458,
+   "lift_living_fixed": 1.2073732718894008,
+   "ci_living_fixed": [
+    0.40245775729646693,
+    2.1129032258064515
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "kitchen",
+   "plans": 64548,
+   "pairs": 100441,
+   "adjacent": 39539,
+   "obs_rate": 0.3936539859220836,
+   "door_rate": 0.7325678444067882,
+   "null_all": 0.38710229892628945,
+   "lift_all": 1.0169249498490882,
+   "ci_all": [
+    1.0104129134394932,
+    1.023397073055403
+   ],
+   "null_living_fixed": 0.3305316242908174,
+   "lift_living_fixed": 1.1909722307712625,
+   "ci_living_fixed": [
+    1.1833456556432258,
+    1.19855206152868
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "study",
+   "plans": 14171,
+   "pairs": 14738,
+   "adjacent": 5585,
+   "obs_rate": 0.37895236802822635,
+   "door_rate": 0.031512981199641896,
+   "null_all": 0.3908670108598896,
+   "lift_all": 0.9695173997788875,
+   "ci_all": [
+    0.9498067686447527,
+    0.9897822167660698
+   ],
+   "null_living_fixed": 0.3213619269083915,
+   "lift_living_fixed": 1.1792074178602114,
+   "ci_living_fixed": [
+    1.1552337146039533,
+    1.2038551678833829
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "dining",
+   "plans": 899,
+   "pairs": 1190,
+   "adjacent": 490,
+   "obs_rate": 0.4117647058823529,
+   "door_rate": 0.6571428571428571,
+   "null_all": 0.38555598012991976,
+   "lift_all": 1.0679764472686992,
+   "ci_all": [
+    0.9993331422688534,
+    1.1332353016667867
+   ],
+   "null_living_fixed": 0.3503676470588235,
+   "lift_living_fixed": 1.1752360965372508,
+   "ci_living_fixed": [
+    1.0996987660766868,
+    1.2470490672291081
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "master_bedroom",
+   "plans": 66561,
+   "pairs": 86015,
+   "adjacent": 31590,
+   "obs_rate": 0.36726152415276403,
+   "door_rate": 0.5342196897752454,
+   "null_all": 0.3994592385014307,
+   "lift_all": 0.9193967462876657,
+   "ci_all": [
+    0.9117246027501161,
+    0.9270866458592273
+   ],
+   "null_living_fixed": 0.31835970005182995,
+   "lift_living_fixed": 1.1536055728566545,
+   "ci_living_fixed": [
+    1.1439790132931036,
+    1.1632544116591423
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "living",
+   "plans": 77597,
+   "pairs": 77737,
+   "adjacent": 62457,
+   "obs_rate": 0.8034398034398035,
+   "door_rate": 0.7619642313911972,
+   "null_all": 0.41828078181268386,
+   "lift_all": 1.9208145302731194,
+   "ci_all": [
+    1.9143686347151787,
+    1.9274235834827853
+   ],
+   "null_living_fixed": 0.6979582433046695,
+   "lift_living_fixed": 1.1511287546883942,
+   "ci_living_fixed": [
+    1.1472657811375806,
+    1.1550895073123502
+   ]
+  },
+  {
+   "type_a": "master_bedroom",
+   "type_b": "master_bedroom",
+   "plans": 902,
+   "pairs": 960,
+   "adjacent": 380,
+   "obs_rate": 0.3958333333333333,
+   "door_rate": 0.02631578947368421,
+   "null_all": 0.40868506493506496,
+   "lift_all": 0.9685534591194968,
+   "ci_all": [
+    0.8948852286865504,
+    1.0432981400137686
+   ],
+   "null_living_fixed": 0.3467297084318361,
+   "lift_living_fixed": 1.1416193181818182,
+   "ci_living_fixed": [
+    1.0547876888002279,
+    1.2297197434467373
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "living",
+   "plans": 291,
+   "pairs": 292,
+   "adjacent": 229,
+   "obs_rate": 0.7842465753424658,
+   "door_rate": 0.9519650655021834,
+   "null_all": 0.4224,
+   "lift_all": 1.8566443545039437,
+   "ci_all": [
+    1.7452683834936393,
+    1.97015099626401
+   ],
+   "null_living_fixed": 0.6881533101045296,
+   "lift_living_fixed": 1.13963932720652,
+   "ci_living_fixed": [
+    1.0712748952348037,
+    1.209311600485521
+   ]
+  },
+  {
+   "type_a": "living",
+   "type_b": "master_bedroom",
+   "plans": 79532,
+   "pairs": 80461,
+   "adjacent": 63121,
+   "obs_rate": 0.7844918656243397,
+   "door_rate": 0.5839736379334928,
+   "null_all": 0.41665691644950276,
+   "lift_all": 1.8828245365738867,
+   "ci_all": [
+    1.8761508898896733,
+    1.8894884522394872
+   ],
+   "null_living_fixed": 0.6984833030557249,
+   "lift_living_fixed": 1.1231361754709732,
+   "ci_living_fixed": [
+    1.1191552341417343,
+    1.1271113120856378
+   ]
+  },
+  {
+   "type_a": "storage",
+   "type_b": "storage",
+   "plans": 94,
+   "pairs": 100,
+   "adjacent": 29,
+   "obs_rate": 0.29,
+   "door_rate": 0.13793103448275862,
+   "null_all": 0.3684210526315789,
+   "lift_all": 0.7871428571428571,
+   "ci_all": [
+    0.5588235294117647,
+    1.0461309523809526
+   ],
+   "null_living_fixed": 0.2608695652173913,
+   "lift_living_fixed": 1.1116666666666666,
+   "ci_living_fixed": [
+    0.7892156862745098,
+    1.4774305555555556
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "storage",
+   "plans": 18,
+   "pairs": 18,
+   "adjacent": 6,
+   "obs_rate": 0.3333333333333333,
+   "door_rate": 0.3333333333333333,
+   "null_all": 0.3448275862068966,
+   "lift_all": 0.9666666666666666,
+   "ci_all": [
+    0.3222222222222222,
+    1.6111111111111112
+   ],
+   "null_living_fixed": 0.3,
+   "lift_living_fixed": 1.1111111111111112,
+   "ci_living_fixed": [
+    0.37037037037037035,
+    1.851851851851852
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "master_bedroom",
+   "plans": 77156,
+   "pairs": 102524,
+   "adjacent": 36662,
+   "obs_rate": 0.35759431937887715,
+   "door_rate": 0.009001145600349135,
+   "null_all": 0.4073722591279157,
+   "lift_all": 0.8778072423105076,
+   "ci_all": [
+    0.8702623124383843,
+    0.8845415777650125
+   ],
+   "null_living_fixed": 0.32468075189057566,
+   "lift_living_fixed": 1.1013720933460018,
+   "ci_living_fixed": [
+    1.0919055785955234,
+    1.1098215669654035
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "bedroom",
+   "plans": 25744,
+   "pairs": 26958,
+   "adjacent": 9077,
+   "obs_rate": 0.33670895467022777,
+   "door_rate": 0.023686239947119093,
+   "null_all": 0.3839857540066856,
+   "lift_all": 0.8768787673939729,
+   "ci_all": [
+    0.8618696439383354,
+    0.8917096342128291
+   ],
+   "null_living_fixed": 0.30601771251230037,
+   "lift_living_fixed": 1.1002923716603292,
+   "ci_living_fixed": [
+    1.0814591821048039,
+    1.1189018878587824
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "storage",
+   "plans": 4037,
+   "pairs": 5115,
+   "adjacent": 1690,
+   "obs_rate": 0.3304007820136852,
+   "door_rate": 0.06627218934911243,
+   "null_all": 0.39112939282840026,
+   "lift_all": 0.8447352412572112,
+   "ci_all": [
+    0.8131804560520915,
+    0.8760715736024378
+   ],
+   "null_living_fixed": 0.30282055718982526,
+   "lift_living_fixed": 1.091077782432621,
+   "ci_living_fixed": [
+    1.0503209590100542,
+    1.1315524475524474
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "closet",
+   "plans": 2967,
+   "pairs": 4039,
+   "adjacent": 1262,
+   "obs_rate": 0.31245357761822234,
+   "door_rate": 0.02694136291600634,
+   "null_all": 0.3588206388206388,
+   "lift_all": 0.870779280269902,
+   "ci_all": [
+    0.8315492377885627,
+    0.9096731353631012
+   ],
+   "null_living_fixed": 0.2889096864763687,
+   "lift_living_fixed": 1.0814922179626518,
+   "ci_living_fixed": [
+    1.0327692101750041,
+    1.1297976870556052
+   ]
+  },
+  {
+   "type_a": "living",
+   "type_b": "study",
+   "plans": 14955,
+   "pairs": 14980,
+   "adjacent": 10714,
+   "obs_rate": 0.7152202937249666,
+   "door_rate": 0.7322195258540227,
+   "null_all": 0.3906144397754988,
+   "lift_all": 1.8310134518734928,
+   "ci_all": [
+    1.813809376446216,
+    1.8496602549728411
+   ],
+   "null_living_fixed": 0.6633088210604077,
+   "lift_living_fixed": 1.0782613935113512,
+   "ci_living_fixed": [
+    1.0681301242269508,
+    1.0892422674496953
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "nook",
+   "plans": 6768,
+   "pairs": 7023,
+   "adjacent": 2371,
+   "obs_rate": 0.33760501210308985,
+   "door_rate": 0.03458456347532687,
+   "null_all": 0.38610747051114025,
+   "lift_all": 0.8743809376600732,
+   "ci_all": [
+    0.8456461750987088,
+    0.9036261243304752
+   ],
+   "null_living_fixed": 0.3150298085974271,
+   "lift_living_fixed": 1.0716605314467602,
+   "ci_living_fixed": [
+    1.036442573699516,
+    1.1075040762218031
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "living",
+   "plans": 78404,
+   "pairs": 104750,
+   "adjacent": 77840,
+   "obs_rate": 0.7431026252983294,
+   "door_rate": 0.7352903391572456,
+   "null_all": 0.4093195507081231,
+   "lift_all": 1.81545842120847,
+   "ci_all": [
+    1.8091358780649451,
+    1.8218230103135176
+   ],
+   "null_living_fixed": 0.6949885642614726,
+   "lift_living_fixed": 1.0692300039324891,
+   "ci_living_fixed": [
+    1.0655062872385457,
+    1.0729784839606293
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "dining",
+   "plans": 1180,
+   "pairs": 1447,
+   "adjacent": 557,
+   "obs_rate": 0.3849343469246717,
+   "door_rate": 0.1687612208258528,
+   "null_all": 0.41589119541875447,
+   "lift_all": 0.92556503038514,
+   "ci_all": [
+    0.8685552706452633,
+    0.9829719033443775
+   ],
+   "null_living_fixed": 0.36559888579387184,
+   "lift_living_fixed": 1.0528870898739593,
+   "ci_living_fixed": [
+    0.9880349854227406,
+    1.1181909350113066
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "living",
+   "plans": 459,
+   "pairs": 461,
+   "adjacent": 331,
+   "obs_rate": 0.7180043383947939,
+   "door_rate": 0.00906344410876133,
+   "null_all": 0.3579865771812081,
+   "lift_all": 2.0056739111515616,
+   "ci_all": [
+    1.890544592988783,
+    2.12080322931434
+   ],
+   "null_living_fixed": 0.6871245332034421,
+   "lift_living_fixed": 1.0449406238595311,
+   "ci_living_fixed": [
+    0.9849591378978058,
+    1.1049221098212565
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "study",
+   "plans": 709,
+   "pairs": 722,
+   "adjacent": 205,
+   "obs_rate": 0.2839335180055402,
+   "door_rate": 0.02926829268292683,
+   "null_all": 0.33900709219858155,
+   "lift_all": 0.8375444777987692,
+   "ci_all": [
+    0.7353935268819711,
+    0.939117069421911
+   ],
+   "null_living_fixed": 0.28389261744966443,
+   "lift_living_fixed": 1.000144070515969,
+   "ci_living_fixed": [
+    0.8781616915914314,
+    1.1214358083658995
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "kitchen",
+   "plans": 77473,
+   "pairs": 92739,
+   "adjacent": 29332,
+   "obs_rate": 0.3162854893841857,
+   "door_rate": 0.028978589935906178,
+   "null_all": 0.40823768476334515,
+   "lift_all": 0.7747581891356649,
+   "ci_all": [
+    0.767792149290003,
+    0.7817824942754169
+   ],
+   "null_living_fixed": 0.32958566629339303,
+   "lift_living_fixed": 0.9596457665808571,
+   "ci_living_fixed": [
+    0.9510173574314411,
+    0.9683463454002373
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "study",
+   "plans": 14271,
+   "pairs": 14314,
+   "adjacent": 4393,
+   "obs_rate": 0.3069023333799078,
+   "door_rate": 0.011837013430457547,
+   "null_all": 0.3924874026568942,
+   "lift_all": 0.7819418694775195,
+   "ci_all": [
+    0.7631635772310646,
+    0.8012819134585195
+   ],
+   "null_living_fixed": 0.32157798597607684,
+   "lift_living_fixed": 0.9543636279964114,
+   "ci_living_fixed": [
+    0.9314446364249813,
+    0.9779682401290886
+   ]
+  },
+  {
+   "type_a": "master_bedroom",
+   "type_b": "study",
+   "plans": 14783,
+   "pairs": 14884,
+   "adjacent": 4516,
+   "obs_rate": 0.3034130610051062,
+   "door_rate": 0.02679362267493357,
+   "null_all": 0.3896353735053865,
+   "lift_all": 0.7787102548606554,
+   "ci_all": [
+    0.7605344854136246,
+    0.7976126972875315
+   ],
+   "null_living_fixed": 0.3213531258920925,
+   "lift_living_fixed": 0.9441733611982651,
+   "ci_living_fixed": [
+    0.9221355400394329,
+    0.9670922613792238
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "dining",
+   "plans": 1308,
+   "pairs": 1450,
+   "adjacent": 479,
+   "obs_rate": 0.3303448275862069,
+   "door_rate": 0.17118997912317327,
+   "null_all": 0.4265899864682003,
+   "lift_all": 0.7743848614947086,
+   "ci_all": [
+    0.7189432448009428,
+    0.8303956198547202
+   ],
+   "null_living_fixed": 0.35329143235196825,
+   "lift_living_fixed": 0.9350490765853029,
+   "ci_living_fixed": [
+    0.868104802398641,
+    1.0026805741616915
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "bathroom",
+   "plans": 16261,
+   "pairs": 16479,
+   "adjacent": 4596,
+   "obs_rate": 0.2789004187147278,
+   "door_rate": 0.14556135770234988,
+   "null_all": 0.36776881576838844,
+   "lift_all": 0.7583579867477733,
+   "ci_all": [
+    0.7400592057647946,
+    0.7765796900552868
+   ],
+   "null_living_fixed": 0.2996301182069786,
+   "lift_living_fixed": 0.9308157016514237,
+   "ci_living_fixed": [
+    0.9083556063432929,
+    0.9531811910981755
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "storage",
+   "plans": 74,
+   "pairs": 80,
+   "adjacent": 25,
+   "obs_rate": 0.3125,
+   "door_rate": 0.24,
+   "null_all": 0.36496350364963503,
+   "lift_all": 0.85625,
+   "ci_all": [
+    0.5822499999999999,
+    1.1360975609756097
+   ],
+   "null_living_fixed": 0.34057971014492755,
+   "lift_living_fixed": 0.9175531914893617,
+   "ci_living_fixed": [
+    0.6239361702127659,
+    1.2174364296834457
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "study",
+   "plans": 14924,
+   "pairs": 19130,
+   "adjacent": 5569,
+   "obs_rate": 0.29111343439623627,
+   "door_rate": 0.0416591847728497,
+   "null_all": 0.38627082090579545,
+   "lift_all": 0.7536511137796599,
+   "ci_all": [
+    0.7366578849708619,
+    0.7704787322576088
+   ],
+   "null_living_fixed": 0.3188675896343628,
+   "lift_living_fixed": 0.9129602501466157,
+   "ci_living_fixed": [
+    0.8923749393304832,
+    0.9333449434007036
+   ]
+  },
+  {
+   "type_a": "storage",
+   "type_b": "study",
+   "plans": 807,
+   "pairs": 824,
+   "adjacent": 236,
+   "obs_rate": 0.28640776699029125,
+   "door_rate": 0.1694915254237288,
+   "null_all": 0.39625,
+   "lift_all": 0.7227956264739211,
+   "ci_all": [
+    0.6461543150611866,
+    0.8053577809626639
+   ],
+   "null_living_fixed": 0.3169267707082833,
+   "lift_living_fixed": 0.9037032950867903,
+   "ci_living_fixed": [
+    0.8078795198360417,
+    1.0069298342745359
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "entrance",
+   "plans": 291,
+   "pairs": 324,
+   "adjacent": 105,
+   "obs_rate": 0.32407407407407407,
+   "door_rate": 0.4095238095238095,
+   "null_all": 0.43317972350230416,
+   "lift_all": 0.7481284475965326,
+   "ci_all": [
+    0.6258010766470136,
+    0.8683388639469062
+   ],
+   "null_living_fixed": 0.362555720653789,
+   "lift_living_fixed": 0.8938600485731634,
+   "ci_living_fixed": [
+    0.7477039304760024,
+    1.0374868401263349
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "living",
+   "plans": 67628,
+   "pairs": 86516,
+   "adjacent": 52428,
+   "obs_rate": 0.6059919552452725,
+   "door_rate": 0.8855382619974059,
+   "null_all": 0.3986731296513905,
+   "lift_all": 1.520022068643469,
+   "ci_all": [
+    1.5125238274282071,
+    1.5271503972975453
+   ],
+   "null_living_fixed": 0.6913820435221213,
+   "lift_living_fixed": 0.8764936273990508,
+   "ci_living_fixed": [
+    0.8721699002785998,
+    0.8806040510357812
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "closet",
+   "plans": 3194,
+   "pairs": 4168,
+   "adjacent": 1011,
+   "obs_rate": 0.2425623800383877,
+   "door_rate": 0.05934718100890208,
+   "null_all": 0.34935497295047857,
+   "lift_all": 0.6943149484600901,
+   "ci_all": [
+    0.658964013788314,
+    0.732614093880554
+   ],
+   "null_living_fixed": 0.28121897955132025,
+   "lift_living_fixed": 0.8625391516084425,
+   "ci_living_fixed": [
+    0.8186231085101541,
+    0.9101177216386025
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "entrance",
+   "plans": 207,
+   "pairs": 271,
+   "adjacent": 85,
+   "obs_rate": 0.31365313653136534,
+   "door_rate": 0.7647058823529411,
+   "null_all": 0.4088586030664395,
+   "lift_all": 0.7671432964329644,
+   "ci_all": [
+    0.6492575757575757,
+    0.887746913580247
+   ],
+   "null_living_fixed": 0.36721311475409835,
+   "lift_living_fixed": 0.8541447021613074,
+   "ci_living_fixed": [
+    0.7228896103896104,
+    0.988425925925926
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "entrance",
+   "plans": 267,
+   "pairs": 326,
+   "adjacent": 99,
+   "obs_rate": 0.30368098159509205,
+   "door_rate": 0.1414141414141414,
+   "null_all": 0.41975308641975306,
+   "lift_all": 0.7234752796824252,
+   "ci_all": [
+    0.6044776119402986,
+    0.8487132352941177
+   ],
+   "null_living_fixed": 0.35771276595744683,
+   "lift_living_fixed": 0.8489520377676922,
+   "ci_living_fixed": [
+    0.7093158741607946,
+    0.995910780669145
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "kitchen",
+   "plans": 75309,
+   "pairs": 100548,
+   "adjacent": 27649,
+   "obs_rate": 0.27498309265226556,
+   "door_rate": 0.006944193280046295,
+   "null_all": 0.4084634120512549,
+   "lift_all": 0.6732135230211514,
+   "ci_all": [
+    0.6666426068449078,
+    0.6799254172483613
+   ],
+   "null_living_fixed": 0.3252880563401006,
+   "lift_living_fixed": 0.8453525645735994,
+   "ci_living_fixed": [
+    0.8371014812972893,
+    0.8537806736416647
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "master_bedroom",
+   "plans": 3004,
+   "pairs": 3064,
+   "adjacent": 745,
+   "obs_rate": 0.24314621409921672,
+   "door_rate": 0.03758389261744966,
+   "null_all": 0.36685667752442996,
+   "lift_all": 0.6627825769452567,
+   "ci_all": [
+    0.6234349001381463,
+    0.7033326137661203
+   ],
+   "null_living_fixed": 0.3011074918566775,
+   "lift_living_fixed": 0.8075063579452567,
+   "ci_living_fixed": [
+    0.7595668068807738,
+    0.8569108137755226
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "storage",
+   "plans": 4275,
+   "pairs": 4951,
+   "adjacent": 1242,
+   "obs_rate": 0.2508584124419309,
+   "door_rate": 0.15942028985507245,
+   "null_all": 0.3830832196452933,
+   "lift_all": 0.6548405139598837,
+   "ci_all": [
+    0.6240758405832608,
+    0.6860561949214431
+   ],
+   "null_living_fixed": 0.311723773451951,
+   "lift_living_fixed": 0.8047458481077259,
+   "ci_living_fixed": [
+    0.7669385612333766,
+    0.843107386702464
+   ]
+  },
+  {
+   "type_a": "nook",
+   "type_b": "study",
+   "plans": 1357,
+   "pairs": 1411,
+   "adjacent": 356,
+   "obs_rate": 0.2523033309709426,
+   "door_rate": 0.03651685393258427,
+   "null_all": 0.3460258780036969,
+   "lift_all": 0.7291458443123928,
+   "ci_all": [
+    0.6612614080834419,
+    0.7926739926739926
+   ],
+   "null_living_fixed": 0.3180545836249125,
+   "lift_living_fixed": 0.7932705389603454,
+   "ci_living_fixed": [
+    0.7194160093975499,
+    0.8623856671381425
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "storage",
+   "plans": 4099,
+   "pairs": 4188,
+   "adjacent": 1001,
+   "obs_rate": 0.23901623686723975,
+   "door_rate": 0.1968031968031968,
+   "null_all": 0.390241240039297,
+   "lift_all": 0.6124832855778415,
+   "ci_all": [
+    0.5795806200009687,
+    0.6451987669961993
+   ],
+   "null_living_fixed": 0.3026552417222046,
+   "lift_living_fixed": 0.7897310335917572,
+   "ci_living_fixed": [
+    0.7473066006222385,
+    0.8319141128093337
+   ]
+  },
+  {
+   "type_a": "living",
+   "type_b": "storage",
+   "plans": 4285,
+   "pairs": 4382,
+   "adjacent": 2388,
+   "obs_rate": 0.5449566408032862,
+   "door_rate": 0.7784757118927973,
+   "null_all": 0.393986683312526,
+   "lift_all": 1.3831854321101629,
+   "ci_all": [
+    1.3445809265907886,
+    1.4212982511325767
+   ],
+   "null_living_fixed": 0.6933818352499413,
+   "lift_living_fixed": 0.785940174805484,
+   "ci_living_fixed": [
+    0.7640046981066809,
+    0.8075962701846174
+   ]
+  },
+  {
+   "type_a": "bedroom",
+   "type_b": "nook",
+   "plans": 7240,
+   "pairs": 9984,
+   "adjacent": 2447,
+   "obs_rate": 0.24509214743589744,
+   "door_rate": 0.020024519820187985,
+   "null_all": 0.37106017191977075,
+   "lift_all": 0.6605186058311059,
+   "ci_all": [
+    0.6393620664580567,
+    0.6839956040963598
+   ],
+   "null_living_fixed": 0.31291616868704114,
+   "lift_living_fixed": 0.7832517842215531,
+   "ci_living_fixed": [
+    0.7581640772809685,
+    0.8110911223069489
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "nook",
+   "plans": 66,
+   "pairs": 67,
+   "adjacent": 16,
+   "obs_rate": 0.23880597014925373,
+   "door_rate": 0.0,
+   "null_all": 0.3696969696969697,
+   "lift_all": 0.6459505749938831,
+   "ci_all": [
+    0.3688524590163934,
+    0.9285539515537069
+   ],
+   "null_living_fixed": 0.3160919540229885,
+   "lift_living_fixed": 0.755495251017639,
+   "ci_living_fixed": [
+    0.4314049586776859,
+    1.0860244233378562
+   ]
+  },
+  {
+   "type_a": "study",
+   "type_b": "study",
+   "plans": 24,
+   "pairs": 26,
+   "adjacent": 8,
+   "obs_rate": 0.3076923076923077,
+   "door_rate": 0.0,
+   "null_all": 0.5131578947368421,
+   "lift_all": 0.5996055226824457,
+   "ci_all": [
+    0.29980276134122286,
+    0.9743589743589742
+   ],
+   "null_living_fixed": 0.4125,
+   "lift_living_fixed": 0.745920745920746,
+   "ci_living_fixed": [
+    0.372960372960373,
+    1.2121212121212122
+   ]
+  },
+  {
+   "type_a": "master_bedroom",
+   "type_b": "nook",
+   "plans": 7078,
+   "pairs": 7427,
+   "adjacent": 1706,
+   "obs_rate": 0.22970243705399218,
+   "door_rate": 0.008792497069167644,
+   "null_all": 0.3735433624172864,
+   "lift_all": 0.614928439813611,
+   "ci_all": [
+    0.5901058075304215,
+    0.6411852373993775
+   ],
+   "null_living_fixed": 0.32689747003994674,
+   "lift_living_fixed": 0.7026742575460209,
+   "ci_living_fixed": [
+    0.6743096161005628,
+    0.7326777092561206
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "living",
+   "plans": 80659,
+   "pairs": 97029,
+   "adjacent": 46812,
+   "obs_rate": 0.48245369940945493,
+   "door_rate": 0.7538451679056652,
+   "null_all": 0.4086481064792008,
+   "lift_all": 1.1806091641195715,
+   "ci_all": [
+    1.1729601370437406,
+    1.1881631394197032
+   ],
+   "null_living_fixed": 0.6866993491928888,
+   "lift_living_fixed": 0.7025690354541712,
+   "ci_living_fixed": [
+    0.6980171738066826,
+    0.707064332714053
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "kitchen",
+   "plans": 3026,
+   "pairs": 3065,
+   "adjacent": 611,
+   "obs_rate": 0.199347471451876,
+   "door_rate": 0.0425531914893617,
+   "null_all": 0.3640678941311853,
+   "lift_all": 0.5475557572238017,
+   "ci_all": [
+    0.507657290358469,
+    0.5849456964831143
+   ],
+   "null_living_fixed": 0.28421483097055616,
+   "lift_living_fixed": 0.7013971465568165,
+   "ci_living_fixed": [
+    0.6502887974213367,
+    0.7492921716029977
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "kitchen",
+   "plans": 64892,
+   "pairs": 82589,
+   "adjacent": 17421,
+   "obs_rate": 0.21093608107617237,
+   "door_rate": 0.5455484759772689,
+   "null_all": 0.4002681555097258,
+   "lift_all": 0.5269869165773469,
+   "ci_all": [
+    0.5210928642188621,
+    0.5328145914715299
+   ],
+   "null_living_fixed": 0.31667589151577447,
+   "lift_living_fixed": 0.6660945361723726,
+   "ci_living_fixed": [
+    0.6586446433033067,
+    0.67346053005855
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "master_bedroom",
+   "plans": 285,
+   "pairs": 296,
+   "adjacent": 65,
+   "obs_rate": 0.2195945945945946,
+   "door_rate": 0.13846153846153847,
+   "null_all": 0.45271317829457364,
+   "lift_all": 0.48506340244353946,
+   "ci_all": [
+    0.3871275243609659,
+    0.5895385968159941
+   ],
+   "null_living_fixed": 0.3759512937595129,
+   "lift_living_fixed": 0.5841038406827881,
+   "ci_living_fixed": [
+    0.4661713761008389,
+    0.7099108217529271
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "bedroom",
+   "plans": 65696,
+   "pairs": 109959,
+   "adjacent": 18274,
+   "obs_rate": 0.16618921598050182,
+   "door_rate": 0.4655795118747948,
+   "null_all": 0.3932282795497258,
+   "lift_all": 0.4226278338139877,
+   "ci_all": [
+    0.4173483891289894,
+    0.42806246919602414
+   ],
+   "null_living_fixed": 0.31122144838030075,
+   "lift_living_fixed": 0.5339902402145014,
+   "ci_living_fixed": [
+    0.5273196622024005,
+    0.5408569016620981
+   ]
+  },
+  {
+   "type_a": "bathroom",
+   "type_b": "nook",
+   "plans": 7540,
+   "pairs": 9721,
+   "adjacent": 1519,
+   "obs_rate": 0.15625964406954018,
+   "door_rate": 0.03686635944700461,
+   "null_all": 0.3683406530456368,
+   "lift_all": 0.4242258973520902,
+   "ci_all": [
+    0.40520988899906124,
+    0.4435418253343488
+   ],
+   "null_living_fixed": 0.31093700177652256,
+   "lift_living_fixed": 0.5025443841574297,
+   "ci_living_fixed": [
+    0.4800177344018302,
+    0.5254263232207042
+   ]
+  },
+  {
+   "type_a": "nook",
+   "type_b": "storage",
+   "plans": 415,
+   "pairs": 438,
+   "adjacent": 52,
+   "obs_rate": 0.1187214611872146,
+   "door_rate": 0.057692307692307696,
+   "null_all": 0.3511988716502116,
+   "lift_all": 0.33804624892263113,
+   "ci_all": [
+    0.25587141191494084,
+    0.4208612741960915
+   ],
+   "null_living_fixed": 0.28150134048257375,
+   "lift_living_fixed": 0.4217438573602957,
+   "ci_living_fixed": [
+    0.3192231731402238,
+    0.5250632354558451
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "study",
+   "plans": 11875,
+   "pairs": 14405,
+   "adjacent": 1875,
+   "obs_rate": 0.13016313779937522,
+   "door_rate": 0.46773333333333333,
+   "null_all": 0.3767868572647749,
+   "lift_all": 0.34545562110173933,
+   "ci_all": [
+    0.3313379150341363,
+    0.3592754488393738
+   ],
+   "null_living_fixed": 0.30894428584042144,
+   "lift_living_fixed": 0.4213158933990066,
+   "ci_living_fixed": [
+    0.40409801190775413,
+    0.43817048401568975
+   ]
+  },
+  {
+   "type_a": "closet",
+   "type_b": "nook",
+   "plans": 65,
+   "pairs": 68,
+   "adjacent": 8,
+   "obs_rate": 0.11764705882352941,
+   "door_rate": 0.0,
+   "null_all": 0.37466666666666665,
+   "lift_all": 0.3140046054008792,
+   "ci_all": [
+    0.11775172702532972,
+    0.5338078291814947
+   ],
+   "null_living_fixed": 0.28858218318695106,
+   "lift_living_fixed": 0.40767263427109973,
+   "ci_living_fixed": [
+    0.1528772378516624,
+    0.6930434782608696
+   ]
+  },
+  {
+   "type_a": "nook",
+   "type_b": "nook",
+   "plans": 56,
+   "pairs": 63,
+   "adjacent": 6,
+   "obs_rate": 0.09523809523809523,
+   "door_rate": 0.0,
+   "null_all": 0.33460803059273425,
+   "lift_all": 0.28462585034013604,
+   "ci_all": [
+    0.09640552995391705,
+    0.5057582417582418
+   ],
+   "null_living_fixed": 0.29310344827586204,
+   "lift_living_fixed": 0.32492997198879553,
+   "ci_living_fixed": [
+    0.11005692599620494,
+    0.5773755656108598
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "dining",
+   "plans": 779,
+   "pairs": 869,
+   "adjacent": 88,
+   "obs_rate": 0.10126582278481013,
+   "door_rate": 0.6363636363636364,
+   "null_all": 0.38563983786913725,
+   "lift_all": 0.2625917056296803,
+   "ci_all": [
+    0.2118045700309411,
+    0.30997894446170304
+   ],
+   "null_living_fixed": 0.3129556926528323,
+   "lift_living_fixed": 0.3235787849916066,
+   "ci_living_fixed": [
+    0.2609963070308612,
+    0.3819717381452643
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "master_bedroom",
+   "plans": 1265,
+   "pairs": 1296,
+   "adjacent": 141,
+   "obs_rate": 0.1087962962962963,
+   "door_rate": 0.11347517730496454,
+   "null_all": 0.4202737698853126,
+   "lift_all": 0.25887006064162754,
+   "ci_all": [
+    0.2199754768983702,
+    0.2962750400313715
+   ],
+   "null_living_fixed": 0.3500897666068223,
+   "lift_living_fixed": 0.31076685660018993,
+   "ci_living_fixed": [
+    0.26407490814270473,
+    0.35567057330398394
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "study",
+   "plans": 63,
+   "pairs": 63,
+   "adjacent": 7,
+   "obs_rate": 0.1111111111111111,
+   "door_rate": 0.14285714285714285,
+   "null_all": 0.3898305084745763,
+   "lift_all": 0.28502415458937197,
+   "ci_all": [
+    0.12215320910973083,
+    0.48861283643892334
+   ],
+   "null_living_fixed": 0.37777777777777777,
+   "lift_living_fixed": 0.29411764705882354,
+   "ci_living_fixed": [
+    0.12605042016806722,
+    0.5042016806722689
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "nook",
+   "plans": 5611,
+   "pairs": 7108,
+   "adjacent": 541,
+   "obs_rate": 0.0761114237478897,
+   "door_rate": 0.05730129390018484,
+   "null_all": 0.36095135394200817,
+   "lift_all": 0.21086338343564728,
+   "ci_all": [
+    0.19400626712431085,
+    0.22782077768458428
+   ],
+   "null_living_fixed": 0.30178663165705805,
+   "lift_living_fixed": 0.2522027676639455,
+   "ci_living_fixed": [
+    0.23204084424565052,
+    0.27248462832779935
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "bathroom",
+   "plans": 67505,
+   "pairs": 100835,
+   "adjacent": 6605,
+   "obs_rate": 0.0655030495363713,
+   "door_rate": 0.3712339137017411,
+   "null_all": 0.3931908731788486,
+   "lift_all": 0.16659351476496834,
+   "ci_all": [
+    0.162790791565248,
+    0.17023397204697804
+   ],
+   "null_living_fixed": 0.3111543747136967,
+   "lift_living_fixed": 0.21051624164578367,
+   "ci_living_fixed": [
+    0.20571092256026133,
+    0.21511651306668456
+   ]
+  },
+  {
+   "type_a": "kitchen",
+   "type_b": "master_bedroom",
+   "plans": 76369,
+   "pairs": 77407,
+   "adjacent": 5308,
+   "obs_rate": 0.06857260971229992,
+   "door_rate": 0.01544837980406933,
+   "null_all": 0.4169016416057387,
+   "lift_all": 0.16448150563328462,
+   "ci_all": [
+    0.1602857726749414,
+    0.1689895474477397
+   ],
+   "null_living_fixed": 0.33287924180905804,
+   "lift_living_fixed": 0.20599845559499824,
+   "ci_living_fixed": [
+    0.20074367326442577,
+    0.21164437698877403
+   ]
+  },
+  {
+   "type_a": "circulation",
+   "type_b": "nook",
+   "plans": 1478,
+   "pairs": 1772,
+   "adjacent": 112,
+   "obs_rate": 0.06320541760722348,
+   "door_rate": 0.07142857142857142,
+   "null_all": 0.34833021896411287,
+   "lift_all": 0.1814525819642863,
+   "ci_all": [
+    0.14965696917734284,
+    0.21494654369466826
+   ],
+   "null_living_fixed": 0.31918979470531755,
+   "lift_living_fixed": 0.19801829085912973,
+   "ci_living_fixed": [
+    0.1633198984045741,
+    0.23457008298108883
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "balcony",
+   "plans": 18256,
+   "pairs": 19524,
+   "adjacent": 1164,
+   "obs_rate": 0.059618930547019056,
+   "door_rate": 0.058419243986254296,
+   "null_all": 0.3794701986754967,
+   "lift_all": 0.1571109688062806,
+   "ci_all": [
+    0.1482464735082536,
+    0.1662321789088929
+   ],
+   "null_living_fixed": 0.3014777307016637,
+   "lift_living_fixed": 0.19775566974138048,
+   "ci_living_fixed": [
+    0.18659792424531577,
+    0.20923654231443434
+   ]
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "nook",
+   "plans": 21,
+   "pairs": 22,
+   "adjacent": 1,
+   "obs_rate": 0.045454545454545456,
+   "door_rate": 1.0,
+   "null_all": 0.5526315789473685,
+   "lift_all": 0.08225108225108224,
+   "ci_all": [
+    0.0,
+    0.25850340136054417
+   ],
+   "null_living_fixed": 0.28205128205128205,
+   "lift_living_fixed": 0.16115702479338845,
+   "ci_living_fixed": [
+    0.0,
+    0.5064935064935064
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "storage",
+   "plans": 3004,
+   "pairs": 3527,
+   "adjacent": 150,
+   "obs_rate": 0.04252906152537567,
+   "door_rate": 0.18,
+   "null_all": 0.37986270022883295,
+   "lift_all": 0.11195903546138054,
+   "ci_all": [
+    0.09436390779034853,
+    0.13061887470494396
+   ],
+   "null_living_fixed": 0.2907925407925408,
+   "lift_living_fixed": 0.14625224364237405,
+   "ci_living_fixed": [
+    0.12326770390908828,
+    0.17062761758276973
+   ]
+  },
+  {
+   "type_a": "living",
+   "type_b": "nook",
+   "plans": 556,
+   "pairs": 563,
+   "adjacent": 48,
+   "obs_rate": 0.0852575488454707,
+   "door_rate": 0.14583333333333334,
+   "null_all": 0.3762485481997677,
+   "lift_all": 0.2265990108225043,
+   "ci_all": [
+    0.16934766782265917,
+    0.28745899189853963
+   ],
+   "null_living_fixed": 0.6328888255009627,
+   "lift_living_fixed": 0.13471173041803217,
+   "ci_living_fixed": [
+    0.10067615605135236,
+    0.17089261812006792
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "closet",
+   "plans": 2734,
+   "pairs": 3670,
+   "adjacent": 138,
+   "obs_rate": 0.03760217983651226,
+   "door_rate": 0.007246376811594203,
+   "null_all": 0.367867165575304,
+   "lift_all": 0.10221673298215285,
+   "ci_all": [
+    0.08614560855277885,
+    0.11911721691149728
+   ],
+   "null_living_fixed": 0.28054247926473885,
+   "lift_living_fixed": 0.1340338188179634,
+   "ci_living_fixed": [
+    0.11296022238103008,
+    0.1561949301627876
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "circulation",
+   "plans": 56778,
+   "pairs": 113086,
+   "adjacent": 3258,
+   "obs_rate": 0.028809932263940716,
+   "door_rate": 0.5337630448127686,
+   "null_all": 0.37644435670239573,
+   "lift_all": 0.07653171511538126,
+   "ci_all": [
+    0.07386750223199415,
+    0.07917126353214872
+   ],
+   "null_living_fixed": 0.31404080054717937,
+   "lift_living_fixed": 0.09173945619086048,
+   "ci_living_fixed": [
+    0.08854583324996422,
+    0.09490351354902396
+   ]
+  },
+  {
+   "type_a": "balcony",
+   "type_b": "entrance",
+   "plans": 184,
+   "pairs": 205,
+   "adjacent": 4,
+   "obs_rate": 0.01951219512195122,
+   "door_rate": 0.25,
+   "null_all": 0.412987012987013,
+   "lift_all": 0.04724651020095106,
+   "ci_all": [
+    0.011641267537493952,
+    0.09685534591194968
+   ],
+   "null_living_fixed": 0.3165829145728643,
+   "lift_living_fixed": 0.06163375919473481,
+   "ci_living_fixed": [
+    0.015186202686202688,
+    0.12634920634920635
+   ]
+  },
+  {
+   "type_a": "dining",
+   "type_b": "dining",
+   "plans": 1,
+   "pairs": 1,
+   "adjacent": 0,
+   "obs_rate": 0.0,
+   "door_rate": null,
+   "null_all": null,
+   "lift_all": null,
+   "ci_all": null,
+   "null_living_fixed": null,
+   "lift_living_fixed": null,
+   "ci_living_fixed": null
+  },
+  {
+   "type_a": "closet",
+   "type_b": "entrance",
+   "plans": 14,
+   "pairs": 14,
+   "adjacent": 2,
+   "obs_rate": 0.14285714285714285,
+   "door_rate": 0.0,
+   "null_all": null,
+   "lift_all": null,
+   "ci_all": null,
+   "null_living_fixed": null,
+   "lift_living_fixed": null,
+   "ci_living_fixed": null
+  },
+  {
+   "type_a": "entrance",
+   "type_b": "entrance",
+   "plans": 1,
+   "pairs": 1,
+   "adjacent": 0,
+   "obs_rate": 0.0,
+   "door_rate": null,
+   "null_all": null,
+   "lift_all": null,
+   "ci_all": null,
+   "null_living_fixed": null,
+   "lift_living_fixed": null,
+   "ci_living_fixed": null
+  }
+ ]
+}

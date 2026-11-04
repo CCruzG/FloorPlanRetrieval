@@ -568,19 +568,40 @@ def check_min_room_size(ctx):
     # 1 mm of slack on each square: the solver places spans at exactly min_edge,
     # and float error must not read as a violation
     use_units = (USABLE_WIDTH_MM - 1.0) / mm
+    # Node-expanded plans (2026-11-03): ids "r_2/primary", "r_2/circ0a" share
+    # source room "r_2". The room minimum applies to the open-plan space: both
+    # the core (min_edge square) and the area test run on the union of the
+    # group, reported on the primary; hallway arms get the hallway width test
+    # only; other members skip.
+    groups = {}
+    for rid in ctx["poly_by_id"]:
+        if isinstance(rid, str) and "/" in rid:
+            groups.setdefault(rid.split("/", 1)[0], []).append(rid)
     for rid, poly in ctx["poly_by_id"].items():
         req = MINIMUM_SIZES.get(ctx["label_by_id"].get(rid))
+        area_poly = poly
+        if isinstance(rid, str) and "/" in rid:
+            members = groups[rid.split("/", 1)[0]]
+            if rid.endswith("/primary"):
+                g = unary_union([SPoly(ctx["poly_by_id"][m]) for m in members]).buffer(0)
+                if g.geom_type != "Polygon":
+                    g = max(g.geoms, key=lambda x: x.area)
+                area_poly = [list(c) for c in g.exterior.coords[:-1]]
+            elif req and ctx["label_by_id"].get(rid) in ("hallway", "corridor"):
+                req = {"min_edge": req["min_edge"], "area": 0.0}
+            else:
+                req = None
         if not req:
             skipped.append(rid)
             continue
-        area_mm2 = _poly_area(poly) * mm * mm
-        core = _usable_parts(poly, max(req["min_edge"] - 1.0, 0.0) / mm)
+        area_mm2 = _poly_area(area_poly) * mm * mm
+        core = _usable_parts(area_poly, max(req["min_edge"] - 1.0, 0.0) / mm)
         if core:
             edge_mm = max(_bbox_min_side(list(core[0].exterior.coords)) * mm,
                           req["min_edge"])
         else:
-            edge_mm = _max_square_side(poly, _bbox_min_side(poly)) * mm
-        use = _usable_parts(poly, use_units)
+            edge_mm = _max_square_side(area_poly, _bbox_min_side(area_poly)) * mm
+        use = _usable_parts(area_poly, use_units)
         home = next((p for p in use if core and p.intersects(core[0])),
                     use[0] if use else None)
         usable_mm2 = home.area * mm * mm if home is not None else 0.0

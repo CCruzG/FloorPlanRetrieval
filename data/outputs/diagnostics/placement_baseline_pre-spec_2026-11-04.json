@@ -1,0 +1,3860 @@
+{
+  "generated_at": "2026-11-04",
+  "mm_per_unit_used": 18000.0,
+  "modes": [
+    "off",
+    "cpsat",
+    "cpsat_dim",
+    "nodes+off",
+    "nodes+cpsat",
+    "nodes+cpsat_dim"
+  ],
+  "boundaries": [
+    {
+      "name": "test_boundary_001",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 14,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 1.759,
+              "objective": 132290.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.027,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 2.194,
+              "objective": 132296.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 4,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.03,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_3",
+                0.525
+              ]
+            ],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.165,
+              "objective": 131810.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_3",
+                0.525
+              ]
+            ],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.019,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 2,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.17,
+              "objective": 131820.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 2,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.021,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 9,
+          "order_constraints": 10,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 3,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 3.558,
+              "objective": 128454.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.019,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 5,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ],
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 3,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.011,
+              "objective": 133620.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 5,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ],
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 3,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 5.029,
+              "objective": 133980.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_002",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.055,
+              "objective": 129461.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.074,
+              "objective": 129401.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 1.753,
+              "objective": 129398.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 1.274,
+              "objective": 129338.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "order_constraints": 10,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 2,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 0.855,
+              "objective": 131657.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 2,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.046,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.01,
+              "objective": 130787.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_4",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 5.024,
+              "objective": 130996.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (kitchen) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_1"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.06,
+              "objective": 129431.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 5,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.074,
+              "objective": 129371.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_1"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ0 (hallway) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.119,
+              "objective": 126214.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ0 (hallway) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.156,
+              "objective": 126094.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_003",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 3,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 4.717,
+              "objective": 146862.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 3,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 4.355,
+              "objective": 146922.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.014,
+              "objective": 150830.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "boundary_fronts",
+              "relaxations": [
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.04,
+              "objective": 151250.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "order_constraints": 10,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 2,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 4,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.052,
+              "objective": 143940.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 4,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 5.024,
+              "objective": 144180.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (dining) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": true,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.885
+              ]
+            ],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 4,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ],
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 3,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.091,
+              "objective": 150518.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/circ1 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 4,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ],
+              [
+                "r_1",
+                "r_3"
+              ],
+              [
+                "r_1",
+                "r_5"
+              ]
+            ],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 3,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 5.034,
+              "objective": 150998.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "order_constraints": 13,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 4,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 4.505,
+              "objective": 146250.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 4,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 3.008,
+              "objective": 146310.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_2"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/circ0 (hallway) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.01,
+              "objective": 150804.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/circ0 (hallway) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.064,
+              "objective": 151224.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_004",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 14,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 3,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.137,
+              "objective": 136474.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 3,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.155,
+              "objective": 136474.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_3"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 3,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.137,
+              "objective": 136480.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 7,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_1/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 3,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 3,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.148,
+              "objective": 136480.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.054,
+              "objective": 148338.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.059,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 4.923,
+              "objective": 148469.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/circ0 (hallway) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "boundary_fronts",
+              "relaxations": [
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.321,
+              "objective": 148889.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": false,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 2,
+            "total": 7,
+            "entrance_valid_ok": false,
+            "entrance_valid_detail": "entrance opens into r_0 (bedroom), not a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.052,
+              "objective": 136025.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": true,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": false,
+            "lost_source_edges": 2,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 2,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 6,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.067,
+              "objective": 136145.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": false,
+              "daylight": true,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": false,
+            "entrance_valid_detail": "entrance opens into r_0 (bedroom), not a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": false
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 5.011,
+              "objective": 146531.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": false,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": false
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_4/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 5.029,
+              "objective": 147011.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_001b",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 3,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 1.581,
+              "objective": 133579.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.026,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.059,
+              "objective": 133578.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_3 (dining) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_1",
+                "r_4"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.071,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 9,
+          "order_constraints": 11,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.122,
+              "objective": 134448.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.027,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.657
+              ]
+            ],
+            "order_violated": 1
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.024,
+              "objective": 134880.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.657
+              ]
+            ],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.029,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 9,
+          "order_constraints": 11,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.175,
+              "objective": 134448.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.027,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.657
+              ]
+            ],
+            "order_violated": 1
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "FEASIBLE",
+              "unsolved": false,
+              "relaxation": "no_entrance",
+              "relaxations": null,
+              "solve_time_s": 5.019,
+              "objective": 134880.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_0 (kitchen) is a transit room",
+            "d24_failing": 3,
+            "reachability_ok": false,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_1",
+                "r_5",
+                0.657
+              ]
+            ],
+            "order_violated": 1,
+            "cpsat": {
+              "status": "cpsat_dim_unsolved",
+              "unsolved": true,
+              "relaxation": "infeasible",
+              "relaxations": [],
+              "solve_time_s": 0.029,
+              "objective": null,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_boundary_005b",
+      "orthogonal": true,
+      "ranks": [
+        {
+          "rank": 1,
+          "src_edge_count": 8,
+          "order_constraints": 12,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": false,
+              "access_typed": false,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 3,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": false,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [
+              [
+                "r_0",
+                "r_2"
+              ]
+            ],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 1,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.045,
+              "objective": 122859.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 2,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.056,
+              "objective": 122919.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_0",
+                "r_2",
+                0.845
+              ]
+            ],
+            "order_violated": 3,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 2.9,
+              "objective": 126616.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 3,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 2.78,
+              "objective": 126928.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 2,
+          "src_edge_count": 8,
+          "order_constraints": 13,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.52
+              ]
+            ],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.447,
+              "objective": 128782.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.599,
+              "objective": 128842.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 5,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 1,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [
+              [
+                "r_2",
+                "r_4",
+                0.52
+              ]
+            ],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.398,
+              "objective": 128782.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_5 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.615,
+              "objective": 128842.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        },
+        {
+          "rank": 3,
+          "src_edge_count": 7,
+          "order_constraints": 15,
+          "off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 8,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.048,
+              "objective": 120381.0,
+              "arrangement_source": null
+            }
+          },
+          "cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2 (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 8,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.057,
+              "objective": 120321.0,
+              "arrangement_source": "polygons"
+            }
+          },
+          "nodes+off": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": false,
+              "min_room_size": false,
+              "node_in_room": true
+            },
+            "passed": 4,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 2,
+            "reachability_ok": true,
+            "lost_source_edges": 0,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 0,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 0
+          },
+          "nodes+cpsat": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 8,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "soft",
+              "relaxations": null,
+              "solve_time_s": 0.042,
+              "objective": 120387.0,
+              "arrangement_source": null
+            }
+          },
+          "nodes+cpsat_dim": {
+            "feasible": true,
+            "sensors_ok": {
+              "reachability": true,
+              "access_typed": true,
+              "entrance_valid": true,
+              "daylight": false,
+              "room_depth": true,
+              "min_room_size": true,
+              "node_in_room": true
+            },
+            "passed": 6,
+            "total": 7,
+            "entrance_valid_ok": true,
+            "entrance_valid_detail": "entry room r_2/primary (living) is a transit room",
+            "d24_failing": 0,
+            "reachability_ok": true,
+            "lost_source_edges": 1,
+            "lost_source_edges_door_open": [],
+            "lost_source_wall_edges": 1,
+            "lost_source_door_open_edges": 0,
+            "door_open_under_0.9m": [],
+            "order_violated": 8,
+            "cpsat": {
+              "status": "OPTIMAL",
+              "unsolved": false,
+              "relaxation": "centre_order+door_open_side+boundary_fronts",
+              "relaxations": [
+                "centre_order",
+                "door_open_side",
+                "boundary_fronts"
+              ],
+              "solve_time_s": 0.056,
+              "objective": 120327.0,
+              "arrangement_source": "polygons"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "off": {
+      "d24_failing": 27,
+      "lost_source_edges": 9,
+      "lost_source_wall_edges": 0,
+      "lost_source_door_open_edges": 9,
+      "door_open_under_0.9m": 2,
+      "infeasible": 1,
+      "unsolved": 0,
+      "reachability_fail": 10,
+      "entrance_fail": 1,
+      "order_violated": 5,
+      "sensors_passed": 74,
+      "sensors_total": 126,
+      "plans": 18
+    },
+    "cpsat": {
+      "d24_failing": 4,
+      "lost_source_edges": 22,
+      "lost_source_wall_edges": 22,
+      "lost_source_door_open_edges": 0,
+      "door_open_under_0.9m": 0,
+      "infeasible": 0,
+      "unsolved": 0,
+      "reachability_fail": 1,
+      "entrance_fail": 0,
+      "order_violated": 52,
+      "sensors_passed": 106,
+      "sensors_total": 126,
+      "plans": 18
+    },
+    "cpsat_dim": {
+      "d24_failing": 19,
+      "lost_source_edges": 19,
+      "lost_source_wall_edges": 15,
+      "lost_source_door_open_edges": 4,
+      "door_open_under_0.9m": 1,
+      "infeasible": 0,
+      "unsolved": 8,
+      "reachability_fail": 5,
+      "entrance_fail": 0,
+      "order_violated": 46,
+      "sensors_passed": 92,
+      "sensors_total": 126,
+      "plans": 18
+    },
+    "nodes+off": {
+      "d24_failing": 30,
+      "lost_source_edges": 12,
+      "lost_source_wall_edges": 1,
+      "lost_source_door_open_edges": 11,
+      "door_open_under_0.9m": 4,
+      "infeasible": 0,
+      "unsolved": 0,
+      "reachability_fail": 11,
+      "entrance_fail": 1,
+      "order_violated": 5,
+      "sensors_passed": 69,
+      "sensors_total": 126,
+      "plans": 18
+    },
+    "nodes+cpsat": {
+      "d24_failing": 14,
+      "lost_source_edges": 21,
+      "lost_source_wall_edges": 14,
+      "lost_source_door_open_edges": 7,
+      "door_open_under_0.9m": 1,
+      "infeasible": 4,
+      "unsolved": 0,
+      "reachability_fail": 3,
+      "entrance_fail": 0,
+      "order_violated": 38,
+      "sensors_passed": 95,
+      "sensors_total": 126,
+      "plans": 18
+    },
+    "nodes+cpsat_dim": {
+      "d24_failing": 25,
+      "lost_source_edges": 24,
+      "lost_source_wall_edges": 13,
+      "lost_source_door_open_edges": 11,
+      "door_open_under_0.9m": 2,
+      "infeasible": 4,
+      "unsolved": 5,
+      "reachability_fail": 8,
+      "entrance_fail": 0,
+      "order_violated": 37,
+      "sensors_passed": 83,
+      "sensors_total": 126,
+      "plans": 18
+    }
+  },
+  "gate": {
+    "criteria": [
+      {
+        "name": "entrance_fail <= off",
+        "pass": true,
+        "cpsat_dim": 0,
+        "bound": 1
+      },
+      {
+        "name": "lost_source_edges <= off",
+        "pass": false,
+        "cpsat_dim": 19,
+        "bound": 9
+      },
+      {
+        "name": "order_violated == 0",
+        "pass": false,
+        "cpsat_dim": 46,
+        "bound": 0
+      },
+      {
+        "name": "sensors_passed >= max(off, cpsat)",
+        "pass": false,
+        "cpsat_dim": 92,
+        "bound": 106
+      },
+      {
+        "name": "d24_failing <= off",
+        "pass": true,
+        "cpsat_dim": 19,
+        "bound": 27
+      },
+      {
+        "name": "infeasible <= off",
+        "pass": true,
+        "cpsat_dim": 0,
+        "bound": 1
+      }
+    ],
+    "pass": false
+  }
+}

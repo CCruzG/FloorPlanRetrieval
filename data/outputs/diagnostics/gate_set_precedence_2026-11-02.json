@@ -1,0 +1,767 @@
+{
+  "generated_at": "2026-11-02",
+  "plans": [
+    {
+      "boundary": "test_boundary_001b",
+      "rank": 1,
+      "base_failing": {
+        "daylight": [
+          "r_1"
+        ],
+        "min_room_size": [
+          "r_2",
+          "r_5"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_2",
+          "loser": "r_3",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_1"
+            ],
+            "min_room_size": [
+              "r_3"
+            ]
+          }
+        },
+        {
+          "winner": "r_2",
+          "loser": "r_4",
+          "realised": false,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_1"
+            ],
+            "min_room_size": [
+              "r_2",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_1",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_1"
+            ],
+            "min_room_size": [
+              "r_2"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_3",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_1"
+            ],
+            "min_room_size": [
+              "r_2"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_4",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_1"
+            ],
+            "min_room_size": [
+              "r_2"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "boundary": "test_boundary_001b",
+      "rank": 2,
+      "base_failing": {
+        "daylight": [
+          "r_4",
+          "r_5"
+        ],
+        "min_room_size": [
+          "r_0",
+          "r_1"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_1",
+          "loser": "r_0",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_0",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_0",
+          "loser": "r_1",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_3"
+            ],
+            "min_room_size": [
+              "r_0",
+              "r_4"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_2",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "reachability": [
+              "r_1"
+            ],
+            "access_typed": [
+              "r_1"
+            ],
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_3"
+            ],
+            "min_room_size": [
+              "r_4"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "boundary": "test_boundary_001b",
+      "rank": 3,
+      "base_failing": {
+        "daylight": [
+          "r_4",
+          "r_5"
+        ],
+        "min_room_size": [
+          "r_0",
+          "r_1"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_1",
+          "loser": "r_0",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_0",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_0",
+          "loser": "r_1",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            0
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_3"
+            ],
+            "min_room_size": [
+              "r_0",
+              "r_4"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_2",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "reachability": [
+              "r_1"
+            ],
+            "access_typed": [
+              "r_1"
+            ],
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_3"
+            ],
+            "min_room_size": [
+              "r_4"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "boundary": "test_boundary_005b",
+      "rank": 1,
+      "base_failing": {
+        "reachability": [
+          "r_0"
+        ],
+        "access_typed": [
+          "r_0"
+        ],
+        "daylight": [
+          "r_1",
+          "r_5"
+        ],
+        "min_room_size": [
+          "r_1",
+          "r_5"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_5",
+          "loser": "r_0",
+          "realised": false,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "reachability": [
+              "r_0"
+            ],
+            "access_typed": [
+              "r_0"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_2",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "reachability": [
+              "r_0",
+              "r_3"
+            ],
+            "access_typed": [
+              "r_0",
+              "r_3"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_1",
+          "realised": false,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "reachability": [
+              "r_0"
+            ],
+            "access_typed": [
+              "r_0"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_3",
+          "realised": false,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            2
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "reachability": [
+              "r_0"
+            ],
+            "access_typed": [
+              "r_0"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_0",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            3
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "reachability": [
+              "r_0"
+            ],
+            "access_typed": [
+              "r_0"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_4",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_1",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            3
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "reachability": [
+              "r_0"
+            ],
+            "access_typed": [
+              "r_0"
+            ],
+            "daylight": [
+              "r_1",
+              "r_5"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_4",
+              "r_5"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "boundary": "test_boundary_005b",
+      "rank": 2,
+      "base_failing": {
+        "daylight": [
+          "r_3",
+          "r_4"
+        ],
+        "min_room_size": [
+          "r_4"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_4",
+          "loser": "r_2",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            1,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_3",
+              "r_4"
+            ],
+            "min_room_size": [
+              "r_3"
+            ]
+          }
+        },
+        {
+          "winner": "r_4",
+          "loser": "r_1",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            1,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_3",
+              "r_4"
+            ],
+            "min_room_size": [
+              "r_3"
+            ]
+          }
+        },
+        {
+          "winner": "r_4",
+          "loser": "r_5",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            1,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_3",
+              "r_4"
+            ],
+            "min_room_size": [
+              "r_3"
+            ]
+          }
+        },
+        {
+          "winner": "r_4",
+          "loser": "r_3",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            1,
+            1
+          ],
+          "breaks_other": true,
+          "actual_failing": {
+            "reachability": [
+              "r_2"
+            ],
+            "access_typed": [
+              "r_2"
+            ],
+            "daylight": [
+              "r_3",
+              "r_4"
+            ],
+            "min_room_size": [
+              "r_3"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "boundary": "test_boundary_005b",
+      "rank": 3,
+      "base_failing": {
+        "daylight": [
+          "r_4",
+          "r_5"
+        ],
+        "room_depth": [
+          "r_2"
+        ],
+        "min_room_size": [
+          "r_0",
+          "r_5"
+        ]
+      },
+      "candidates": [
+        {
+          "winner": "r_0",
+          "loser": "r_2",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            3
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_2"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_2",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_0",
+          "loser": "r_1",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            3
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_2"
+            ],
+            "min_room_size": [
+              "r_1",
+              "r_2",
+              "r_5"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_3",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_2"
+            ],
+            "min_room_size": [
+              "r_0"
+            ]
+          }
+        },
+        {
+          "winner": "r_5",
+          "loser": "r_4",
+          "realised": true,
+          "predicted_eq_actual": true,
+          "d24": [
+            2,
+            1
+          ],
+          "breaks_other": false,
+          "actual_failing": {
+            "daylight": [
+              "r_4",
+              "r_5"
+            ],
+            "room_depth": [
+              "r_2"
+            ],
+            "min_room_size": [
+              "r_0"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "plans": 6,
+    "candidates": 29,
+    "realised": 25,
+    "predicted_eq_actual": 29,
+    "mismatches": 0,
+    "reduce_d24_no_break": 12
+  }
+}

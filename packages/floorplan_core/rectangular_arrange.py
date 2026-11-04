@@ -614,6 +614,37 @@ def reconcile_edges(realised_adj, source_edges):
         if _is_conn(e):
             conn_by_pair[frozenset((u, v))] = e
 
+    # Circulation arms of one region (node-expanded plans, 2026-11-03: ids
+    # "r_2/circ0a", "r_2/circ0b") are one space joined by open edges. A
+    # connection to one arm that the layout did not realise moves to a sibling
+    # arm that does touch the other room, instead of being dropped.
+    import re as _re
+    _arm = _re.compile(r"^(.+/circ\d+)[a-z]$")
+
+    def _siblings(x):
+        m = _arm.match(str(x))
+        if not m:
+            return []
+        return [y for pr in realised_adj for y in pr
+                if y != x and _arm.match(str(y)) and _arm.match(str(y)).group(1) == m.group(1)]
+    for pair, e in list(conn_by_pair.items()):
+        if pair in realised_adj or len(pair) != 2:
+            continue
+        u, v = e.get("u"), e.get("v")
+        moved = None
+        for end, other in ((u, v), (v, u)):
+            for sib in sorted(set(_siblings(end))):
+                np_ = frozenset((sib, other))
+                if np_ in realised_adj and np_ not in conn_by_pair:
+                    moved = {**e, "u": sib if end == u else u, "v": sib if end == v else v,
+                             "retargeted_from": end}
+                    break
+            if moved:
+                break
+        if moved:
+            del conn_by_pair[pair]
+            conn_by_pair[frozenset((moved["u"], moved["v"]))] = moved
+
     edges, preserved = [], 0
     for pair in realised_adj:
         if len(pair) != 2:
