@@ -42,6 +42,7 @@ printed and saved alongside.
 Read-only diagnostic. Output: data/outputs/diagnostics/placement_cpsat_dim_<date>.json
 (pass a suffix, e.g. `diag_placement_topology.py baseline`, to keep runs apart).
 """
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -68,8 +69,23 @@ SENSOR_NAMES = ["reachability", "access_typed", "entrance_valid", "daylight",
                 "room_depth", "min_room_size", "node_in_room"]
 
 OUT_DIR = REPO_ROOT / "data" / "outputs" / "diagnostics"
-OUT_PATH = OUT_DIR / (f"placement_cpsat_dim_{RUN_DATE}"
-                      + (f"_{sys.argv[1]}" if len(sys.argv) > 1 else "") + ".json")
+
+
+def _parse_args():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    ap.add_argument("suffix", nargs="?", default="", help="output file suffix")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="CP-SAT workers (default: app value, 8)")
+    ap.add_argument("--det-time", type=float, default=None,
+                    help="CP-SAT deterministic-time limit; replaces the wall limit")
+    ap.add_argument("--out", default=None, help="output path (overrides the dated name)")
+    return ap.parse_args()
+
+
+ARGS = _parse_args() if __name__ == "__main__" else argparse.Namespace(
+    suffix="", workers=None, det_time=None, out=None)
+OUT_PATH = Path(ARGS.out) if ARGS.out else OUT_DIR / (
+    f"placement_cpsat_dim_{RUN_DATE}" + (f"_{ARGS.suffix}" if ARGS.suffix else "") + ".json")
 
 DOOR_MIN_M = 0.9
 ORDER_MIN_M = 0.5
@@ -224,10 +240,13 @@ def main():
         data_dir=str(server_mod.RPLAN_DATASET_DIR),
         logger=server_mod.logger,
     )
+    from tools.gate_common import patch_solver
+    patch_solver(ARGS.workers, ARGS.det_time)
     client = server_mod.app.test_client()
     targets = load_targets()
 
     out = {"generated_at": RUN_DATE, "mm_per_unit_used": MM_PER_UNIT,
+          "solver": {"workers": ARGS.workers, "det_time": ARGS.det_time},
           "modes": [mode_label(m, ex) for m, ex in RUNS], "boundaries": []}
     totals = {mode_label(m, ex): {"d24_failing": 0, "lost_source_edges": 0,
                               "lost_source_wall_edges": 0,

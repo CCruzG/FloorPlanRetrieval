@@ -8,7 +8,8 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 // (see project-71's buildweave.service for the pattern this mirrors). Locally,
 // apps/web (Vite) and apps/api (Flask, default :5000) run as separate
 // processes/ports, so relative fetches like /retrieve 404 without this.
-const API_PROXY_TARGET = "http://127.0.0.1:5002";
+// GATE_API_PORT lets the E2E gate point its own Vite at its own backend; default unchanged.
+const API_PROXY_TARGET = `http://127.0.0.1:${process.env.GATE_API_PORT || 5002}`;
 const API_ROUTES = [
   "/config",
   "/retrieve",

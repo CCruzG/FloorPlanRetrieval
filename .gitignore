@@ -42,3 +42,11 @@ refs/
 data/refine_debug/
 image.png
 test_s1_*.png
+
+# Gate suite screenshots (tools/gate_all.py e2e stage)
+data/outputs/gates/shots/
+data/outputs/gates/runs/
+
+# Large or derived local output
+data/outputs/diagnostics/block_stats_*/
+graphify-out/

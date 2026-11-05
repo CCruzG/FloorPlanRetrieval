@@ -1,0 +1,27 @@
+{
+ "date": "2026-11-04",
+ "git_hash": "bd6a072",
+ "dirty": true,
+ "argv": [
+  "--stage",
+  "unit"
+ ],
+ "baseline": "main",
+ "change": null,
+ "overall": "FAIL",
+ "seconds": {
+  "unit": 1.0460889339447021
+ },
+ "stages": {
+  "unit": {
+   "status": "FAIL",
+   "detail": "4 failed, 107 passed, 1 warning in 0.81s",
+   "failures": [
+    "FAILED packages/floorplan_core/tests/test_entrance_units.py::test_entry_room_is_the_door_room_not_the_nearest_room",
+    "FAILED packages/floorplan_core/tests/test_entrance_units.py::test_entry_room_of_expanded_plan_reads_entry_node",
+    "FAILED packages/floorplan_core/tests/test_node_graph.py::test_entry_room_of",
+    "FAILED packages/floorplan_core/tests/test_spec.py::test_fit_replaces_given_fields_keeps_the_rest_and_is_pure"
+   ]
+  }
+ }
+}

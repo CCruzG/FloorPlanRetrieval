@@ -795,7 +795,8 @@ def _realise(spec, options, claim_choice):
                         entrance=spec.get("entrance"),
                         cpsat_seed=options.get("cpsat_seed", CPSAT_SEED),
                         cpsat_workers=options.get("cpsat_workers", CPSAT_WORKERS),
-                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S))
+                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S),
+                        cpsat_det_time=options.get("cpsat_det_time"))
         elif _cp_mode == "cpsat_dim":
             # Sizes rooms on the RETRIEVED arrangement — the source plan supplies
             # the layout, CP-SAT only sizes/places each room's rectangle around it
@@ -810,7 +811,8 @@ def _realise(spec, options, claim_choice):
                         entrance=spec.get("entrance"),
                         cpsat_seed=options.get("cpsat_seed", CPSAT_SEED),
                         cpsat_workers=options.get("cpsat_workers", CPSAT_WORKERS),
-                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S))
+                        cpsat_time_s=options.get("cpsat_time_s", CPSAT_TIME_S),
+                        cpsat_det_time=options.get("cpsat_det_time"))
         else:
             from packages.floorplan_core.core_placement import place_cores as _place
             _pl = _place(nodes, spec.get("demands", {}) or {}, mm, boundary,

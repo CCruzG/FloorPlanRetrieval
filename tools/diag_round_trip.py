@@ -12,6 +12,10 @@ Compared with the source plan:
   sensors on the source plan (a sensor the source itself fails is not generator loss).
 
 Usage: tools/diag_round_trip.py [--n 300] [--n-cpsat 30] [--seed 4] [--tag name]
+         [--plan-set dev|holdout] [--workers N] [--det-time T] [--out PATH]
+--plan-set draws the ids from data/outputs/gates/plan_sets.json (in file order, no
+GATE_IDS prefix); cpsat uses the first --n-cpsat ids of the set. --workers and
+--det-time set the CP-SAT workers and deterministic time (gate runs: 1 and 1.0).
 Output: data/outputs/diagnostics/round_trip_<date>[_tag].json, per-mode totals on stdout.
 """
 import argparse
@@ -121,13 +125,25 @@ def main():
     ap.add_argument("--n-cpsat", type=int, default=30)
     ap.add_argument("--seed", type=int, default=4)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--plan-set", default=None)
+    ap.add_argument("--workers", type=int, default=None)
+    ap.add_argument("--det-time", type=float, default=None)
+    ap.add_argument("--out", default=None)
     a = ap.parse_args()
-    ids = sorted(p.stem for p in DATA.glob("*.json"))
-    random.Random(a.seed).shuffle(ids)
-    ids = [i for i in GATE_IDS if (DATA / f"{i}.json").exists()] + ids
+    if a.plan_set:
+        ids = json.loads((REPO / "data/outputs/gates/plan_sets.json").read_text())[a.plan_set]
+    else:
+        ids = sorted(p.stem for p in DATA.glob("*.json"))
+        random.Random(a.seed).shuffle(ids)
+        ids = [i for i in GATE_IDS if (DATA / f"{i}.json").exists()] + ids
+    solver_kw = {}
+    if a.workers is not None:
+        solver_kw["cpsat_workers"] = a.workers
+    if a.det_time is not None:
+        solver_kw["cpsat_det_time"] = a.det_time
     out, errors, invalid = {}, [], {}
     for placement, n in ((False, a.n), ("cpsat", a.n_cpsat)):
-        options = build_options(core_placement=placement)
+        options = build_options(core_placement=placement, **solver_kw)
         for pid in ids[:n]:
             plan = json.loads((DATA / f"{pid}.json").read_text())
             try:
@@ -146,8 +162,11 @@ def main():
                 errors.append({"id": pid, "placement": str(placement), "error": repr(exc)[:200]})
     totals = {k: summarise(v) for k, v in out.items()}
     stamp = datetime.date.today().isoformat()
-    path = REPO / "data/outputs/diagnostics" / f"round_trip_{stamp}{'_' + a.tag if a.tag else ''}.json"
+    path = Path(a.out) if a.out else (
+        REPO / "data/outputs/diagnostics" / f"round_trip_{stamp}{'_' + a.tag if a.tag else ''}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"generated_at": stamp, "n": a.n, "n_cpsat": a.n_cpsat, "seed": a.seed,
+                                "plan_set": a.plan_set, "solver": solver_kw,
                                 "totals": totals, "invalid_specs": invalid, "errors": errors,
                                 "plans": out}, indent=1))
     print(json.dumps({"totals": totals, "invalid_specs": invalid, "n_errors": len(errors),

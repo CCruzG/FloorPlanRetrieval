@@ -1,0 +1,172 @@
+# Gate report 2026-11-04 bd6a072-dirty
+
+- Command: `tools/gate_all.py`
+- Baseline: `main` (bd6a072)
+- Solver: 1 worker, seed from spec default, deterministic time 1.0
+- Rules: default (behaviour must match baseline)
+- Overall: **PASS**
+
+## Stages
+
+| Stage | Result | Time | Detail |
+|---|---|---|---|
+| unit | PASS | 1s | 111 passed, 1 warning in 0.85s |
+| selftest | PASS | 0s | exit 0 |
+| moves | PASS | 73s | SetConnection 13/13 predicted=actual, mismatches 0; SetPrecedence 29/29 predicted=actual, mismatches 0 |
+| determinism | PASS | 31s | 12 cases (3 plans x rooms/nodes x cpsat/cpsat_dim), byte-identical twice in-process and across 2 processes |
+| placement | PASS | 89s | vs baseline bd6a072: all metrics identical |
+| round_trip_dev | PASS | 161s | vs baseline bd6a072: all metrics identical |
+| e2e | PASS | 32s | 32/32 checks |
+
+Placement script verdict `gate.pass` (cpsat_dim against off and cpsat; not a gate rule): **False**; failed criteria: lost_source_edges <= off, order_violated == 0, sensors_passed >= max(off, cpsat)
+
+## placement: totals
+
+```json
+{
+ "off": {
+  "sensors_passed": 74,
+  "entrance_fail": 1,
+  "reachability_fail": 10,
+  "d24_failing": 27,
+  "lost_source_door_open_edges": 9,
+  "infeasible": 1,
+  "order_violated": 5
+ },
+ "cpsat": {
+  "sensors_passed": 106,
+  "entrance_fail": 1,
+  "reachability_fail": 1,
+  "d24_failing": 3,
+  "lost_source_door_open_edges": 0,
+  "infeasible": 0,
+  "order_violated": 59
+ },
+ "cpsat_dim": {
+  "sensors_passed": 93,
+  "entrance_fail": 0,
+  "reachability_fail": 5,
+  "d24_failing": 18,
+  "lost_source_door_open_edges": 4,
+  "infeasible": 0,
+  "order_violated": 50
+ },
+ "nodes+off": {
+  "sensors_passed": 69,
+  "entrance_fail": 1,
+  "reachability_fail": 11,
+  "d24_failing": 30,
+  "lost_source_door_open_edges": 11,
+  "infeasible": 0,
+  "order_violated": 5
+ },
+ "nodes+cpsat": {
+  "sensors_passed": 97,
+  "entrance_fail": 0,
+  "reachability_fail": 3,
+  "d24_failing": 10,
+  "lost_source_door_open_edges": 4,
+  "infeasible": 2,
+  "order_violated": 45
+ },
+ "nodes+cpsat_dim": {
+  "sensors_passed": 87,
+  "entrance_fail": 0,
+  "reachability_fail": 8,
+  "d24_failing": 21,
+  "lost_source_door_open_edges": 9,
+  "infeasible": 3,
+  "order_violated": 40
+ }
+}
+```
+
+## round_trip_dev: totals
+
+```json
+{
+ "rooms/describe/off": {
+  "feasible": 281,
+  "iou_median": 0.648,
+  "plans_losing_door": 184,
+  "lost_door_open": 255,
+  "entrance_missed": 46,
+  "gen_passed_mean": 4.51,
+  "plans_regressed": 205
+ },
+ "rooms/identity/off": {
+  "feasible": 267,
+  "iou_median": 0.621,
+  "plans_losing_door": 160,
+  "lost_door_open": 209,
+  "entrance_missed": 35,
+  "gen_passed_mean": 4.65,
+  "plans_regressed": 196
+ },
+ "nodes/describe/off": {
+  "feasible": 293,
+  "iou_median": 0.654,
+  "plans_losing_door": 137,
+  "lost_door_open": 187,
+  "entrance_missed": 21,
+  "gen_passed_mean": 4.81,
+  "plans_regressed": 154
+ },
+ "nodes/identity/off": {
+  "feasible": 278,
+  "iou_median": 0.624,
+  "plans_losing_door": 138,
+  "lost_door_open": 183,
+  "entrance_missed": 17,
+  "gen_passed_mean": 4.76,
+  "plans_regressed": 165
+ },
+ "rooms/describe/cpsat": {
+  "feasible": 23,
+  "iou_median": 0.383,
+  "plans_losing_door": 5,
+  "lost_door_open": 5,
+  "entrance_missed": 13,
+  "gen_passed_mean": 5.93,
+  "plans_regressed": 12
+ },
+ "rooms/identity/cpsat": {
+  "feasible": 23,
+  "iou_median": 0.318,
+  "plans_losing_door": 5,
+  "lost_door_open": 5,
+  "entrance_missed": 12,
+  "gen_passed_mean": 5.87,
+  "plans_regressed": 14
+ },
+ "nodes/describe/cpsat": {
+  "feasible": 20,
+  "iou_median": 0.39,
+  "plans_losing_door": 11,
+  "lost_door_open": 13,
+  "entrance_missed": 7,
+  "gen_passed_mean": 5.9,
+  "plans_regressed": 9
+ },
+ "nodes/identity/cpsat": {
+  "feasible": 19,
+  "iou_median": 0.406,
+  "plans_losing_door": 11,
+  "lost_door_open": 14,
+  "entrance_missed": 6,
+  "gen_passed_mean": 5.77,
+  "plans_regressed": 11
+ }
+}
+```
+
+## View by hand
+
+A gate pass does not replace looking. Open these:
+
+- `data/outputs/gates/shots/bd6a072/01_005b_retrieved.png`
+- `data/outputs/gates/shots/bd6a072/02_generate_nodes_off.png`
+- `data/outputs/gates/shots/bd6a072/03_generate_nodes_cpsat.png`
+- `data/outputs/gates/shots/bd6a072/04_after_reset.png`
+- `data/outputs/gates/shots/bd6a072/05_generate_swap.png`
+- `data/outputs/gates/shots/bd6a072/06_generate_rooms_mode.png`

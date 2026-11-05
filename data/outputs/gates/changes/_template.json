@@ -1,0 +1,10 @@
+{
+  "name": "describe the change in one line",
+  "written_before_code": true,
+  "may_move": {
+    "placement/nodes+cpsat/order_violated": {"direction": "worse", "max": 2}
+  },
+  "must_improve": {
+    "round_trip_dev/rooms/describe/off/entrance_missed": 5
+  }
+}

@@ -282,9 +282,21 @@ def _add_entrance_front(model, r, g, entrance, mm, m):
         model.Add(ehi - elo >= int(round(DOOR_MIN_M * 10)))
 
 
+def _set_limits(solver, cpsat_time_s, cpsat_workers, cpsat_seed, cpsat_det_time=None):
+    """Solver limits. cpsat_det_time (gate runs) replaces the wall-clock limit
+    with a deterministic one, so the same model gives the same plan."""
+    if cpsat_det_time is not None:
+        solver.parameters.max_deterministic_time = float(cpsat_det_time)
+    else:
+        solver.parameters.max_time_in_seconds = cpsat_time_s
+    solver.parameters.num_search_workers = cpsat_workers
+    solver.parameters.random_seed = cpsat_seed
+
+
 def solve_layout(nodes, demands, mm, boundary, boundary_demands, edge_types,
                  adjacencies, precedence=None, pair_weights=None, entry_room=None, entrance=None,
-                 cpsat_seed=RANDOM_SEED, cpsat_workers=NUM_WORKERS, cpsat_time_s=TIME_LIMIT_S):
+                 cpsat_seed=RANDOM_SEED, cpsat_workers=NUM_WORKERS, cpsat_time_s=TIME_LIMIT_S,
+                 cpsat_det_time=None):
     if not mm or mm <= 0:
         return {"cores": {}, "nodes": nodes, "report": {"skipped": "no mm scale"}}
     if not _orthogonal(boundary):
@@ -445,26 +457,20 @@ def solve_layout(nodes, demands, mm, boundary, boundary_demands, edge_types,
     t0 = time.time()
     model, rooms, fronted_bool = _build(front_hard=True)
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = cpsat_time_s
-    solver.parameters.num_search_workers = cpsat_workers
-    solver.parameters.random_seed = cpsat_seed
+    _set_limits(solver, cpsat_time_s, cpsat_workers, cpsat_seed, cpsat_det_time)
     status = solver.Solve(model)
     relaxation = "hard"
     if status in (cp_model.INFEASIBLE, cp_model.MODEL_INVALID):
         model, rooms, fronted_bool = _build(front_hard=False)
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = cpsat_time_s
-        solver.parameters.num_search_workers = cpsat_workers
-        solver.parameters.random_seed = cpsat_seed
+        _set_limits(solver, cpsat_time_s, cpsat_workers, cpsat_seed, cpsat_det_time)
         status = solver.Solve(model)
         relaxation = "soft" if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "infeasible"
     if status in (cp_model.INFEASIBLE, cp_model.MODEL_INVALID) and entrance_status["applied"]:
         entrance_status["applied"] = False
         model, rooms, fronted_bool = _build(front_hard=False, entry_hard=False)
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = cpsat_time_s
-        solver.parameters.num_search_workers = cpsat_workers
-        solver.parameters.random_seed = cpsat_seed
+        _set_limits(solver, cpsat_time_s, cpsat_workers, cpsat_seed, cpsat_det_time)
         status = solver.Solve(model)
         relaxation = "no_entrance" if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "infeasible"
     solve_time = time.time() - t0
@@ -647,7 +653,7 @@ def solve_layout_dim(nodes, demands, mm, boundary, boundary_demands, edge_types,
                      adjacencies, precedence=None, pair_weights=None,
                      source_rooms=None, entry_room=None, entrance=None,
                      cpsat_seed=RANDOM_SEED, cpsat_workers=NUM_WORKERS,
-                     cpsat_time_s=TIME_LIMIT_S):
+                     cpsat_time_s=TIME_LIMIT_S, cpsat_det_time=None):
     """Same job/seam as solve_layout (see module docstring), but the retrieved
     plan's own arrangement drives placement: door/open edges are hard (touch
     on their source side), far-apart non-adjacent pairs keep their source
@@ -936,9 +942,7 @@ def solve_layout_dim(nodes, demands, mm, boundary, boundary_demands, edge_types,
         for front_hard in (True, False):
             model, rooms, fronted_bool, build_dbg = _build(front_hard, combo["order"], combo["door_free"])
             solver = cp_model.CpSolver()
-            solver.parameters.max_time_in_seconds = cpsat_time_s
-            solver.parameters.num_search_workers = cpsat_workers
-            solver.parameters.random_seed = cpsat_seed
+            _set_limits(solver, cpsat_time_s, cpsat_workers, cpsat_seed, cpsat_det_time)
             status = solver.Solve(model)
             if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 relaxations = (["centre_order"] if not combo["order"] else []) + \

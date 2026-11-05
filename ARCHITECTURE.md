@@ -115,6 +115,18 @@ The forward design (workspace `docs/agent-harness-build-plan.md`): a fixed Obser
 
 **Stage 2 — STARTED (2026-10-30):** `packages/floorplan_core/moves.py` holds the move contract — `applicable(plan, sensors)`, `propose(plan, sensors, ctx_inputs)`, `predict_effect(plan, edit, ctx_inputs)`, `apply(spec, edit)` (pure) — and the `MOVES` registry. **SetConnection** edits one Spec edge to wall/door/open. Guards: rooms realised-adjacent; door needs a shared wall ≥ 0.9 m; open never touches a private room (bedrooms, bathroom). Proposals: doors from `access_typed.door_candidates` and unreachable rooms; open for daylight failures only (depth is geometric — merging adds floor behind the same window). `predict_effect` is exact (geometry unchanged: edit the edge, re-run the sensors); `tools/gate_set_connection.py` confirms predicted = apply + regenerate on 13/13 candidates over `001b`/`005b` top 3. In-app: the "stage 2 · moves" panel (propose → click to apply and regenerate; undo/clear), each candidate labelled with rooms fixed and broken per sensor. Swap is not yet on the contract.
 
+## Gates (2026-11-04)
+
+Command: `.venv/bin/python tools/gate_all.py` (about 7 min). `--fast` skips placement, round_trip_dev and e2e. `--stage NAME`, `--change FILE`, `--update-baseline --reason "..."`. Report: `data/outputs/gates/report_<date>_<hash>.md` and `.json`. Exit 1 on any FAIL.
+
+Stages: `unit` (pytest), `selftest` (generate.py), `moves` (SetConnection and SetPrecedence gates, mismatches 0), `determinism` (same Spec + options give a byte-identical plan, 3 plans, cpsat and cpsat_dim, in two processes), `placement` (18 plans, 6 runs), `round_trip_dev` (300 dev plans, 30 with cpsat), `e2e` (`tools/e2e/app_flow.cjs`: own backend on 5012, own Vite on 5183, Playwright; it FAILS if Playwright is absent). `round_trip_holdout` runs only with `--stage round_trip_holdout`: totals, no verdict, logged in `holdout_log.md`.
+
+Settings: 1 CP-SAT worker, default seed, `cpsat_det_time` 1.0 (`spec.build_options`; app default stays None), `PYTHONHASHSEED=0` (Generator output depends on string hashing across processes). Plan sets: `data/outputs/gates/plan_sets.json` (dev 300, holdout 300, fixed seed, disjoint from each other and from `GATE_IDS`).
+
+Rule modes (`tools/gate_rules.py`). Default: every tracked metric and every per-plan `sensors_ok` / `passed` must equal the baseline; any difference fails. `--change FILE` (JSON in `data/outputs/gates/changes/`, `written_before_code: true`): declared `must_improve` and `may_move` metrics; an undeclared metric must not get worse; an undeclared improvement is reported, not failed. Baselines: `data/outputs/gates/baselines/main.json` (records the git hash), changed only by `--update-baseline --reason`, each change appended to `baseline_log.md`.
+
+The hold-out is not used for tuning. Read its totals; do not change code to move them. A gate pass does not replace looking: the report lists screenshots under "View by hand" (`data/outputs/gates/shots/<hash>/`).
+
 ## Retired / legacy (in-tree, not extended)
 
 ARAP realiser (`arap_bridge`, `fit_boolean`, `fit_geometry`, `fit_invariants`, `fit_plan`, `fit_planner`, `fit_rooms`, `fit_step1`, `fit_transform`, `fitting`); old `/adapt` centroid fit; 63-dim `index.bin` descriptor (superseded by `rplan_index_v5.npz` — 5-dim ent + 48-dim complex shape); `apps/web/legacy/*.html`. `docs/architecture/system-overview.md` is STALE (documents the 63-dim index + `/adapt`); this file supersedes it as the live map.
