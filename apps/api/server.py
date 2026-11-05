@@ -1172,7 +1172,7 @@ def topo_check_route():
 
 def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=None,
                     swap=None, mm_per_unit=None, area_lift=True, core_block=True, core_placement=False, connections=None, precedence=None,
-                    node_pos=None, expand_nodes=None):
+                    node_pos=None, expand_nodes=None, source_grid=False):
     """
     Build the Spec from `fp`, thread boundary_demands, apply an optional swap and
     optional SetConnection edits, run the Stage-0 generator, re-derive room_edges
@@ -1243,6 +1243,7 @@ def _generate_plan(fp, boundary, entrance_point, typed_edges=None, requirements=
         core_placement=core_placement, core_block=core_block, area_lift=area_lift,
         source_rooms=map_rooms_to_target(fp, boundary, entrance_point,
                                          topo.get("mirror", False)),
+        source_grid=source_grid,
     )
     if swap and len(swap) == 2:
         # The retrieved graph selects rooms; an expanded plan's ids are nodes.
@@ -1372,7 +1373,7 @@ def generate_route():
             fp, boundary, entrance_point, typed_edges=typed_edges,
             requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
             area_lift=area_lift, core_block=core_block, core_placement=core_placement, connections=connections, precedence=precedence, node_pos=node_pos,
-            expand_nodes=body.get("expand_nodes"),
+            expand_nodes=body.get("expand_nodes"), source_grid=body.get("source_grid") or False,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -1436,7 +1437,7 @@ def moves_propose_route():
             fp, boundary, entrance_point, typed_edges=typed_edges,
             requirements=requirements, swap=swap, mm_per_unit=mm_per_unit,
             area_lift=area_lift, core_block=core_block, core_placement=core_placement, connections=connections, precedence=precedence, node_pos=node_pos,
-            expand_nodes=body.get("expand_nodes"),
+            expand_nodes=body.get("expand_nodes"), source_grid=body.get("source_grid") or False,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400

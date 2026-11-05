@@ -261,7 +261,7 @@ def fit(source_spec, boundary, edge_types=None, entrance=None, mm_per_unit=None,
 def build_options(core_placement=False, core_block=True, area_lift=True,
                   source_rooms=None, pair_weights=None, cpsat_seed=CPSAT_SEED,
                   cpsat_workers=CPSAT_WORKERS, cpsat_time_s=CPSAT_TIME_S,
-                  cpsat_det_time=None):
+                  cpsat_det_time=None, source_grid=False):
     """Generator and solver switches. Not part of the Spec: no move edits them.
 
     core_placement : False|True|"greedy"|"cpsat"|"cpsat_dim" (step 0)
@@ -272,6 +272,9 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
     cpsat_*        : CP-SAT seed, worker count, time limit (s)
     cpsat_det_time : None, or a deterministic-time limit that replaces the
                      wall-clock limit (gate runs use it)
+    source_grid    : experiment 2026-11-05. True: grid lines at the source_rooms
+                     walls, cells owned by the source room, gap widths kept close
+                     to the source. "flex": the same with the slack-by-flex solve.
     """
     return {
         "core_placement": core_placement,
@@ -283,6 +286,7 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
         "cpsat_workers": cpsat_workers,
         "cpsat_time_s": cpsat_time_s,
         "cpsat_det_time": cpsat_det_time,
+        "source_grid": source_grid,
     }
 
 

@@ -155,7 +155,7 @@ def reassign(spec, room_a, room_b):
 
 # ── the solver ───────────────────────────────────────────────────────────────
 
-def _grid_lines(coords, lo, hi, tol, fixed=(), min_seg=0.0):
+def _grid_lines(coords, lo, hi, tol, fixed=(), min_seg=0.0, walls=None):
     """Separator lines along one axis from a bag of node coordinates: cluster the
     coords into bands, cut at the midpoints between consecutive bands, and bracket
     with the boundary extent [lo, hi]. n bands -> n columns.
@@ -169,8 +169,13 @@ def _grid_lines(coords, lo, hi, tol, fixed=(), min_seg=0.0):
     would make a strip no room can occupy, so that jog falls back to the clip.
     Returns (lines, fixed_idx): fixed_idx are the indices of lines pinned to the
     boundary (always including both ends)."""
-    bands = _cluster([c for c in coords if lo - tol <= c <= hi + tol], tol)
-    cuts = [(bands[k] + bands[k + 1]) / 2.0 for k in range(len(bands) - 1)]
+    if walls is not None:
+        # options["source_grid"], experiment 2026-11-05: cut at the source plan's
+        # walls (mapped to the target frame), not midway between nodes.
+        cuts = _cluster([c for c in walls if lo + tol < c < hi - tol], tol * 0.5)
+    else:
+        bands = _cluster([c for c in coords if lo - tol <= c <= hi + tol], tol)
+        cuts = [(bands[k] + bands[k + 1]) / 2.0 for k in range(len(bands) - 1)]
     gap = max(tol, min_seg)
     pins = []
     for f in sorted(set(fixed)):
@@ -182,6 +187,50 @@ def _grid_lines(coords, lo, hi, tol, fixed=(), min_seg=0.0):
     lines = [v for v, _ in tagged]
     fixed_idx = {k for k, (_, is_pin) in enumerate(tagged) if is_pin}
     return lines, fixed_idx
+
+
+def _solve_to_source(n_sep, spans, total, widths, eps, fixed=None):
+    """Separator positions that keep each gap close to its source width (experiment,
+    2026-11-05, options["source_grid"] True). _solve_positions puts a span's whole
+    minimum into its last gap, so a narrow gap can inherit a neighbour's minimum.
+    Here the deviation from the source is minimised, weighted so a narrow gap is the
+    most protected: slack falls to the wide gaps. Same return as _solve_positions;
+    falls back to it when no layout meets the minimums."""
+    from ortools.sat.python import cp_model
+    unit = total / 100000.0
+    to_int = lambda v: int(round(v / unit))  # noqa: E731
+    pins = dict(fixed or {})
+    pins[0], pins[n_sep] = 0.0, total
+    keys = sorted(pins)
+    for a, b in zip(keys, keys[1:]):
+        eps = min(eps, (pins[b] - pins[a]) / (2.0 * (b - a)))
+    T, E = 100000, max(to_int(eps), 1)
+    model = cp_model.CpModel()
+    pos = [model.NewIntVar(0, T, f"p{k}") for k in range(n_sep + 1)]
+    for k, v in pins.items():
+        model.Add(pos[k] == to_int(v))
+    for k in range(n_sep):
+        model.Add(pos[k + 1] - pos[k] >= E)
+    for lo, hi, mn in spans:
+        model.Add(pos[hi] - pos[lo] >= int(math.ceil(mn / unit)))
+    narrowest = max(min(widths), eps)
+    cost = []
+    for k in range(n_sep):
+        dev = model.NewIntVar(0, T, f"d{k}")
+        w = to_int(widths[k])
+        model.Add(dev >= pos[k + 1] - pos[k] - w)
+        model.Add(dev >= w - pos[k + 1] + pos[k])
+        cost.append(dev * max(int(round(100 * narrowest / max(widths[k], narrowest))), 1))
+    model.Minimize(sum(cost))
+    solver = cp_model.CpSolver()
+    solver.parameters.num_workers = 1
+    solver.parameters.random_seed = 1
+    solver.parameters.max_deterministic_time = 2.0
+    if solver.Solve(model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return _solve_positions(n_sep, spans, total, widths, eps, fixed=fixed)
+    out = [solver.Value(p) * unit for p in pos]
+    out[-1] = total
+    return out, True
 
 
 def _solve_positions(n_sep, spans, total, gap_flex, eps, fixed=None):
@@ -839,10 +888,23 @@ def _realise(spec, options, claim_choice):
     # placed core edges are pinned like boundary vertices: the solve keeps them
     _cx = [v for c in placed_cores.values() for v in (c[0], c[2])]
     _cy = [v for c in placed_cores.values() for v in (c[1], c[3])]
+    # options["source_grid"] (experiment 2026-11-05): the source's walls set the grid
+    # and its rooms own the cells. Off by default; needs options["source_rooms"].
+    src_polys = {}
+    if options.get("source_grid"):
+        for n in nodes:
+            pts = (options.get("source_rooms") or {}).get(str(n["id"]))
+            if pts and len(pts) >= 3:
+                g_ = SPoly(pts)
+                src_polys[n["id"]] = g_ if g_.is_valid else g_.buffer(0)
+    _wx = [v for g_ in src_polys.values() for v in (g_.bounds[0], g_.bounds[2])] if src_polys else None
+    _wy = [v for g_ in src_polys.values() for v in (g_.bounds[1], g_.bounds[3])] if src_polys else None
     xs, x_pins = _grid_lines([n["pos"][0] for n in nodes], bx0, bx1, tol_x,
-                             fixed=[p[0] for p in boundary] + _cx, min_seg=min_seg)
+                             fixed=[p[0] for p in boundary] + _cx, min_seg=min_seg,
+                             walls=_wx)
     ys, y_pins = _grid_lines([n["pos"][1] for n in nodes], by0, by1, tol_y,
-                             fixed=[p[1] for p in boundary] + _cy, min_seg=min_seg)
+                             fixed=[p[1] for p in boundary] + _cy, min_seg=min_seg,
+                             walls=_wy)
     ncol, nrow = len(xs) - 1, len(ys) - 1
     debug_steps.append({"step": "1_grid", "ncol": ncol, "nrow": nrow,
                         "nodes": len(nodes),
@@ -883,6 +945,15 @@ def _realise(spec, options, claim_choice):
                 if cy0 < (ys[j] + ys[j + 1]) / 2.0 < cy1 and (i, j) in inside:
                     owner[(i, j)] = rid
                     core_cells[(i, j)] = rid
+    if src_polys:
+        for (i, j) in inside:
+            if (i, j) in owner:
+                continue
+            pt_ = SPoint((xs[i] + xs[i + 1]) / 2.0, (ys[j] + ys[j + 1]) / 2.0)
+            for nid_, g_ in src_polys.items():
+                if g_.contains(pt_):
+                    owner[(i, j)] = nid_
+                    break
     node_conflicts = []          # nodes sharing one grid cell — only one can own it
     for n in nodes:
         cell = contain[n["id"]]
@@ -906,6 +977,8 @@ def _realise(spec, options, claim_choice):
                     dx = max(c[0] - ccx, 0.0, ccx - c[2])
                     dy = max(c[1] - ccy, 0.0, ccy - c[3])
                     d = dx * dx + dy * dy
+                elif n["id"] in src_polys:
+                    d = src_polys[n["id"]].distance(SPoint(ccx, ccy)) ** 2
                 else:
                     px, py = n["pos"]
                     d = (px - ccx) ** 2 + (py - ccy) ** 2
@@ -1059,6 +1132,9 @@ def _realise(spec, options, claim_choice):
         row_flex = [max([_flex(label_by_id[owner[(i, j)]])
                          for i in range(ncol) if (i, j) in owner] or [FLEX_DEFAULT])
                     for j in range(nrow)]
+    if src_polys:   # slack follows the source's own column and row sizes
+        col_flex = [max(xs[i + 1] - xs[i], 1e-6) for i in range(ncol)]
+        row_flex = [max(ys[j + 1] - ys[j], 1e-6) for j in range(nrow)]
     # _longest_path_positions needs positive EPS gaps; it works in whatever units
     # the spans are in. We solve in boundary units with a [0, BW]/[0, BH] extent.
     eps_x = 0.02 * max(BW, 1e-9)
@@ -1070,16 +1146,19 @@ def _realise(spec, options, claim_choice):
     span_x = {r: (span_box[r][0], span_box[r][1]) for r in cells_by_room}
     span_y = {r: (span_box[r][2], span_box[r][3]) for r in cells_by_room}
 
+    # source_grid "flex" keeps the slack-by-flex solve; True keeps source widths
+    _solver = _solve_to_source if (src_polys and options.get("source_grid") is True) else _solve_positions
+
     def _solve_x(mx, sx):
-        xt_, ok_ = _solve_positions(ncol, [(sx[r][0], sx[r][1], mx[r]) for r in cells_by_room],
-                                    BW, col_flex, eps_x,
-                                    fixed={k: xs[k] - bx0 for k in x_pins})
+        xt_, ok_ = _solver(ncol, [(sx[r][0], sx[r][1], mx[r]) for r in cells_by_room],
+                           BW, col_flex, eps_x,
+                           fixed={k: xs[k] - bx0 for k in x_pins})
         return [bx0 + v for v in xt_], ok_
 
     def _solve_y(my, sy):
-        yt_, ok_ = _solve_positions(nrow, [(sy[r][0], sy[r][1], my[r]) for r in cells_by_room],
-                                    BH, row_flex, eps_y,
-                                    fixed={k: ys[k] - by0 for k in y_pins})
+        yt_, ok_ = _solver(nrow, [(sy[r][0], sy[r][1], my[r]) for r in cells_by_room],
+                           BH, row_flex, eps_y,
+                           fixed={k: ys[k] - by0 for k in y_pins})
         return [by0 + v for v in yt_], ok_
 
     def _solve_axes(mx, my):

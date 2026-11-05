@@ -3194,6 +3194,7 @@ async function runGenerate(useSwap){
       core_block:document.getElementById('chk-core-block')?.checked!==false,
       core_placement:(()=>{const v=document.getElementById('sel-core-placement')?.value||'off';return v==='off'?false:v;})(),
       expand_nodes:document.getElementById('chk-node-generate')?.checked!==false,
+      source_grid:document.getElementById('chk-source-grid')?.checked===true,
       connections:connectionPayload(),
       precedence:precedencePayload(),
     },{timeoutMs:15000});
@@ -3349,6 +3350,7 @@ async function runProposeMoves(){
       core_block:document.getElementById('chk-core-block')?.checked!==false,
       core_placement:(()=>{const v=document.getElementById('sel-core-placement')?.value||'off';return v==='off'?false:v;})(),
       expand_nodes:document.getElementById('chk-node-generate')?.checked!==false,
+      source_grid:document.getElementById('chk-source-grid')?.checked===true,
       connections:connectionPayload(),
       precedence:precedencePayload(),
     },{timeoutMs:60000});
@@ -4330,6 +4332,7 @@ function wirePhase1UI(){
   on('chk-area-lift','change',()=>{if(generatedRooms)runGenerate(false);});
   on('chk-core-block','change',()=>{if(generatedRooms)runGenerate(false);});
   on('chk-node-generate','change',()=>{if(generatedRooms)runGenerate(false);});
+  on('chk-source-grid','change',()=>{if(generatedRooms)runGenerate(false);});
   on('sel-core-placement','change',()=>{if(generatedRooms)runGenerate(false);});
   on('btn-generate-reset','click',()=>resetGenerate());
   on('btn-propose-moves','click',()=>runProposeMoves());
