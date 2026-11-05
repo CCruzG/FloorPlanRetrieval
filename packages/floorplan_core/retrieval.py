@@ -34,7 +34,7 @@ def _req_to_room_desc(requirements):
     Storage, total]. Bedrooms fill Master then Second then Child, in that
     priority order — RPlan's own label taxonomy treats "Second" (a second
     primary-ish bedroom) as distinct from "Child". Study/Balcony/Storage
-    come from explicit UI toggles, default false.
+    come from explicit UI toggles, default false; so does Dining.
 
     2026-08-14 fix: previously Second/Study/Balcony/Storage were hardcoded
     to zero here (no UI input existed for them), which meant hand-drawn
@@ -54,7 +54,9 @@ def _req_to_room_desc(requirements):
     second = 1 if bedrooms > 1 else 0
     child = max(0, bedrooms - 2)
     kitchen = 1
-    dining = 1
+    # 2026-11-05 fix: dining was hardcoded to 1. Only 1.6% of the corpus has a
+    # dining room, and those plans filled 20-50 of 60 pool places on every query.
+    dining = 1 if requirements.get("dining") else 0
     study = 1 if requirements.get("study") else 0
     balcony = 1 if requirements.get("balcony") else 0
     storage = 1 if requirements.get("storage") else 0

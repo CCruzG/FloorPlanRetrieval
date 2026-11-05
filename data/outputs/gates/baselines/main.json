@@ -1,9 +1,9 @@
 {
  "name": "main",
- "git_hash": "bd6a072",
+ "git_hash": "de0d24a",
  "dirty": true,
- "date": "2026-11-04",
- "reason": "first baseline at bd6a072 plus gate tooling",
+ "date": "2026-11-05",
+ "reason": "dining term off by default (2026-11-05): retrieval no longer favours the 1.6% of plans with a dining room, so placement runs on different plans. Reviewed and accepted by Camilo.",
  "solver": {
   "workers": 1,
   "det_time": 1.0,
@@ -13,47 +13,47 @@
   "placement": {
    "metrics": {
     "placement/off/sensors_passed": 74,
-    "placement/off/entrance_fail": 1,
-    "placement/off/reachability_fail": 10,
-    "placement/off/d24_failing": 27,
-    "placement/off/lost_source_door_open_edges": 9,
-    "placement/off/infeasible": 1,
-    "placement/off/order_violated": 5,
-    "placement/cpsat/sensors_passed": 106,
+    "placement/off/entrance_fail": 2,
+    "placement/off/reachability_fail": 14,
+    "placement/off/d24_failing": 12,
+    "placement/off/lost_source_door_open_edges": 15,
+    "placement/off/infeasible": 0,
+    "placement/off/order_violated": 0,
+    "placement/cpsat/sensors_passed": 101,
     "placement/cpsat/entrance_fail": 1,
-    "placement/cpsat/reachability_fail": 1,
-    "placement/cpsat/d24_failing": 3,
-    "placement/cpsat/lost_source_door_open_edges": 0,
+    "placement/cpsat/reachability_fail": 0,
+    "placement/cpsat/d24_failing": 11,
+    "placement/cpsat/lost_source_door_open_edges": 5,
     "placement/cpsat/infeasible": 0,
-    "placement/cpsat/order_violated": 59,
+    "placement/cpsat/order_violated": 22,
     "placement/cpsat_dim/sensors_passed": 93,
-    "placement/cpsat_dim/entrance_fail": 0,
-    "placement/cpsat_dim/reachability_fail": 5,
-    "placement/cpsat_dim/d24_failing": 18,
-    "placement/cpsat_dim/lost_source_door_open_edges": 4,
+    "placement/cpsat_dim/entrance_fail": 1,
+    "placement/cpsat_dim/reachability_fail": 6,
+    "placement/cpsat_dim/d24_failing": 11,
+    "placement/cpsat_dim/lost_source_door_open_edges": 10,
     "placement/cpsat_dim/infeasible": 0,
-    "placement/cpsat_dim/order_violated": 50,
-    "placement/nodes+off/sensors_passed": 69,
+    "placement/cpsat_dim/order_violated": 14,
+    "placement/nodes+off/sensors_passed": 85,
     "placement/nodes+off/entrance_fail": 1,
-    "placement/nodes+off/reachability_fail": 11,
-    "placement/nodes+off/d24_failing": 30,
-    "placement/nodes+off/lost_source_door_open_edges": 11,
-    "placement/nodes+off/infeasible": 0,
-    "placement/nodes+off/order_violated": 5,
-    "placement/nodes+cpsat/sensors_passed": 97,
+    "placement/nodes+off/reachability_fail": 6,
+    "placement/nodes+off/d24_failing": 15,
+    "placement/nodes+off/lost_source_door_open_edges": 5,
+    "placement/nodes+off/infeasible": 2,
+    "placement/nodes+off/order_violated": 0,
+    "placement/nodes+cpsat/sensors_passed": 100,
     "placement/nodes+cpsat/entrance_fail": 0,
-    "placement/nodes+cpsat/reachability_fail": 3,
-    "placement/nodes+cpsat/d24_failing": 10,
-    "placement/nodes+cpsat/lost_source_door_open_edges": 4,
-    "placement/nodes+cpsat/infeasible": 2,
-    "placement/nodes+cpsat/order_violated": 45,
-    "placement/nodes+cpsat_dim/sensors_passed": 87,
+    "placement/nodes+cpsat/reachability_fail": 0,
+    "placement/nodes+cpsat/d24_failing": 8,
+    "placement/nodes+cpsat/lost_source_door_open_edges": 1,
+    "placement/nodes+cpsat/infeasible": 3,
+    "placement/nodes+cpsat/order_violated": 21,
+    "placement/nodes+cpsat_dim/sensors_passed": 98,
     "placement/nodes+cpsat_dim/entrance_fail": 0,
-    "placement/nodes+cpsat_dim/reachability_fail": 8,
-    "placement/nodes+cpsat_dim/d24_failing": 21,
-    "placement/nodes+cpsat_dim/lost_source_door_open_edges": 9,
-    "placement/nodes+cpsat_dim/infeasible": 3,
-    "placement/nodes+cpsat_dim/order_violated": 40
+    "placement/nodes+cpsat_dim/reachability_fail": 1,
+    "placement/nodes+cpsat_dim/d24_failing": 10,
+    "placement/nodes+cpsat_dim/lost_source_door_open_edges": 3,
+    "placement/nodes+cpsat_dim/infeasible": 4,
+    "placement/nodes+cpsat_dim/order_violated": 11
    },
    "per_plan": {
     "placement/off/test_boundary_001#1": {
@@ -61,12 +61,12 @@
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 5
     },
     "placement/cpsat/test_boundary_001#1": {
      "sensors_ok": {
@@ -74,35 +74,35 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
+      "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/cpsat_dim/test_boundary_001#1": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 5
     },
     "placement/nodes+off/test_boundary_001#1": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 6
     },
     "placement/nodes+cpsat/test_boundary_001#1": {
      "sensors_ok": {
@@ -111,31 +111,31 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 6
+    },
+    "placement/nodes+cpsat_dim/test_boundary_001#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
      "passed": 5
     },
-    "placement/nodes+cpsat_dim/test_boundary_001#1": {
+    "placement/off/test_boundary_001#2": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 3
-    },
-    "placement/off/test_boundary_001#2": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": true,
-      "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
      "passed": 5
@@ -147,19 +147,19 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 6
     },
     "placement/cpsat_dim/test_boundary_001#2": {
      "sensors_ok": {
       "reachability": false,
-      "access_typed": true,
+      "access_typed": false,
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
      "passed": 5
@@ -171,48 +171,12 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/nodes+cpsat/test_boundary_001#2": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": true,
-      "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 5
     },
-    "placement/nodes+cpsat_dim/test_boundary_001#2": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": true,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/off/test_boundary_001#3": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 3
-    },
-    "placement/cpsat/test_boundary_001#3": {
+    "placement/nodes+cpsat/test_boundary_001#2": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
@@ -224,12 +188,48 @@
      },
      "passed": 6
     },
-    "placement/cpsat_dim/test_boundary_001#3": {
+    "placement/nodes+cpsat_dim/test_boundary_001#2": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/off/test_boundary_001#3": {
+     "sensors_ok": {
+      "reachability": false,
+      "access_typed": false,
+      "entrance_valid": false,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 3
+    },
+    "placement/cpsat/test_boundary_001#3": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": false,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 6
+    },
+    "placement/cpsat_dim/test_boundary_001#3": {
+     "sensors_ok": {
+      "reachability": false,
+      "access_typed": false,
+      "entrance_valid": false,
+      "daylight": true,
       "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
@@ -241,74 +241,38 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/nodes+cpsat/test_boundary_001#3": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/nodes+cpsat_dim/test_boundary_001#3": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": true,
-      "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
      "passed": 5
     },
-    "placement/off/test_boundary_002#1": {
+    "placement/nodes+cpsat/test_boundary_001#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
-      "min_room_size": true,
+      "room_depth": true,
+      "min_room_size": false,
       "node_in_room": true
      },
      "passed": 6
     },
-    "placement/cpsat/test_boundary_002#1": {
+    "placement/nodes+cpsat_dim/test_boundary_001#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
      "passed": 6
     },
-    "placement/cpsat_dim/test_boundary_002#1": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 6
-    },
-    "placement/nodes+off/test_boundary_002#1": {
+    "placement/off/test_boundary_002#1": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
@@ -320,13 +284,49 @@
      },
      "passed": 3
     },
+    "placement/cpsat/test_boundary_002#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/cpsat_dim/test_boundary_002#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/nodes+off/test_boundary_002#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
     "placement/nodes+cpsat/test_boundary_002#1": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
@@ -337,8 +337,8 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
@@ -349,72 +349,72 @@
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 2
-    },
-    "placement/cpsat/test_boundary_002#2": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 6
-    },
-    "placement/cpsat_dim/test_boundary_002#2": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 2
-    },
-    "placement/nodes+off/test_boundary_002#2": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/nodes+cpsat/test_boundary_002#2": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
       "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
      "passed": 3
     },
-    "placement/nodes+cpsat_dim/test_boundary_002#2": {
+    "placement/cpsat/test_boundary_002#2": {
      "sensors_ok": {
-      "reachability": false,
+      "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/cpsat_dim/test_boundary_002#2": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/nodes+off/test_boundary_002#2": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": false,
+      "entrance_valid": true,
+      "daylight": true,
       "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 5
+    },
+    "placement/nodes+cpsat/test_boundary_002#2": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/nodes+cpsat_dim/test_boundary_002#2": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
     },
     "placement/off/test_boundary_002#3": {
      "sensors_ok": {
@@ -422,55 +422,55 @@
       "access_typed": false,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 3
     },
     "placement/cpsat/test_boundary_002#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/cpsat_dim/test_boundary_002#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+off/test_boundary_002#3": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 5
     },
     "placement/nodes+cpsat/test_boundary_002#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
@@ -481,8 +481,8 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
@@ -494,19 +494,19 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
+      "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/cpsat/test_boundary_003#1": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
@@ -526,29 +526,17 @@
     },
     "placement/nodes+off/test_boundary_003#1": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": true,
-      "room_depth": false,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 4
-    },
-    "placement/nodes+cpsat/test_boundary_003#1": {
-     "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 7
     },
-    "placement/nodes+cpsat_dim/test_boundary_003#1": {
+    "placement/nodes+cpsat/test_boundary_003#1": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
@@ -560,25 +548,37 @@
      },
      "passed": 5
     },
+    "placement/nodes+cpsat_dim/test_boundary_003#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 6
+    },
     "placement/off/test_boundary_003#2": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
-      "min_room_size": false,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 2
+     "passed": 5
     },
     "placement/cpsat/test_boundary_003#2": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
@@ -589,20 +589,20 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+off/test_boundary_003#2": {
      "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
+      "reachability": false,
+      "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": false,
+      "daylight": true,
+      "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
@@ -610,27 +610,27 @@
     },
     "placement/nodes+cpsat/test_boundary_003#2": {
      "sensors_ok": {
-      "reachability": false,
+      "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_003#2": {
      "sensors_ok": {
-      "reachability": false,
+      "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 5
     },
     "placement/off/test_boundary_003#3": {
      "sensors_ok": {
@@ -638,8 +638,8 @@
       "access_typed": false,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
-      "min_room_size": true,
+      "room_depth": true,
+      "min_room_size": false,
       "node_in_room": true
      },
      "passed": 4
@@ -649,12 +649,12 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/cpsat_dim/test_boundary_003#3": {
      "sensors_ok": {
@@ -663,10 +663,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+off/test_boundary_003#3": {
      "sensors_ok": {
@@ -674,8 +674,8 @@
       "access_typed": false,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
-      "min_room_size": true,
+      "room_depth": true,
+      "min_room_size": false,
       "node_in_room": true
      },
      "passed": 4
@@ -710,11 +710,11 @@
       "access_typed": false,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 4
     },
     "placement/cpsat/test_boundary_004#1": {
      "sensors_ok": {
@@ -722,11 +722,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
-      "min_room_size": true,
+      "room_depth": false,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 5
     },
     "placement/cpsat_dim/test_boundary_004#1": {
      "sensors_ok": {
@@ -735,34 +735,34 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 6
     },
     "placement/nodes+off/test_boundary_004#1": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+cpsat/test_boundary_004#1": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": true,
+      "daylight": false,
       "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 6
     },
     "placement/nodes+cpsat_dim/test_boundary_004#1": {
      "sensors_ok": {
@@ -770,11 +770,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 7
+     "passed": 6
     },
     "placement/off/test_boundary_004#2": {
      "sensors_ok": {
@@ -783,22 +783,22 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/cpsat/test_boundary_004#2": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
-      "entrance_valid": false,
-      "daylight": false,
+      "entrance_valid": true,
+      "daylight": true,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/cpsat_dim/test_boundary_004#2": {
      "sensors_ok": {
@@ -806,23 +806,23 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
+      "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+off/test_boundary_004#2": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 5
     },
     "placement/nodes+cpsat/test_boundary_004#2": {
      "sensors_ok": {
@@ -831,10 +831,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+cpsat_dim/test_boundary_004#2": {
      "sensors_ok": {
@@ -850,39 +850,39 @@
     },
     "placement/off/test_boundary_004#3": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": false,
       "daylight": true,
       "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 2
+     "passed": 4
     },
     "placement/cpsat/test_boundary_004#3": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 7
     },
     "placement/cpsat_dim/test_boundary_004#3": {
      "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
+      "reachability": true,
+      "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 7
     },
     "placement/nodes+off/test_boundary_004#3": {
      "sensors_ok": {
@@ -901,36 +901,36 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
+      "daylight": true,
       "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/nodes+cpsat_dim/test_boundary_004#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 7
+    },
+    "placement/off/test_boundary_001b#1": {
+     "sensors_ok": {
+      "reachability": false,
+      "access_typed": false,
+      "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
-    },
-    "placement/off/test_boundary_001b#1": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 5
+     "passed": 4
     },
     "placement/cpsat/test_boundary_001b#1": {
      "sensors_ok": {
@@ -939,34 +939,34 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 6
-    },
-    "placement/cpsat_dim/test_boundary_001b#1": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
      "passed": 5
     },
-    "placement/nodes+off/test_boundary_001b#1": {
+    "placement/cpsat_dim/test_boundary_001b#1": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 4
+    },
+    "placement/nodes+off/test_boundary_001b#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": false,
+      "room_depth": false,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 5
     },
     "placement/nodes+cpsat/test_boundary_001b#1": {
      "sensors_ok": {
@@ -974,35 +974,35 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": false,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_001b#1": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": false,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 4
+    },
+    "placement/off/test_boundary_001b#2": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 3
-    },
-    "placement/off/test_boundary_001b#2": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 5
+     "passed": 4
     },
     "placement/cpsat/test_boundary_001b#2": {
      "sensors_ok": {
@@ -1018,15 +1018,15 @@
     },
     "placement/cpsat_dim/test_boundary_001b#2": {
      "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
+      "reachability": false,
+      "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 4
     },
     "placement/nodes+off/test_boundary_001b#2": {
      "sensors_ok": {
@@ -1034,8 +1034,8 @@
       "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
+      "room_depth": false,
+      "min_room_size": true,
       "node_in_room": true
      },
      "passed": 3
@@ -1046,67 +1046,67 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": false,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_001b#2": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": false,
-      "node_in_room": true
-     },
-     "passed": 3
-    },
-    "placement/off/test_boundary_001b#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
       "daylight": false,
+      "room_depth": false,
+      "min_room_size": true,
+      "node_in_room": true
+     },
+     "passed": 5
+    },
+    "placement/off/test_boundary_001b#3": {
+     "sensors_ok": {
+      "reachability": false,
+      "access_typed": false,
+      "entrance_valid": true,
+      "daylight": true,
       "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 4
     },
     "placement/cpsat/test_boundary_001b#3": {
      "sensors_ok": {
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 6
-    },
-    "placement/cpsat_dim/test_boundary_001b#3": {
-     "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
      "passed": 5
+    },
+    "placement/cpsat_dim/test_boundary_001b#3": {
+     "sensors_ok": {
+      "reachability": false,
+      "access_typed": false,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": true,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 4
     },
     "placement/nodes+off/test_boundary_001b#3": {
      "sensors_ok": {
       "reachability": false,
       "access_typed": false,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
@@ -1117,24 +1117,24 @@
       "reachability": true,
       "access_typed": true,
       "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
-      "min_room_size": true,
-      "node_in_room": true
-     },
-     "passed": 6
-    },
-    "placement/nodes+cpsat_dim/test_boundary_001b#3": {
-     "sensors_ok": {
-      "reachability": false,
-      "access_typed": false,
-      "entrance_valid": true,
-      "daylight": false,
-      "room_depth": true,
+      "daylight": true,
+      "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 3
+     "passed": 5
+    },
+    "placement/nodes+cpsat_dim/test_boundary_001b#3": {
+     "sensors_ok": {
+      "reachability": true,
+      "access_typed": true,
+      "entrance_valid": true,
+      "daylight": true,
+      "room_depth": false,
+      "min_room_size": false,
+      "node_in_room": true
+     },
+     "passed": 5
     },
     "placement/off/test_boundary_005b#1": {
      "sensors_ok": {
@@ -1191,10 +1191,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+cpsat_dim/test_boundary_005b#1": {
      "sensors_ok": {
@@ -1210,15 +1210,15 @@
     },
     "placement/off/test_boundary_005b#2": {
      "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
+      "reachability": false,
+      "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 3
     },
     "placement/cpsat/test_boundary_005b#2": {
      "sensors_ok": {
@@ -1251,10 +1251,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+cpsat/test_boundary_005b#2": {
      "sensors_ok": {
@@ -1263,10 +1263,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_005b#2": {
      "sensors_ok": {
@@ -1275,10 +1275,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/off/test_boundary_005b#3": {
      "sensors_ok": {
@@ -1318,15 +1318,15 @@
     },
     "placement/nodes+off/test_boundary_005b#3": {
      "sensors_ok": {
-      "reachability": true,
-      "access_typed": true,
+      "reachability": false,
+      "access_typed": false,
       "entrance_valid": true,
       "daylight": false,
       "room_depth": false,
       "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 2
     },
     "placement/nodes+cpsat/test_boundary_005b#3": {
      "sensors_ok": {
@@ -1334,11 +1334,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": false,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_005b#3": {
      "sensors_ok": {

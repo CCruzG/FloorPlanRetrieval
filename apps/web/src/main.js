@@ -1452,7 +1452,7 @@ async function runRetrieveFitHarness(){
   const body={
     boundary:bdryArr,
     entrance_point:entArr,
-    requirements:{bedrooms:req.bedrooms,bathrooms:req.bathrooms,balcony:req.balcony,study:req.study,storage:req.storage},
+    requirements:{bedrooms:req.bedrooms,bathrooms:req.bathrooms,balcony:req.balcony,study:req.study,storage:req.storage,dining:req.dining},
     topn:5,
     shape_w:params.shape_w,
     ent_w:params.ent_w,
@@ -2816,8 +2816,9 @@ render=()=>{
 };
 
 // Boundary area in m² (shoelace on the normalised polygon × METRES_PER_UNIT²).
+// An open polygon is measured as if closed, so the area is live while drawing.
 function boundaryAreaM2(){
-  if(!closed||boundary.length<3)return null;
+  if(boundary.length<3)return null;
   let a=0;
   for(let i=0;i<boundary.length;i++){
     const p=boundary[i],q=boundary[(i+1)%boundary.length];
@@ -2830,11 +2831,13 @@ function boundaryAreaM2(){
 // (so it does not pan/zoom with the drawing). Shows boundary area always, plus
 // the arrange step's judgement when one has been run. Extend by pushing lines.
 function updateCanvasHud(){
+  const areaM2=boundaryAreaM2();
+  const areaEl=document.getElementById('s-boundary-area');
+  if(areaEl)areaEl.textContent=areaM2!=null?areaM2.toFixed(1)+' m²':'—';
   const el=document.getElementById('canvas-hud');
   if(!el)return;
   const lines=[];
-  const areaM2=boundaryAreaM2();
-  if(areaM2!=null)lines.push(['boundary: '+areaM2.toFixed(2)+' m²','#1e293b']);
+  if(areaM2!=null)lines.push(['<span style="font-size:13px;font-weight:600">boundary: '+areaM2.toFixed(1)+' m²</span>','#1e293b']);
   if(graphSelection.length===1)lines.push(['swap: pick a 2nd room','#2563eb']);
   else if(graphSelection.length===2)lines.push(['swap: '+graphSelection.join(' ↔ '),'#2563eb']);
   const rep=arapDebugReport;
@@ -4340,6 +4343,7 @@ function wirePhase1UI(){
   on('chk-balcony','change',(e)=>{req.balcony=e.target.checked;});
   on('chk-study','change',(e)=>{req.study=e.target.checked;});
   on('chk-storage','change',(e)=>{req.storage=e.target.checked;});
+  on('chk-dining','change',(e)=>{req.dining=e.target.checked;});
   bindRange('rng-topn','v-topn',(value)=>{params.topn=value;});
   bindRange('rng-shape-weight','v-sw',(value)=>{params.shape_w=value;},(value)=>(+value).toFixed(1));
   bindRange('rng-entrance-weight','v-entw',(value)=>{params.ent_w=value;},(value)=>(+value).toFixed(1));

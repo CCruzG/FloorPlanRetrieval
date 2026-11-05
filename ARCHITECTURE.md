@@ -1,6 +1,6 @@
 # ARCHITECTURE — project-44 : floor-plan retrieval + agent harness
 
-Last mapped: 2026-11-04 (node-graph display added by hand; graph stats below from 2026-11-03), re-stamped after the node-graph build (graphify, AST-only: 2078 nodes / 4203 edges; previous 2026-10-30: 1765 / 3527 / 89 communities;
+Last mapped: 2026-11-05 (dining term and two diagnostics added by hand; graph stats below from 2026-11-03), re-stamped after the node-graph build (graphify, AST-only: 2078 nodes / 4203 edges; previous 2026-10-30: 1765 / 3527 / 89 communities;
 design docs not graph-extracted — read directly). Re-stamp from `graphify update .` at milestones.
 
 ## What this repo is
@@ -14,6 +14,8 @@ Two fused lineages share one monorepo. The **live** one is the **agent harness**
 - **Wiring — `apps/api/server.py`**: HTTP only. Routes validate input, call domain services, format responses — no business logic inline.
 - **Wiring — `apps/web/src`**: canvas (`canvas-renderer`, `plan-drawing-renderer`), 3D (`viewer-3d`), panels, `main.js` orchestration, `render-pipeline` (ControlNet).
 - **Wiring — `tools/`**: offline index builders, exploration, MCP fit server; `diag_min_size.py` classifies D24 failures by cause over named test boundaries (output `data/outputs/diagnostics/`; still bbox-based — to update to the usable-footprint D24); `gate_set_connection.py` checks SetConnection's predicted sensor result against apply + regenerate. `corpus_adjacency_stats.py` + `_v2.py` (room-type adjacency over all 80,791 RPlan plans, with null models; `ROOM_TYPE_MAP` fixed 2026-11-03 — types 6–9 are study / storage / balcony / entrance; `ADJ_TAG` env sets the output name), `corpus_node_adjacency_stats.py` (the same over the node-graph sidecar: node types incl. circulation, same-room pairs excluded, hub comparison against the room-level baseline — the first node-graph consumer) and `corpus_block_stats.py` (rect_decompose + part_labels v1.2 over the corpus: roles, short-side distributions, threshold margins, living-room hub test, kitchen relation; `--n 0` = full corpus, `--param k=v` overrides a `label_parts` threshold; writes `labels.jsonl.gz`, the per-plan labelling for re-indexing) run in parallel. `build_node_graph.py` writes the node-graph sidecar for the whole corpus (`data/RPlan-node-graph/node_graph_v<rules>.jsonl.gz` in the artefacts data folder; header line = rules version + all parameters; about 60 s). May import the brain; never imported by it.
+
+**Added 2026-11-05.** `tools/diag_sensor_census.py`: geometry-layer sensors on source plans per unit type, with a scale test; hold-out excluded. `tools/diag_unit_retrievability.py`: type matches, rank and area ratio at rectangular unit shapes. `retrieval._req_to_room_desc`: dining is now a requirement, default off (it was hardcoded on, and plans with a dining room, 1.6% of the corpus, filled 20–50 of 60 pool places); app checkbox `chk-dining`. Retrieval still has no size term. The app shows live boundary area in the requirements panel (`s-boundary-area`).
 
 ## Entry points
 

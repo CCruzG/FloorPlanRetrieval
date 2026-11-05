@@ -131,12 +131,14 @@ const passedOf = (g) => g.sensors && g.sensors.summary ? g.sensors.summary.passe
     await page.waitForTimeout(600);
     await shot('01_005b_retrieved.png');
 
-    // b. rank 1 carries the node graph; the entrance opens onto r_2/primary
+    // b. rank 1 carries the node graph; the entrance opens onto one of its nodes.
+    // No plan-specific id here: rank 1 changes when retrieval changes (2026-11-05).
     const plans = (retrieves.at(-1) || {}).plans || [];
     const rank1 = plans[0] || {};
     const ret = rank1.retrieval || {};
     check('b: rank 1 has retrieval.node_graph', !!ret.node_graph && Array.isArray(ret.node_graph.nodes), `plans=${plans.length}`);
-    check('b: entry_node is r_2/primary', (ret.node_graph || {}).entry_node === 'r_2/primary', (ret.node_graph || {}).entry_node);
+    const entryNode = (ret.node_graph || {}).entry_node;
+    check('b: entry_node is a node of the graph', ((ret.node_graph || {}).nodes || []).some((n) => n.id === entryNode), entryNode);
     const retrievedRoomEdges = JSON.stringify(ret.room_edges || null);
     check('d: /retrieve returned room_edges for rank 1', !!ret.room_edges && Object.keys(ret.room_edges).length > 0);
 
