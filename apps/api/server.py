@@ -16,6 +16,8 @@ POST /fit_schema        Run the schema.py-native adaptation chain (fitting-proto
 POST /render            Run the selected rendering backend and return an image
 POST /comfy_health      Check ComfyUI connectivity
 POST /fit_step1         Spatial reasoning agent — reposition layout graph nodes
+GET/POST /floor_plates, PUT/DELETE /floor_plates/<id>
+                         Floor plate library (packages/floor_plate_design/library.py)
 POST /topo_check        Topology-only sensor registry (reachability, typed access,
                          daylight, entrance) over a plan, recomputed fresh
 """
@@ -50,6 +52,7 @@ from packages.floorplan_core.retrieval import RetrievalError, run_retrieval
 from packages.floorplan_core.schema_bridge import run_fit_pipeline
 from packages.floorplan_core.topo_signature import topological_fitness, default_edge_types
 from packages.floorplan_core.topo_sensors import run_sensors
+from packages.floor_plate_design import library as plate_library
 from packages.floorplan_core.arap_bridge import (
     STEPS as ARAP_STEPS,
     CANVAS_STEPS as ARAP_CANVAS_STEPS,
@@ -1542,6 +1545,89 @@ def rplan_get(plan_id):
     if plan is None:
         return jsonify({"error": f"plan {plan_id} not found"}), 404
     return jsonify(plan)
+
+
+# ── floor plate library (HTTP only; logic in packages/floor_plate_design/library.py) ──
+
+def _plate_call(fn, *args, ok=200):
+    try:
+        return jsonify(fn(*args)), ok
+    except plate_library.PlateValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except plate_library.PlateNotFoundError:
+        return jsonify({"error": f"floor plate '{args[0]}' not found"}), 404
+    except plate_library.LibraryFileError as exc:
+        logger.exception("floor plate library unreadable")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/floor_plates", methods=["GET"])
+def floor_plates_list():
+    return _plate_call(plate_library.list_plates)
+
+
+@app.route("/floor_plates", methods=["POST"])
+def floor_plates_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "invalid JSON body"}), 400
+    return _plate_call(plate_library.create_plate, body, ok=201)
+
+
+@app.route("/floor_plates/<plate_id>", methods=["PUT"])
+def floor_plates_update(plate_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "invalid JSON body"}), 400
+    return _plate_call(plate_library.update_plate, plate_id, body)
+
+
+@app.route("/floor_plates/<plate_id>", methods=["DELETE"])
+def floor_plates_delete(plate_id):
+    return _plate_call(lambda pid: (plate_library.delete_plate(pid), {"deleted": pid})[1], plate_id)
+
+
+@app.route("/assemble_floor_plate", methods=["POST"])
+def assemble_floor_plate():
+    """Plate assembler (ARCHITECTURE.md, "Plate assembler"). Body: plate_id or boundary_m,
+    mix {1B1b, 2B1b, 2B2b, 3B2b: weight}, optional street_edges. Always 200 for a result
+    (status ok / infeasible / unsupported); 400 for a malformed body; 404 for an unknown plate_id."""
+    from packages.floor_plate_design.assembler import assemble_plate
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "invalid JSON body"}), 400
+    mix = body.get("mix")
+    if not isinstance(mix, dict):
+        return jsonify({"error": "mix must be an object of weights"}), 400
+    street = body.get("street_edges")
+    north = body.get("north_deg")
+    boundary = body.get("boundary_m")
+    plate_id = body.get("plate_id")
+    if plate_id is not None:
+        try:
+            plate = plate_library.get_plate(plate_id)
+        except plate_library.PlateNotFoundError:
+            return jsonify({"error": f"floor plate '{plate_id}' not found"}), 404
+        except plate_library.LibraryFileError as exc:
+            return jsonify({"error": str(exc)}), 500
+        boundary = plate["boundary_m"]
+        if street is None:
+            street = plate.get("street_edges", [])
+        if north is None:
+            north = plate.get("north_deg", 0)
+    if not isinstance(boundary, list) or len(boundary) < 3 or not all(
+            isinstance(p, (list, tuple)) and len(p) == 2 and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) for v in p) for p in boundary):
+        return jsonify({"error": "plate_id or boundary_m ([[x, y], ...], metres) is required"}), 400
+    street = [] if street is None else street
+    if not isinstance(street, list) or not all(isinstance(e, int) and not isinstance(e, bool) for e in street):
+        return jsonify({"error": "street_edges must be a list of integers"}), 400
+    if north is not None and (isinstance(north, bool) or not isinstance(north, (int, float))):
+        return jsonify({"error": "north_deg must be a number"}), 400
+    try:
+        return jsonify(assemble_plate(boundary, mix, street, north or 0.0))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/decompose", methods=["POST"])

@@ -425,6 +425,27 @@ details.ss[open] > summary { margin-bottom:8px; }
       </label>
     </div>
 
+    <div class="ss" id="fpl-section" style="display:none">
+      <div class="sl">floor plate library</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <input id="fpl-name" type="text" placeholder="name…" style="flex:1;min-width:0;font-size:10px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--border2);border-radius:3px;color:var(--text);padding:2px 4px">
+        <span id="fpl-size" title="bounding box of the outline" style="flex-shrink:0;font-size:10px;font-family:var(--mono);color:var(--text)">—</span>
+      </div>
+      <input id="fpl-notes" type="text" placeholder="notes…" style="width:100%;box-sizing:border-box;font-size:10px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--border2);border-radius:3px;color:var(--text);padding:2px 4px;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <label for="fpl-north" style="font-size:10px;color:var(--muted);flex:1" title="bearing of north, degrees clockwise from canvas up">north bearing &deg;</label>
+        <input id="fpl-north" type="number" value="0" step="1" style="width:64px;font-size:10px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--border2);border-radius:3px;color:var(--text);padding:2px 4px">
+      </div>
+      <button class="mode-btn" id="fpl-btn-street">&#9473; street frontage</button>
+      <div id="fpl-street-info" style="font-size:9px;color:var(--muted);margin-top:3px">street frontage: none</div>
+      <div style="display:flex;gap:4px;margin-top:6px">
+        <button class="clear-btn" id="fpl-btn-save-new" style="margin-top:0">save new</button>
+        <button class="clear-btn" id="fpl-btn-update" style="margin-top:0" disabled>update boundary</button>
+      </div>
+      <div id="fpl-status" style="font-size:9px;color:var(--muted);margin-top:4px;min-height:11px;line-height:1.4"></div>
+      <div id="fpl-list" style="display:flex;flex-direction:column;gap:5px;margin-top:4px"></div>
+    </div>
+
     <div class="ss">
       <div class="sl">requirements</div>
       <div class="stat" title="area of the drawn boundary; updates while drawing">

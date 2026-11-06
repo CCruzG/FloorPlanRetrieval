@@ -80,6 +80,7 @@ export function createCanvasRenderer({
       measureMode,
       measureA,
       measureB,
+      fpLibOverlay,
     }=getState();
 
     const vpZoom=viewport?.zoom??1;
@@ -104,6 +105,7 @@ export function createCanvasRenderer({
       renderFloorPlate(ctx,floorPlateState,cW,cH,devMode);
       ctx.restore();
       drawScaleBar(ctx,cW,cH,vpZoom);
+      if(fpLibOverlay)drawNorthArrow(ctx,cW,cH,fpLibOverlay.northDeg);
       return;
     }
 
@@ -609,9 +611,55 @@ export function createCanvasRenderer({
       ctx.restore();
     }
 
+    // Floor plate library: street frontage (world space, thick) and its hover preview.
+    if(fpLibOverlay&&closed&&boundary.length>=3){
+      const edgeLine=(i,width,colour,dash)=>{
+        const a=boundary[i],b=boundary[(i+1)%boundary.length];
+        const [ax,ay]=n2c(a.x,a.y),[bx,by]=n2c(b.x,b.y);
+        ctx.save();
+        ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+        ctx.strokeStyle=colour;ctx.lineWidth=width/vpZoom;ctx.setLineDash(dash);ctx.lineCap='butt';ctx.stroke();
+        ctx.restore();
+        return [(ax+bx)/2,(ay+by)/2,bx-ax,by-ay];
+      };
+      if(fpLibOverlay.streetMode&&hoveredEdge!==null&&!fpLibOverlay.streetEdges.includes(hoveredEdge)){
+        edgeLine(hoveredEdge,6,'rgba(217,119,6,0.45)',[8/vpZoom,5/vpZoom]);
+      }
+      for(const streetEdge of fpLibOverlay.streetEdges){
+        const [mx,my,ex,ey]=edgeLine(streetEdge,8,'#d97706',[]);
+        const eL=Math.hypot(ex,ey)||1;
+        // outward-ish label offset: away from the plate centroid
+        const cxm=boundary.reduce((t,p)=>t+n2c(p.x,p.y)[0],0)/boundary.length;
+        const cym=boundary.reduce((t,p)=>t+n2c(p.x,p.y)[1],0)/boundary.length;
+        let nx=-ey/eL,ny=ex/eL;
+        if(nx*(mx-cxm)+ny*(my-cym)<0){nx=-nx;ny=-ny;}
+        ctx.save();
+        ctx.font=`bold ${11/vpZoom}px monospace`;ctx.fillStyle='#b45309';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('STREET',mx+nx*16/vpZoom,my+ny*16/vpZoom);
+        ctx.restore();
+      }
+    }
+
     // Restore ctx from viewport transform, then draw screen-space overlays
     ctx.restore();
     drawScaleBar(ctx,cW,cH,vpZoom);
+    if(fpLibOverlay)drawNorthArrow(ctx,cW,cH,fpLibOverlay.northDeg);
+  }
+
+  // North arrow in a fixed screen corner (bottom right; the HUD covers the top right). Bearing is degrees clockwise
+  // from canvas up; the canvas never rotates, so the arrow is the only place it shows.
+  function drawNorthArrow(c,W,H,deg){
+    const cx=W-44,cy=H-48,r=26;
+    c.save();
+    c.translate(cx,cy);
+    c.fillStyle='rgba(255,255,255,0.8)';c.strokeStyle='rgba(0,0,0,0.35)';c.lineWidth=1;
+    c.beginPath();c.ellipse(0,0,r+8,r+8,0,0,Math.PI*2);c.fill();c.stroke();
+    c.rotate((Number.isFinite(deg)?deg:0)*Math.PI/180);
+    c.beginPath();c.moveTo(0,-r);c.lineTo(8,6);c.lineTo(0,1);c.lineTo(-8,6);c.closePath();
+    c.fillStyle='#111827';c.fill();
+    c.fillStyle='#111827';c.font='bold 12px monospace';c.textAlign='center';c.textBaseline='bottom';
+    c.fillText('N',0,-r-2);
+    c.restore();
   }
 
   function renderFloorPlate(c,state,W,H,devMode={}){
@@ -634,6 +682,8 @@ export function createCanvasRenderer({
     const minY=Math.min(...ys),maxY=Math.max(...ys);
     const spanX=Math.max(maxX-minX,1e-6);
     const spanY=Math.max(maxY-minY,1e-6);
+    // Plate geometry in mm: a length under 1000 is not a normalised editor unit (short edges were labelled x13.67).
+    const linM=(v)=>Math.max(spanX,spanY)>1000?(Number.isFinite(v)&&v>0?v/1000:0):resolveLinearMetres(v);
     const usableW=W*(1-2*pad);
     const usableH=H*(1-2*pad);
     const scale=Math.min(usableW/spanX,usableH/spanY);
@@ -692,7 +742,7 @@ export function createCanvasRenderer({
         const [x2, y2] = boundary[(index + 1) % boundary.length];
         return {
           index,
-          len_m: resolveLinearMetres(Math.hypot(x2 - x1, y2 - y1)),
+          len_m: linM(Math.hypot(x2 - x1, y2 - y1)),
           mid: [(x1 + x2) * 0.5, (y1 + y2) * 0.5],
         };
       });
@@ -720,6 +770,21 @@ export function createCanvasRenderer({
 
     if(showCores){
       (floorPlate.cores||[]).forEach((core)=>{
+        if(core.service_polygon&&core.lobby_polygon){
+          // Core block = stair + lift zone (dark, no doors) and lobby (light, doors open off it).
+          drawPoly(core.service_polygon,{fill:'rgba(51,65,85,0.62)',stroke:'#334155',lineWidth:1});
+          drawPoly(core.lobby_polygon,{fill:'rgba(253,224,71,0.34)',stroke:'#334155',lineWidth:1});
+          drawPoly(core.polygon,{fill:null,stroke:'#1e293b',lineWidth:2.5});
+          const [sx,sy]=t(centroid(core.service_polygon));
+          const [lx,ly]=t(centroid(core.lobby_polygon));
+          c.font='9px monospace';
+          c.textAlign='center';
+          c.fillStyle='#f8fafc';
+          c.fillText('stair+lift',sx,sy+3);
+          c.fillStyle='#713f12';
+          c.fillText('lobby',lx,ly+3);
+          return;
+        }
         drawPoly(core.polygon,{fill:'rgba(148,163,184,0.36)',stroke:'#475569',lineWidth:2});
         const [cx,cy]=t(centroid(core.polygon));
         if(showElementIds){
@@ -797,7 +862,7 @@ export function createCanvasRenderer({
         for(let i=0;i<poly.length;i++){
           const from=poly[i];
           const to=poly[(i+1)%poly.length];
-          const lenM=resolveLinearMetres(Math.hypot(to[0]-from[0],to[1]-from[1]));
+          const lenM=linM(Math.hypot(to[0]-from[0],to[1]-from[1]));
           if(lenM<0.05)continue;
           const label=`${lenM.toFixed(2)}m`;
           const [x1,y1]=t(from);
@@ -918,7 +983,7 @@ export function createCanvasRenderer({
 
     if(showCommonAreas){
       (floorPlate.unresolved_regions||[]).forEach((region)=>{
-        drawPoly(region,{fill:'rgba(239,68,68,0.22)',stroke:'rgba(185,28,28,0.9)',lineWidth:1.5,dash:[4,3]});
+        drawPoly(region,{fill:'rgba(255,242,0,0.55)',stroke:'rgba(161,98,7,0.95)',lineWidth:1.5,dash:[4,3]});
       });
     }
 

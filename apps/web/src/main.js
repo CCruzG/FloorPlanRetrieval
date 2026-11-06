@@ -24,6 +24,7 @@ import {
   getActivePlanView,
 } from './queryState.js';
 import { createBoundaryEditor } from './boundary-editor.js';
+import { createFloorPlateLibrary } from './floor-plate-library.js';
 import { createCanvasRenderer } from './canvas-renderer.js';
 import {
   autoLoadIndex,
@@ -371,6 +372,7 @@ function applyBoundaryEditorState(patch){
 const canvas=document.getElementById('main-canvas');
 const ctx=canvas.getContext('2d');
 let viewport={zoom:1.0,panX:0,panY:0};
+let fpLib=null; // floor plate library (floor-plate-library.js), created after render()
 let panDrag=null;
 let syncDevModePanel=()=>{};
 let devModeSetupDone=false;
@@ -769,6 +771,8 @@ function contractCandidateToOverlayState(candidate, boundaryMm){
     id:core.id||'core-0',
     type:core.type||'stair_lift',
     polygon:convertPolygonMToMm(core.polygon),
+    service_polygon:core.service_polygon?convertPolygonMToMm(core.service_polygon):undefined,
+    lobby_polygon:core.lobby_polygon?convertPolygonMToMm(core.lobby_polygon):undefined,
     centroid:core.centroid?[core.centroid[0]*1000,core.centroid[1]*1000]:[0,0],
     width:(core.width||0)*1000,
     depth:(core.depth||0)*1000,
@@ -2004,6 +2008,20 @@ Select a requirement info button to view how its check is measured.
     devMode.panelVisible=false;
     syncDevModePanel();
   });
+  // Toggle in the Floor plate sidebar section (top row), always visible in that tab.
+  const fplSec=document.getElementById('fpl-section');
+  if(fplSec&&!document.getElementById('fp-dev-toggle')){
+    const tg=document.createElement('button');
+    tg.id='fp-dev-toggle';tg.type='button';tg.className='mode-btn';
+    tg.textContent='dev panel';
+    tg.style.marginBottom='6px';
+    tg.addEventListener('click',()=>{
+      devMode.panelVisible=!devMode.panelVisible;
+      syncDevModePanel();
+      tg.classList.toggle('active',!!devMode.panelVisible);
+    });
+    fplSec.insertBefore(tg,fplSec.firstChild);
+  }
   overlayToggle?.addEventListener('change',(e)=>{
     devMode.showFloorPlateOverlay=!!e.target.checked;
     render();
@@ -2192,6 +2210,7 @@ Select a requirement info button to view how its check is measured.
     ensureDevModeDefaults();
 
     panelEl.classList.toggle('show',!!devMode.enabled&&!!devMode.panelVisible);
+    document.getElementById('fp-dev-toggle')?.classList.toggle('active',!!devMode.panelVisible);
     if(overlayEl)overlayEl.checked=!!devMode.showFloorPlateOverlay;
     if(showIdsToggle)showIdsToggle.checked=!!devMode.showElementIds;
     if(showEdgesToggle)showEdgesToggle.checked=!!devMode.showEdgeIndices;
@@ -2650,6 +2669,7 @@ const {
 // rule as the Stage-0 overlay (selectResult, resetGenerate).
 function clearBoundary(){
   clearBoundaryInner();
+  fpLib?.onBoundaryCleared();
   resetConnectionEdits();
 }
 
@@ -2667,6 +2687,7 @@ function setViewTab(tab,opts={}){
   const is3d=tab==='3d';
   const isFp=tab==='fp';
   const isFit=tab==='fit';
+  fpLib?.setVisible(isFp);
 
   panel2d.style.display=is3d?'none':'flex';
   panel3d.style.display=is3d?'flex':'none';
@@ -2681,7 +2702,7 @@ function setViewTab(tab,opts={}){
 
   if(isFp){
     devMode.enabled=true;
-    devMode.panelVisible=true;
+    devMode.panelVisible=false; // hidden by default; the "dev panel" button in the Floor plate section shows it
     if(!devModeSetupDone)setupDevModeUI();
     syncDevModePanel();
     render();
@@ -2781,6 +2802,7 @@ function getActiveFPState(){
     devMode,
     viewport,
     activeTab,
+    fpLibOverlay:activeTab==='fp'&&fpLib?fpLib.overlay():null,
     fitState,
     arapDebugRooms,
     arapDebugLabel,
@@ -2812,8 +2834,45 @@ render=()=>{
   updateSwapPanel();
   updateGeneratePanel();
   updateMovesPanel();
+  fpLib?.sync();
   if(activeTab==='fit')_fitSyncRunButton();
 };
+
+fpLib=createFloorPlateLibrary({
+  doc:document,
+  getState:()=>({boundary,closed,entrance,edgeTypes,mode,cW,cH}),
+  applyState:applyBoundaryEditorState,
+  getViewport:()=>viewport,
+  n2c,
+  setMode,
+  render:()=>render(),
+  updateEntranceInfo,
+  checkReady,
+  loadAssembled:(res)=>loadAssembledPlate(res),
+  clearAssembled:()=>{if(floorPlateState?.floor_plate?.id==='fp-assembler')floorPlateState=null;},
+});
+
+// Plate assembler result (metres) -> the existing contract-candidate conversion -> floorPlateState.
+function loadAssembledPlate(res){
+  const response={
+    mode:'assembler',
+    placed_units:(res.units||[]).map((u)=>({
+      id:u.id,type:u.type,polygon:u.polygon,typed_edges:u.typed_edges,
+      entrance_point:u.entrance_point,depth_m:u.depth,area_m2:u.area,
+    })),
+    residual_zones:(res.residual||[]).map((polygon)=>({polygon})),
+    cores:res.cores||[],
+    corridors:res.corridors||[],
+    warnings:[],
+  };
+  const boundaryMm=(res.boundary||[]).map(([x,y])=>[x*1000,y*1000]);
+  floorPlateState=contractCandidateToOverlayState(response,boundaryMm);
+  floorPlateState.floor_plate.id='fp-assembler';
+  // The overlay fits the plate to the canvas itself; drop the pan/zoom set when the outline was loaded.
+  viewport.zoom=1;viewport.panX=0;viewport.panY=0;
+  floorPlateState.floor_plate.typology={type:'slab',sub_type:'assembler',confidence:'high',reasoning:'Plate assembler'};
+  render();
+}
 
 // Boundary area in m² (shoelace on the normalised polygon × METRES_PER_UNIT²).
 // An open polygon is measured as if closed, so the area is live while drawing.
@@ -2984,6 +3043,7 @@ function setMode(next){
   if(mode===next)return;
   if(mode==='entrance'){entranceSnap=null;}
   if(mode==='edgeType'){hoveredEdge=null;closeEdgeTypePicker();}
+  if(mode==='streetEdge'){hoveredEdge=null;}
   mode=next;
   entranceMode=mode==='entrance';
   edgeTypeMode=mode==='edgeType';
@@ -2992,6 +3052,7 @@ function setMode(next){
   document.getElementById('btn-measure-mode')?.classList.toggle('active',mode==='measure');
   document.getElementById('btn-entrance-mode')?.classList.toggle('active',mode==='entrance');
   document.getElementById('btn-edge-type-mode')?.classList.toggle('active',mode==='edgeType');
+  document.getElementById('fpl-btn-street')?.classList.toggle('active',mode==='streetEdge');
   updateCursor();render();
 }
 
@@ -3598,7 +3659,7 @@ canvas.addEventListener('mousemove',e=>{
   }
 
   // ── edge-type mode: highlight the edge under the cursor ──────────────
-  if(edgeTypeMode&&closed){
+  if((edgeTypeMode||mode==='streetEdge')&&closed){
     const snap=snapToEdge(nx,ny);
     hoveredEdge=snap?snap.edge:null;
     canvas.style.cursor=snap?'pointer':'default';
@@ -3685,6 +3746,13 @@ canvas.addEventListener('click',e=>{
     return;
   }
 
+  // street frontage mode (floor plate library): click edges to mark them, again to clear
+  if(mode==='streetEdge'&&closed){
+    const snap=snapToEdge(nx,ny);
+    if(snap&&snap.dist*_baseScale()*viewport.zoom<24)fpLib.clickStreetEdge(snap.edge);
+    return;
+  }
+
   // entrance placement mode
   if(entranceMode&&closed){
     const snap=snapToEdge(nx,ny);
@@ -3693,7 +3761,7 @@ canvas.addEventListener('click',e=>{
       setMode('select');
       // The edge the entrance sits on is the hallway-facing one by definition —
       // set it unless the user already classified that edge deliberately.
-      if(!edgeTypes[snap.edge])edgeTypes[snap.edge]='facing_corridor';
+      if(activeTab!=='fp'&&!edgeTypes[snap.edge])edgeTypes[snap.edge]='facing_corridor';
       document.getElementById('canvas-hint').textContent='entrance placed · press retrieve';
       updateEntranceInfo();
       checkReady();render();
@@ -3756,7 +3824,7 @@ document.addEventListener('keydown',e=>{
       clearBoundary();setMode('select');            // delete the unfinished boundary, back to select (clearBoundary leaves mode alone)
     }else if(mode==='measure'){
       clearMeasure();setMode('select');
-    }else if(mode==='entrance'||mode==='edgeType'){
+    }else if(mode==='entrance'||mode==='edgeType'||mode==='streetEdge'){
       setMode('select');                            // setMode() clears that mode's own transient state
       document.getElementById('canvas-hint').textContent='boundary closed · press retrieve';
     }else if(graphSelection.length||selectedRoom!==null){
