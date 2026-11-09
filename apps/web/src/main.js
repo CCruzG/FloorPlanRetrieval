@@ -2645,6 +2645,8 @@ window.__renderCaptureState=renderCaptureState;
   setViewer3DStatus,
   getCameraPerspectivePrompt,
   toIntInput,
+  // the building massing while the 3D scene shows it (viewer3D.lastBuild is set by build3DSceneFromBuilding)
+  getBuilding:()=>(composedBuilding&&activeTab==='3d'&&viewer3D.lastBuild?.source==='building'?composedBuilding:null),
 }));
 
 const {

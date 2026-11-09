@@ -7,6 +7,7 @@ export function createRenderPipeline({
   setViewer3DStatus,
   getCameraPerspectivePrompt,
   toIntInput,
+  getBuilding=()=>null, // () => massing record | null: the building shown in the 3D tab
 }) {
   function getPromptConfig(){
     if(!renderRequestState.promptConfig){
@@ -344,7 +345,7 @@ export function createRenderPipeline({
 
   const coreParts = [
     styleText,
-    `${viewText} of a modern residential building`,
+    (()=>{const i=describeBuilding(getBuilding());return i?`${viewText} of a ${i.storeys}-storey residential apartment building${i.height!==null?`, ${i.height} m tall`:''}, punched windows`:`${viewText} of a modern residential building`;})(),
     contextText,
     siteNotes,
     lightingText,
@@ -359,6 +360,29 @@ export function createRenderPipeline({
 
   return coreParts.filter(Boolean).join(', ');
 }
+
+  // Massing facts for the prompt (2026-11-09, G1): storeys, height, window pattern. Null when the 3D scene is not the building.
+  function describeBuilding(b){
+    if(!b||!Number.isFinite(Number(b.storeys))||!(b.storeys>0))return null;
+    const n=Number(b.storeys);
+    const h=Number(b.total_height_m);
+    const hasTransom=(b.windows||[]).some((w)=>w&&w.transom_m);
+    return {
+      storeys:n,
+      height:Number.isFinite(h)?Math.round(h*10)/10:null,
+      transom:hasTransom,
+      lobby:(b.prisms||[]).some((p)=>p&&p.role==='entrance_lobby'),
+    };
+  }
+
+  function buildingSentences(info,perspective){
+    const massing=`a ${info.storeys}-storey residential apartment building${info.height!==null?`, ${info.height} m tall`:''}`;
+    const ground=info.lobby?'The ground floor holds the entrance lobby.':'';
+    const windows=info.transom
+      ?'Punched window openings sit in a regular rhythm on every storey; living rooms have large windows with a transom band.'
+      :'Punched window openings sit in a regular rhythm on every storey.';
+    return {massing,ground,windows,perspective:perspective?`View: ${perspective}.`:''};
+  }
 
   function composeOpenAIPrompt(){
     const promptConfig=getPromptConfig();
@@ -424,6 +448,30 @@ export function createRenderPipeline({
     const silhouetteNote=(renderCaptureState.silhouetteDataUrl||renderCaptureState.maskDataUrl)
       ?'Preserve the exact building silhouette and massing — do not add or remove wings, balconies, or extensions.'
       :'';
+
+    const info=describeBuilding(getBuilding());
+    if(info){
+      const bs=buildingSentences(info,getCameraPerspectivePrompt('exterior'));
+      // empty override fields must not blank the preset; site notes that only repeat the context preset are dropped
+      const bMat={...base};
+      Object.entries(materialOverrides||{}).forEach(([k,v])=>{if(String(v||'').trim())bMat[k]=String(v).trim();});
+      const bParts=Object.entries(ELEMENT_LABELS).map(([key,label])=>{
+        const val=(bMat[key]||'').trim();
+        if(!val)return null;
+        return val.toLowerCase().includes(label.toLowerCase())?val:`${val} ${label}`;
+      }).filter(Boolean);
+      const bNotes=contextKeys.includes(notes)?'':notes;
+      return [
+        `${styleOpener} of ${bs.massing}.`,
+        bs.ground,
+        bs.windows,
+        bs.perspective,
+        `The building is ${contextSentence}, ${lightingSentence}.`,
+        `Exterior materials: ${bParts.join(', ')}.`,
+        bNotes,
+        silhouetteNote.replace('wings, balconies, or extensions','storeys, wings, or extensions'),
+      ].filter(Boolean).join(' ');
+    }
 
     return [
       `${styleOpener} of a house, ${viewSentence}.`,

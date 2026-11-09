@@ -206,6 +206,36 @@ const PLATES = (process.env.PLATES || 'test-plate-001').split(',');
       check(tag('preview and opacity mask captured'), cap.preview && cap.opacity, JSON.stringify(cap));
       check(tag('ground plane restored visible after capture'), (await scene()).groundVisible === true);
 
+      // render panel (2026-11-09, G1 last step): OpenAI backend, building prompt in the preview, /render stubbed in the browser
+      const STUB = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      let renderReq = null;
+      await page.route('**/render', async (route) => {
+        renderReq = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', backend: 'openai', image_data_url: STUB, meta: { prompt_id: 'stub' } }) });
+      });
+      await page.click('#tab-3d');
+      await sleep(600);
+      await page.check('input[name="render-backend"][value="openai"]');
+      await sleep(300);
+      const prev = await page.inputValue('#render-prompt-preview');
+      check(tag('prompt preview names the storeys'), new RegExp(`${b.storeys}-storey residential apartment building`).test(prev), prev);
+      check(tag('prompt preview names height, lobby, windows, transom, perspective'),
+        /m tall/.test(prev) && /entrance lobby/.test(prev) && /Punched window/.test(prev) && /transom/.test(prev) && /View: .*(view|perspective)/.test(prev), prev);
+      console.log('info: prompt preview:', prev);
+      check(tag('prompt preview is not the house prompt'), !/of a house/.test(prev), prev);
+      check(tag('preview label says OpenAI'), /OpenAI/.test(await page.textContent('#render-prompt-preview-label')));
+      check(tag('Generate Render enabled after capture'), await page.isEnabled('#btn-generate-render'));
+      await page.click('#btn-generate-render');
+      for (let i = 0; i < 100 && !renderReq; i++) await sleep(100);
+      await sleep(500);
+      check(tag('/render request carries depth, preview and the building prompt'),
+        renderReq && renderReq.backend === 'openai' && /^data:image\/png/.test(renderReq.depth_data_url || '') && /^data:image\/png/.test(renderReq.preview_data_url || '')
+        && new RegExp(`${b.storeys}-storey`).test(renderReq.prompt || '') && !renderReq.openai_api_key, renderReq && renderReq.prompt);
+      const shown = await page.evaluate(() => { const i = document.getElementById('render-result-img'); return { src: i && i.src.slice(0, 22), shown: document.getElementById('render-result').classList.contains('show') }; });
+      check(tag('stub render result displays'), shown.shown && shown.src === STUB.slice(0, 22), JSON.stringify(shown));
+      await page.screenshot({ path: path.join(SHOT_DIR, `building_${pid}_render.png`) });
+      await page.unroute('**/render');
+
       // max height: 8 m gives fewer storeys
       await page.click('#tab-fp');
       await sleep(800);

@@ -1174,7 +1174,12 @@ export function createViewer3D({
         if(bld)build3DSceneFromBuilding(bld.building);
         else build3DSceneFromActivePlan();
         viewer3D.lastFingerprint=fp;
+        // the old maps belong to the old scene: drop them so a render never pairs them with the new prompt
+        ['depthDataUrl','maskDataUrl','silhouetteDataUrl','normalDataUrl','opacityMaskDataUrl','previewDataUrl'].forEach((k)=>{renderCaptureState[k]=null;});
+        updateCapturePanel();
       }
+      // the prompt reads the scene source (building or plan), which is known only now
+      refreshStructuredPromptPreview();
     }catch(err){
       console.error('3D viewer init failed:',err);
       setViewer3DStatus('3D initialization failed. Check network/CDN access.');
