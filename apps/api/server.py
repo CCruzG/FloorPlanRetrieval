@@ -90,7 +90,7 @@ UTILITY_WEB_FILES = {"retrieval_tool.html", "index_explorer.html"}
 ALLOW_REMOTE_COMFY = False
 DEFAULT_RENDER_BACKEND = "comfy"
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
-DEFAULT_OPENAI_MODEL = "gpt-image-1"
+DEFAULT_OPENAI_MODEL = "gpt-image-2.5-flare"
 DEFAULT_OPENAI_QUALITY = "medium"
 DEFAULT_PLAN_CACHE_KEY = "fp-plans-v1"
 
@@ -566,7 +566,7 @@ def render_image():
             workflow_override          : optional dict (comfy backend; workflow JSON)
             segmentation_data_url      : optional data:image/png;base64,... (comfy backend)
             openai_api_key             : optional str (openai backend; falls back to OPENAI_API_KEY env)
-            openai_model               : optional str (openai backend; default gpt-image-1)
+            openai_model               : optional str (openai backend; default gpt-image-2.5-flare)
             openai_quality             : optional str (openai backend; default medium)
             openai_width               : optional int (openai backend target width)
             openai_height              : optional int (openai backend target height)

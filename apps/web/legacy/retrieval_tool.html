@@ -501,7 +501,7 @@ input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
         </div>
         <div class="render-row" id="openai-row-model">
           <label for="render-openai-model">OpenAI Model</label>
-          <input id="render-openai-model" type="text" value="gpt-image-1" spellcheck="false">
+          <input id="render-openai-model" type="text" value="gpt-image-2.5-flare" spellcheck="false">
         </div>
         <div class="render-row" id="openai-row-quality">
           <label for="render-openai-quality">Quality</label>
@@ -879,7 +879,7 @@ function updateBackendDependentUI(){
 
 function getOpenAIRenderParams(){
   const key=(document.getElementById('render-openai-key')?.value||'').trim();
-  const model=(document.getElementById('render-openai-model')?.value||'gpt-image-1').trim()||'gpt-image-1';
+  const model=(document.getElementById('render-openai-model')?.value||'gpt-image-2.5-flare').trim()||'gpt-image-2.5-flare';
   const quality=(document.getElementById('render-openai-quality')?.value||'medium').trim()||'medium';
   const width=toIntInput('py-width',512,256,2048);
   const height=toIntInput('py-height',512,256,2048);

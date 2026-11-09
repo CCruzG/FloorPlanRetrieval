@@ -12,7 +12,7 @@ export const DEFAULT_RENDER_PROMPT_CONFIG={
     slabs:'',
     parapets:'',
   },
-  openaiModel:'gpt-image-1',
+  openaiModel:'gpt-image-2.5-flare',
   openaiQuality:'medium',
   comfyUrl:'http://127.0.0.1:8188',
   depthInvert:false,

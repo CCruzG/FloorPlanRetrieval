@@ -17,6 +17,9 @@ DEFAULT_COMFY_WORKFLOW_FILENAME = "comfyui-sdxl-depth-multi-workflow.json"
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
+DEFAULT_OPENAI_MODEL = "gpt-image-2.5-flare"
+
+
 def validate_comfy_url(comfy_url, allow_remote_comfy=False):
     parsed = urlparse.urlparse(comfy_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -69,7 +72,7 @@ def render(backend, params, base_dir, logger, allow_remote_comfy=False):
         preview_data_url=params.get("preview_data_url"),
         depth_data_url=params["depth_data_url"],
         api_key=params.get("openai_api_key"),
-        model=str(params.get("openai_model") or "gpt-image-1"),
+        model=str(params.get("openai_model") or DEFAULT_OPENAI_MODEL),
         quality=str(params.get("openai_quality") or "medium"),
         width=int(params.get("openai_width") or params.get("width") or 1024),
         height=int(params.get("openai_height") or params.get("height") or 1024),
@@ -537,7 +540,7 @@ def _render_with_openai(
     prompt,
     depth_data_url,
     preview_data_url=None,
-    model="gpt-image-1",
+    model=DEFAULT_OPENAI_MODEL,
     quality="medium",
     width=1024,
     height=1024,
@@ -555,30 +558,28 @@ def _render_with_openai(
     if clean_quality not in {"low", "medium", "high", "auto"}:
         clean_quality = "medium"
 
-    # Prefer the colour preview render as reference — it carries the camera angle,
-    # massing and composition. Fall back to depth if no preview is available.
+    # The reference image is mandatory: the colour preview carries the camera angle,
+    # massing and composition; the depth map is the only accepted substitute.
     reference_data_url = preview_data_url or depth_data_url
     reference_filename = "preview.png" if preview_data_url else "depth.png"
+    if not reference_data_url:
+        raise RuntimeError("no reference image to render from: capture maps first")
 
-    used_endpoint = "generations"
-    used_reference = False
-    first_error = None
-
+    ref_png = _decode_data_url_png(reference_data_url)
+    fields = {
+        "model": model,
+        "prompt": prompt,
+        "size": size,
+        "quality": clean_quality,
+    }
+    files = {
+        "image": {
+            "filename": reference_filename,
+            "content_type": "image/png",
+            "content": ref_png,
+        }
+    }
     try:
-        ref_png = _decode_data_url_png(reference_data_url)
-        fields = {
-            "model": model,
-            "prompt": prompt,
-            "size": size,
-            "quality": clean_quality,
-        }
-        files = {
-            "image": {
-                "filename": reference_filename,
-                "content_type": "image/png",
-                "content": ref_png,
-            }
-        }
         _, payload = http_post_multipart(
             f"{base_url}/edits",
             fields=fields,
@@ -587,23 +588,9 @@ def _render_with_openai(
             extra_headers=headers,
         )
         out_data_url = _extract_openai_image_data_url(payload)
-        used_endpoint = "edits"
-        used_reference = True
     except Exception as exc:
-        first_error = str(exc)
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "size": size,
-            "quality": clean_quality,
-        }
-        _, resp = http_post_json(
-            f"{base_url}/generations",
-            payload,
-            timeout=180,
-            extra_headers=headers,
-        )
-        out_data_url = _extract_openai_image_data_url(resp)
+        # No fallback to images/generations: never render without the reference image.
+        raise RuntimeError(f"OpenAI images/edits failed: {exc}") from exc
 
     meta = {
         "provider": "openai",
@@ -612,10 +599,9 @@ def _render_with_openai(
         "size": size,
         "requested_width": int(width),
         "requested_height": int(height),
-        "endpoint": used_endpoint,
-        "used_reference": bool(used_reference),
-        "reference_type": reference_filename.replace(".png", "") if used_reference else None,
-        "edits_error": first_error,
+        "endpoint": "edits",
+        "used_reference": True,
+        "reference_type": reference_filename.replace(".png", ""),
     }
     return out_data_url, meta
 
