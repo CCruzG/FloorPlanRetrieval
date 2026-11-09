@@ -1,6 +1,6 @@
 # ARCHITECTURE — project-44 : floor-plan retrieval + agent harness
 
-Last mapped: 2026-11-09 (plate composition, doors, windows, reachability added by hand; on 2026-11-06 floor plate library added by hand; on 2026-11-05 dining term and two diagnostics added by hand; graph stats below from 2026-11-03), re-stamped after the node-graph build (graphify, AST-only: 2078 nodes / 4203 edges; previous 2026-10-30: 1765 / 3527 / 89 communities;
+Last mapped: 2026-11-09, re-stamped at the G1 milestone (thin chain end to end: plate composition, doors, windows, massing, render from the building) after `graphify update .` (AST-only: 2786 nodes / 5765 edges / 130 communities; previous 2026-11-03: 2078 / 4203; 2026-10-30: 1765 / 3527 / 89; sections since 2026-11-05 added by hand in the same sessions;
 design docs not graph-extracted — read directly). Re-stamp from `graphify update .` at milestones.
 
 ## What this repo is
