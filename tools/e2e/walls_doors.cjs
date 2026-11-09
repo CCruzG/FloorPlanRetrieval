@@ -1,7 +1,8 @@
 // E2E for walls and doors on generated plans (2026-11-09): assemble test-plate-001 (mix 1B1b:1, 2B1b:1),
 // generate all units, graph off, screenshot the plate; open u1, generate, screenshot the unit with the graph off.
 // Asserts: wall fills are drawn; door leaves drawn on the canvas equal the plan's placed doors
-// (plate: sum over the composed slots; unit: the /generate response). Exit 1 on any failure.
+// (plate: sum over the composed slots; unit: the /generate response). Windows (2026-11-09): the plan carries
+// windows (> 0) and the canvas draws two glazing strokes (#2b7a9b) per window; no console errors. Exit 1 on any failure.
 // Own backend (Flask app only) and own Vite on ports that are neither the dev ports (5002, 5173),
 // the gate's (5012, 5183) nor compose_plate.cjs's (5025, 5196).
 // FLOOR_PLATE_LIBRARY is a temp copy of data/floor_plates/library.json; the real file is never touched.
@@ -24,6 +25,7 @@ const PY = process.env.PYTHON || path.join(REPO, '.venv', 'bin', 'python');
 const REAL_LIB = path.join(REPO, 'data', 'floor_plates', 'library.json');
 const WALL_FILL = '#2b2b2b';
 const DOOR_FILL = '#b45309';
+const GLAZE = '#2b7a9b';   // window glazing lines: two strokes per window
 
 function findPlaywright() {
   const cands = [];
@@ -78,6 +80,8 @@ async function portFree(port) {
     const page = await ctx.newPage();
     const dialogs = [];
     const pageErrors = [];
+    const consoleErrors = [];
+    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(String(m.text()).slice(0, 200)); });
     page.on('dialog', async (d) => { dialogs.push(d.message()); await d.dismiss(); });
     page.on('pageerror', (e) => pageErrors.push(String(e.message).slice(0, 200)));
     let asmRes = null;
@@ -91,8 +95,13 @@ async function portFree(port) {
       } catch (e) { /* ignore */ }
     });
     // Count fills by fillStyle on the main canvas since its last full clear (one frame).
-    await page.addInitScript(({ W, D }) => {
-      window.__fills = { wall: 0, door: 0 };
+    await page.addInitScript(({ W, D, G }) => {
+      window.__fills = { wall: 0, door: 0, glaze: 0 };
+      const st = CanvasRenderingContext2D.prototype.stroke;
+      CanvasRenderingContext2D.prototype.stroke = function (...a) {
+        if (this.canvas && this.canvas.id === 'main-canvas' && this.strokeStyle === G) window.__fills.glaze++;
+        return st.apply(this, a);
+      };
       const P = CanvasRenderingContext2D.prototype;
       const f = P.fill;
       P.fill = function (...a) {
@@ -104,10 +113,10 @@ async function portFree(port) {
       };
       const cr = P.clearRect;
       P.clearRect = function (...a) {
-        if (this.canvas && this.canvas.id === 'main-canvas' && a[0] === 0 && a[1] === 0) window.__fills = { wall: 0, door: 0 };
+        if (this.canvas && this.canvas.id === 'main-canvas' && a[0] === 0 && a[1] === 0) window.__fills = { wall: 0, door: 0, glaze: 0 };
         return cr.apply(this, a);
       };
-    }, { W: WALL_FILL, D: DOOR_FILL });
+    }, { W: WALL_FILL, D: DOOR_FILL, G: GLAZE });
     const fills = () => page.evaluate(() => ({ ...window.__fills }));
     const setGraph = (on) => page.evaluate((v) => {
       const c = document.getElementById('chk-graph');
@@ -158,6 +167,13 @@ async function portFree(port) {
     const fp = await fills();
     console.log('plate fills', JSON.stringify(fp), 'expected doors', expectedPlate);
     check('plate: wall fills drawn', fp.wall > 0, JSON.stringify(fp));
+    let expectedWin = 0;
+    for (const u of units) {
+      const s = slots[u.id];
+      if (s && s.status !== 'failed' && s.plan) expectedWin += (s.plan.windows || []).length;
+    }
+    check('plate: composed units carry windows', expectedWin > 0, expectedWin);
+    check('plate: glazing lines on canvas equal 2 x composed windows', fp.glaze === 2 * expectedWin, `${fp.glaze} vs ${2 * expectedWin}`);
     check('plate: door count on canvas equals composed doors', fp.door === expectedPlate && expectedPlate > 0, `${fp.door} vs ${expectedPlate}`);
     await page.screenshot({ path: path.join(SHOT_DIR, `walls_${PLATE}_plate.png`) });
 
@@ -178,6 +194,9 @@ async function portFree(port) {
     const f1 = await fills();
     const gdoors = genRes ? (genRes.doors || []).length : -1;
     console.log('unit fills', JSON.stringify(f1), 'plan doors', gdoors);
+    const gwin = genRes ? (genRes.windows || []).length : -1;
+    check('unit (generated): window count above 0', gwin > 0, gwin);
+    check('unit (generated): glazing lines equal 2 x windows', f1.glaze === 2 * gwin, `${f1.glaze} vs ${2 * gwin}`);
     check('unit (generated): wall fills drawn', f1.wall > 0, JSON.stringify(f1));
     check('unit (generated): door leaves equal plan doors', f1.door === gdoors && gdoors > 0, `${f1.door} vs ${gdoors}`);
     const graphOff = await page.evaluate(() => !document.getElementById('chk-graph').checked);
@@ -194,6 +213,7 @@ async function portFree(port) {
     check('draw walls on again', f3.wall > 0 && f3.door === gdoors, JSON.stringify(f3));
 
     check('no page errors', pageErrors.length === 0, JSON.stringify(pageErrors));
+    check('no console errors', consoleErrors.length === 0, JSON.stringify(consoleErrors));
     check('no dialogs', dialogs.length === 0, JSON.stringify(dialogs));
     console.log('DOORS', JSON.stringify(perUnit));
     code = results.every((r) => r.ok) ? 0 : 1;

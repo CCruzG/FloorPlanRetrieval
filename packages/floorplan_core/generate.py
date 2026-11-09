@@ -58,6 +58,8 @@ from packages.floorplan_core.rectangular_arrange import (
 # MINIMUM_SIZES / FLEX key, so the solver ran with zero minimums.
 from packages.floorplan_core.topo_signature import _label
 from packages.floorplan_core.doors import derive_doors
+from packages.floorplan_core.windows import derive_windows
+from packages.floorplan_core.topo_signature import WINDOW_MIN_WIDTH_M
 from packages.floorplan_core.spec import (
     build_options, validate_spec, CPSAT_SEED, CPSAT_WORKERS, CPSAT_TIME_S,
 )
@@ -817,7 +819,7 @@ def _realise(spec, options, claim_choice):
     if not nodes or len(boundary) < 3:
         return {"rooms": [], "edges": spec.get("adjacencies", []),
                 "entrance": spec.get("entrance"), "node_pos": {},
-                "doors": [], "feasible": False,
+                "doors": [], "windows": [], "feasible": False,
                 "report": {"reason": "no nodes or degenerate boundary",
                            "debug_steps": []}}
 
@@ -1468,6 +1470,12 @@ def _realise(spec, options, claim_choice):
     # ── 5. doors (decision 2026-11-04): derived from the geometry, not stated in the Spec
     doors, doors_unplaced = derive_doors(out_rooms, recon_edges, boundary, spec.get("entrance"),
                                          mm, options)
+    # ── 5b. windows (G1 part 2a): external runs of the generated rooms, clear of doors
+    windows, windows_unplaced, glazing = derive_windows(
+        out_rooms, boundary, spec.get("edge_types"), mm, doors, options)
+    # A window starts at 600 mm, the D26 floor is 800 mm: rooms whose windows are all on runs below D26's
+    _wide = {w["room"] for w in windows if w["run_mm"] >= WINDOW_MIN_WIDTH_M * 1000.0 - 1e-6}
+    windows_below_d26 = sorted({w["room"] for w in windows} - _wide)
 
     return {
         "rooms": out_rooms,
@@ -1475,12 +1483,16 @@ def _realise(spec, options, claim_choice):
         "entrance": spec.get("entrance"),
         "node_pos": node_pos_out,
         "doors": doors,
+        "windows": windows,
         # What the drawing needs to read the plan alone (plan units; 1 unit = mm_per_unit mm).
         "frame": {"boundary": [list(p) for p in boundary], "edge_types": list(spec.get("edge_types") or []),
                   "mm_per_unit": mm},
         "feasible": feasible,
         "report": {
             "doors_unplaced": doors_unplaced,
+            "windows_unplaced": windows_unplaced,
+            "windows_below_d26": windows_below_d26,
+            "glazing": glazing,
             "grid": [ncol, nrow],
             "grid_lines": grid_lines,
             "precedence": precedence_report,

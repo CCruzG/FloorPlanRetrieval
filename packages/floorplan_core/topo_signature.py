@@ -714,6 +714,56 @@ def _raycast_room_edges(plan, target_boundary, entrance_point, mirror, target_ed
     return room_edges
 
 
+def boundary_eps(tpts):
+    """Contact tolerance for a boundary: 1e-5 of its bounding-box diagonal."""
+    xs = [p[0] for p in tpts]
+    ys = [p[1] for p in tpts]
+    return 1e-5 * (math.hypot(max(xs) - min(xs), max(ys) - min(ys)) or 1.0)
+
+
+def contact_runs(poly, tpts, eps=None):
+    """Merged contact runs of one room polygon with each boundary edge.
+    Returns {edge_index: [[lo, hi], ...]}: intervals along the edge in edge units,
+    sorted, with collinear and touching walls merged. A contact is a room wall with
+    both ends on the edge's line. Shared by exact_room_edges and windows.derive_windows."""
+    n, m = len(tpts), len(poly)
+    if n < 3 or m < 3:
+        return {}
+    if eps is None:
+        eps = boundary_eps(tpts)
+    runs = {}
+    for i in range(n):
+        px, py = tpts[i]
+        qx, qy = tpts[(i + 1) % n]
+        ex, ey = qx - px, qy - py
+        L = math.hypot(ex, ey)
+        if L < eps:
+            continue
+        ux, uy = ex / L, ey / L
+        for k in range(m):
+            ax, ay = poly[k]
+            bx, by = poly[(k + 1) % m]
+            if (abs((ax - px) * uy - (ay - py) * ux) > eps
+                    or abs((bx - px) * uy - (by - py) * ux) > eps):
+                continue
+            ta = (ax - px) * ux + (ay - py) * uy
+            tb = (bx - px) * ux + (by - py) * uy
+            lo, hi = max(min(ta, tb), 0.0), min(max(ta, tb), L)
+            if hi - lo > eps:
+                runs.setdefault(i, []).append((lo, hi))
+    out = {}
+    for i, ivs in runs.items():
+        ivs.sort()
+        merged = [list(ivs[0])]
+        for lo, hi in ivs[1:]:
+            if lo <= merged[-1][1] + eps:
+                merged[-1][1] = max(merged[-1][1], hi)
+            else:
+                merged.append([lo, hi])
+        out[i] = merged
+    return out
+
+
 def exact_room_edges(plan, target_boundary, target_edge_types):
     """Room↔target-edge contacts read EXACTLY off generated geometry (2026-10-30).
 
@@ -733,8 +783,7 @@ def exact_room_edges(plan, target_boundary, target_edge_types):
     types = target_edge_types or []
     SCALE_M = SCALE / 1000.0
     DOOR_MIN_M = 0.9
-    _txs = [p[0] for p in tpts]; _tys = [p[1] for p in tpts]
-    eps = 1e-5 * (math.hypot(max(_txs) - min(_txs), max(_tys) - min(_tys)) or 1.0)
+    eps = boundary_eps(tpts)
 
     def _floor(ti):
         et = types[ti] if 0 <= ti < len(types) else EXTERNAL
@@ -745,37 +794,8 @@ def exact_room_edges(plan, target_boundary, target_edge_types):
         poly = r.get("polygon")
         if not poly or len(poly) < 3:
             continue
-        m = len(poly)
-        runs = {}    # tidx -> [(t0, t1)] intervals along the edge, in edge units
-        for i in range(n):
-            px, py = tpts[i]
-            qx, qy = tpts[(i + 1) % n]
-            ex, ey = qx - px, qy - py
-            L = math.hypot(ex, ey)
-            if L < eps:
-                continue
-            ux, uy = ex / L, ey / L
-            for k in range(m):
-                ax, ay = poly[k]
-                bx, by = poly[(k + 1) % m]
-                # both wall ends on the edge's line (perpendicular offset ~ 0)
-                if (abs((ax - px) * uy - (ay - py) * ux) > eps
-                        or abs((bx - px) * uy - (by - py) * ux) > eps):
-                    continue
-                ta = (ax - px) * ux + (ay - py) * uy
-                tb = (bx - px) * ux + (by - py) * uy
-                lo, hi = max(min(ta, tb), 0.0), min(max(ta, tb), L)
-                if hi - lo > eps:
-                    runs.setdefault(i, []).append((lo, hi))
         fronts = {}
-        for i, ivs in runs.items():
-            ivs.sort()
-            merged = [list(ivs[0])]
-            for lo, hi in ivs[1:]:
-                if lo <= merged[-1][1] + eps:
-                    merged[-1][1] = max(merged[-1][1], hi)
-                else:
-                    merged.append([lo, hi])
+        for i, merged in contact_runs(poly, tpts, eps).items():
             lo, hi = max(merged, key=lambda iv: iv[1] - iv[0])
             px, py = tpts[i]
             qx, qy = tpts[(i + 1) % n]

@@ -262,7 +262,8 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
                   source_rooms=None, pair_weights=None, cpsat_seed=CPSAT_SEED,
                   cpsat_workers=CPSAT_WORKERS, cpsat_time_s=CPSAT_TIME_S,
                   cpsat_det_time=None, source_grid=False, door_width_mm=900.0,
-                  door_jamb_mm=100.0, door_min_wall_mm=1000.0, entrance_door_mm=900.0):
+                  door_jamb_mm=100.0, door_min_wall_mm=1000.0, entrance_door_mm=900.0,
+                  window_min_mm=600.0, window_jamb_mm=300.0, window_fill=0.6):
     """Generator and solver switches. Not part of the Spec: no move edits them.
 
     core_placement : False|True|"greedy"|"cpsat"|"cpsat_dim" (step 0)
@@ -278,6 +279,9 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
                      to the source. "flex": the same with the slack-by-flex solve.
     door_*_mm      : door derivation (floorplan_core/doors.py): width, near-jamb offset
                      from the wall end, shortest wall that takes a door, entrance width
+    window_*       : window derivation (floorplan_core/windows.py): shortest run that
+                     takes a window, clear distance to run ends and doors, share of
+                     the free run that is glazed
     """
     return {
         "core_placement": core_placement,
@@ -294,6 +298,9 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
         "door_jamb_mm": door_jamb_mm,
         "door_min_wall_mm": door_min_wall_mm,
         "entrance_door_mm": entrance_door_mm,
+        "window_min_mm": window_min_mm,
+        "window_jamb_mm": window_jamb_mm,
+        "window_fill": window_fill,
     }
 
 

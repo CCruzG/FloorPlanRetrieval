@@ -128,6 +128,7 @@ def plan_record(generated: Dict[str, Any], source_plan: Dict[str, Any]) -> Dict[
         "edges": generated.get("edges", []),
         "node_pos": generated.get("node_pos", {}),
         "doors": generated.get("doors", []),
+        "windows": generated.get("windows", []),
         "frame": generated.get("frame"),
         "room_edges": generated.get("room_edges", {}),
         "feasible": generated.get("feasible"),
@@ -279,6 +280,9 @@ def _plan_export(plan: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "doors_m": [{**{k: d.get(k) for k in ("u", "v", "kind", "width_mm", "segment_mm")},
                      "centre": _m(d["centre"]), "wall": [_m(q) for q in d.get("wall", [])]}
                     for d in plan.get("doors", []) if d.get("centre")],
+        "windows_m": [{**{k: w.get(k) for k in ("room", "edge_index", "width_mm", "sill_mm", "head_mm", "kind")},
+                       "centre": _m(w["centre"]), "wall": [_m(q) for q in w.get("wall", [])]}
+                      for w in plan.get("windows", []) if w.get("centre")],
         "feasible": plan.get("feasible"),
         "report": plan.get("report", {}),
     }

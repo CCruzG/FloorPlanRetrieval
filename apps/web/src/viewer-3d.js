@@ -27,6 +27,7 @@ export function createViewer3D({
   getActiveFPState,
   getSelectionState,
   getActiveTab,
+  getGeneratedPlan=()=>null,
 }) {
   function getCameraPerspectivePrompt(view){
     const normalizedView=(view||'exterior').trim().toLowerCase();
@@ -626,7 +627,9 @@ export function createViewer3D({
     if(!s||selected===null)return null;
     const result=results[selected]||{};
     const fp=s.fp||{};
+    const gen=getGeneratedPlan();
     return [
+      gen?`gen${gen.rooms.length}/${(gen.windows||[]).length}/${gen.rooms.reduce((a,r)=>a+(r.polygon||[]).length,0)}`:'',
       selected,
       fitMode?1:0,
       result.name||fp.id||'plan',
@@ -934,6 +937,32 @@ export function createViewer3D({
     });
   }
 
+  // Generated plans: one opening box per derived window (plan.windows), from sill to head
+  // (mm above the floor, read as metres like ROOM_HEIGHT), centred on the window and aligned to its wall.
+  function addGeneratedWindowGeometry(windows,state){
+    (windows||[]).forEach((w)=>{
+      if(!Array.isArray(w?.centre)||!Array.isArray(w?.wall)||w.wall.length<2)return;
+      const [cx,cz]=planPtToSceneXY(w.centre,state);
+      const [ax,az]=planPtToSceneXY(w.wall[0],state);
+      const [bx,bz]=planPtToSceneXY(w.wall[1],state);
+      const len=(w.width||0)*WORLD_SCALE;
+      const sill=(w.sill_mm||0)/1000;
+      const height=Math.max(0.05,((w.head_mm||2400)-(w.sill_mm||0))/1000);
+      const geom=new THREE.BoxGeometry(Math.max(len,WINDOW_THICKNESS),height,WINDOW_THICKNESS);
+      const mesh=new THREE.Mesh(
+        geom,
+        new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75})
+      );
+      mesh.position.set(cx,sill+height/2,cz);
+      mesh.rotation.y=-Math.atan2(bz-az,bx-ax);
+      mesh.userData.captureRole='windows';
+      mesh.userData.generatedWindow=true;
+      mesh.castShadow=false;
+      mesh.receiveShadow=false;
+      viewer3D.planGroup.add(mesh);
+    });
+  }
+
   function build3DSceneFromActivePlan(){
     const s=getActiveFPState();
     const empty=document.getElementById('viewer-3d-empty');
@@ -945,7 +974,10 @@ export function createViewer3D({
     }
     if(empty)empty.style.display='none';
 
-    const fp=s.fp;
+    // A generated plan (Unit tab overlay) replaces the retrieved one: its rooms, and the windows derived from them.
+    const gen=getGeneratedPlan();
+    const fp=gen?{rooms:gen.rooms,boundary:gen.boundary,doors:[],windows:[]}:s.fp;
+    const st=gen?{rot:0,mirror:false,offset:[0,0],fpBdry:gen.boundary}:s;
     const rooms=fp.rooms||[];
     const boundaryPoly=fp.boundary||[];
 
@@ -953,11 +985,11 @@ export function createViewer3D({
     rooms.forEach((room)=>{
       const st=room.source_type??room.type;
       if(st===BALCONY_TYPE_ID){
-        addBalconyGeometry(room,s);
+        addBalconyGeometry(room,st);
         return;
       }
 
-      const shape=shapeFromPlanPolygon(room.polygon,s);
+      const shape=shapeFromPlanPolygon(room.polygon,st);
       if(!shape)return;
       const geom=new THREE.ExtrudeGeometry(shape,roomGeomOpts);
       geom.rotateX(-Math.PI/2);
@@ -969,10 +1001,10 @@ export function createViewer3D({
       viewer3D.planGroup.add(mesh);
     });
 
-    addDoorGeometry(fp,s);
-    addWindowGeometry(fp,s);
+    if(gen)addGeneratedWindowGeometry(gen.windows,st);
+    else{addDoorGeometry(fp,st);addWindowGeometry(fp,st);}
 
-    const boundaryShape=shapeFromPlanPolygon(boundaryPoly,s);
+    const boundaryShape=shapeFromPlanPolygon(boundaryPoly,st);
     if(boundaryShape){
       const slabGeom=new THREE.ExtrudeGeometry(boundaryShape,{depth:0.1,bevelEnabled:false,steps:1});
       slabGeom.rotateX(-Math.PI/2);
@@ -996,7 +1028,7 @@ export function createViewer3D({
     }
 
     const bCen=bdryCenter((boundaryPoly||[]).map(planVertexToXY));
-    const [cx,cz]=planPtToSceneXY(bCen,s);
+    const [cx,cz]=planPtToSceneXY(bCen,st);
 
     const bounds=new THREE.Box3().setFromObject(viewer3D.planGroup);
     if(Number.isFinite(bounds.min.x)&&Number.isFinite(bounds.max.x)){

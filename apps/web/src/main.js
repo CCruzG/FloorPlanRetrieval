@@ -2615,6 +2615,9 @@ const {
   getActiveFPState,
   getSelectionState:()=>({selected,results,fitMode}),
   getActiveTab:()=>activeTab,
+  // the generated overlay (Unit tab) when it has rooms: the 3D view then shows it, with its derived windows
+  getGeneratedPlan:()=>(generatedRooms&&generatedRooms.length&&lastGenResp?.frame
+    ?{rooms:generatedRooms,windows:lastGenResp.windows||[],boundary:lastGenResp.frame.boundary}:null),
 });
 
 ({
@@ -2955,7 +2958,7 @@ async function captureUnitWork(){
     plan:{
       rooms:generatedRooms,edges:generatedEdges||[],node_pos:generatedNodes||{},
       room_edges:generatedRoomEdges||{},feasible:lastGenResp.feasible,report:lastGenResp.report||{},
-      doors:lastGenResp.doors||[],frame:lastGenResp.frame||null,
+      doors:lastGenResp.doors||[],windows:lastGenResp.windows||[],frame:lastGenResp.frame||null,
     },
     sensors:lastGenResp.sensors||null,
     options:{

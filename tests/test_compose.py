@@ -119,3 +119,16 @@ def test_record_round_trip_keeps_state():
     again = C.from_record(rec)
     assert again.slots["u1"].status == C.GENERATED
     assert C.to_export(again) == C.to_export(comp)
+
+
+def test_windows_travel_in_the_record_and_export_in_metres():
+    gen = gen_result()
+    gen["windows"] = [{"room": "r_1/primary", "edge_index": 0, "centre": [0.25, 0.0], "wall": [[0.0, 0.0], [0.5, 0.0]],
+                       "width": 0.0003, "width_mm": 5400.0, "sill_mm": 0.0, "head_mm": 2400.0, "kind": "window"}]
+    rec = C.plan_record(gen, server_plan())
+    assert rec["windows"] == gen["windows"]
+    out = C._plan_export(rec)
+    w = out["windows_m"][0]
+    assert w["centre"] == [4.5, 0.0] and w["wall"] == [[0.0, 0.0], [9.0, 0.0]]
+    assert w["room"] == "r_1/primary" and w["sill_mm"] == 0.0 and w["head_mm"] == 2400.0
+    assert C._plan_export(C.plan_record(gen_result(), server_plan()))["windows_m"] == []

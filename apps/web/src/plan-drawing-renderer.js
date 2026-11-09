@@ -216,12 +216,34 @@ export function computeWallGeometry(fixture, options = {}) {
     }
   }
 
+  // Windows (plan.windows, from the Generator): cut the poché across the wall, and keep
+  // two thin lines (the glazing) in the gap, a quarter of the wall thickness either side of its axis.
+  const windows = [];
+  for (const w of plan.windows || []) {
+    const [a, b] = w.wall;
+    const t = thickness[w.edgeType] ?? thickness.external;
+    doorCuts.push(toPath(doorCutRect(a, b, w.centre, w.width, t * 0.35)));
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const hw = w.width / 2;
+    const off = t * 0.25;
+    const lines = [off, -off].map((o) => [
+      [w.centre[0] - ux * hw - uy * o, w.centre[1] - uy * hw + ux * o],
+      [w.centre[0] + ux * hw - uy * o, w.centre[1] + uy * hw + ux * o],
+    ]);
+    windows.push({ centre: w.centre, edge: { start: a, end: b }, width: w.width, lines });
+  }
+
   const merged = unionPaths(wallPaths);
   const withOpenings = differencePaths(merged, doorCuts);
 
   return {
     wallPolygons: withOpenings.map(fromPath),
     doors,
+    windows,
   };
 }
 
@@ -231,7 +253,7 @@ export function computeWallGeometry(fixture, options = {}) {
  * so a caller with its own transform (the Unit and Floor plate canvases) reuses
  * the same geometry. Door leaves use `doorFill`; walls use `wallFill`.
  */
-export function drawWallGeometry(ctx, geo, map = (p) => p, wallFill = '#2b2b2b', doorFill = '#b45309') {
+export function drawWallGeometry(ctx, geo, map = (p) => p, wallFill = '#2b2b2b', doorFill = '#b45309', glazingStroke = '#2b7a9b', glazingWidth = 1) {
   ctx.save();
   ctx.setLineDash([]);
   ctx.fillStyle = wallFill;
@@ -251,6 +273,20 @@ export function drawWallGeometry(ctx, geo, map = (p) => p, wallFill = '#2b2b2b',
       d.leaf.forEach((p, i) => { const [x, y] = map(p); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.closePath();
       ctx.fill();
+    }
+  }
+  if (geo.windows?.length) {
+    ctx.strokeStyle = glazingStroke;
+    ctx.lineWidth = glazingWidth;
+    for (const w of geo.windows) {
+      for (const [p, q] of w.lines) {
+        const [x0, y0] = map(p);
+        const [x1, y1] = map(q);
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
     }
   }
   ctx.restore();
@@ -330,7 +366,7 @@ export function renderPlanDrawing(ctx, fixture, options = {}) {
     const geo = computeWallGeometry(fixture, options);
     doors = geo.doors;
     if (showWalls) {
-      drawWallGeometry(ctx, geo, (p) => p, '#2b2b2b', null);
+      drawWallGeometry(ctx, geo, (p) => p, '#2b2b2b', null, '#2b7a9b', Math.max(1, 1 / scale));
     }
   }
 

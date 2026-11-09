@@ -1394,6 +1394,7 @@ def generate_route():
         "edges": plan.get("edges", []),
         "node_pos": plan.get("node_pos", {}),
         "doors": plan.get("doors", []),
+        "windows": plan.get("windows", []),
         "frame": plan.get("frame"),
         "room_edges": gen["room_edges"],
         "spec_nodes": spec["nodes"],

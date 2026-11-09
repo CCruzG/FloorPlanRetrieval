@@ -7,7 +7,8 @@
 //
 // Walls: the boundary edges (thickness by type: external 200, shared_wall 150,
 // facing_corridor 150) and one internal wall (100) on every stretch two rooms share,
-// except between rooms joined by an open edge (connection 2). Doors come from plan.doors.
+// except between rooms joined by an open edge (connection 2). Doors come from plan.doors,
+// windows from plan.windows (cut in the wall, two glazing lines drawn in the gap).
 
 import { METRES_PER_UNIT } from './constants.js';
 import { computeWallGeometry } from './plan-drawing-renderer.js';
@@ -96,10 +97,18 @@ export function planToDrawingFixture(plan, opts = {}) {
     };
   });
 
+  // Windows (plan.windows, from the Generator): centre, width and the contact run's ends, in mm.
+  // The wall's thickness follows the boundary edge the window sits on.
+  const windows = (plan.windows || []).map((w) => ({
+    room: w.room, kind: 'window', wall: w.wall.map(([x, y]) => [x * k, y * k]),
+    centre: [w.centre[0] * k, w.centre[1] * k], width: w.width_mm,
+    edgeType: types[w.edge_index] || 'external',
+  }));
+
   return {
     schema_version: 'generated-plan',
     boundary: { polygon, typed_edges: typedEdges },
-    plan: { rooms, edges, doors },
+    plan: { rooms, edges, doors, windows },
   };
 }
 
