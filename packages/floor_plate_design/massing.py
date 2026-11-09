@@ -22,11 +22,27 @@ from .compose import ComposedPlate, _plan_export
 SLAB_M = 0.25
 GROUND_EXTRA_M = 0.5
 CORE_OVERRUN_M = 1.2
+TRANSOM_M = 0.9
+GROUND_SLAB_OFFSET_M = 1.5
+GLAZED_ROOM_TYPES = ("living", "dining")
 _R = 4
 
 
 def _pts(poly) -> List[List[float]]:
     return [[round(float(p[0]), _R), round(float(p[1]), _R)] for p in poly]
+
+
+def _parts(geom):
+    """Polygon parts of a shapely result as (outer, [holes]) point lists; slivers dropped."""
+    if geom is None or geom.is_empty:
+        return []
+    geoms = [geom] if isinstance(geom, Polygon) else [g for g in getattr(geom, "geoms", []) if isinstance(g, Polygon)]
+    out = []
+    for g in geoms:
+        if g.area < 1e-6:
+            continue
+        out.append((list(g.exterior.coords)[:-1], [list(r.coords)[:-1] for r in g.interiors]))
+    return out
 
 
 def _storeys_allowed(storeys: int, f2f: float, gf2f: float, max_height_m: Optional[float]) -> int:
@@ -56,7 +72,9 @@ def _entrance_unit(units: List[Dict[str, Any]], pt) -> Optional[str]:
 def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor_m: float,
                            ground_floor_to_floor_m: Optional[float] = None,
                            max_height_m: Optional[float] = None,
-                           main_entrance_m: Optional[List[float]] = None) -> Dict[str, Any]:
+                           main_entrance_m: Optional[List[float]] = None,
+                           window_transom_m: float = TRANSOM_M,
+                           ground_slab_offset_m: float = GROUND_SLAB_OFFSET_M) -> Dict[str, Any]:
     if isinstance(storeys, bool) or not isinstance(storeys, int) or storeys < 1:
         raise ValueError("storeys must be an integer of at least 1")
     if not isinstance(floor_to_floor_m, (int, float)) or floor_to_floor_m <= SLAB_M:
@@ -67,6 +85,9 @@ def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor
         raise ValueError(f"ground_floor_to_floor_m must be above {SLAB_M}")
     if max_height_m is not None and (not isinstance(max_height_m, (int, float)) or max_height_m <= 0):
         raise ValueError("max_height_m must be a positive number")
+    for name, val in (("window_transom_m", window_transom_m), ("ground_slab_offset_m", ground_slab_offset_m)):
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or val < 0:
+            raise ValueError(f"{name} must be a number of at least 0")
     if main_entrance_m is None:
         main_entrance_m = (composed.options or {}).get("main_entrance_m")
 
@@ -90,15 +111,37 @@ def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor
     windows: List[Dict[str, Any]] = []
     fallback_units: List[str] = []
 
-    def add(stem, storey, role, ptype, polygon, z0, z1):
-        prisms.append({"id": f"{stem}@{storey}", "stem": stem, "storey": storey, "role": role,
-                       "type": ptype, "polygon": _pts(polygon), "z0": round(z0, 4), "z1": round(z1, 4)})
+    def add(stem, storey, role, ptype, polygon, z0, z1, holes=None):
+        prism = {"id": f"{stem}@{storey}", "stem": stem, "storey": storey, "role": role,
+                 "type": ptype, "polygon": _pts(polygon), "z0": round(z0, 4), "z1": round(z1, 4)}
+        if holes:
+            prism["holes"] = [_pts(h) for h in holes]
+        prisms.append(prism)
+
+    # The core prism runs the full height, so every slab has the core footprint cut out of it
+    # (no shared coplanar face). Ground slab: outline offset outward with mitred corners.
+    core_union = None
+    for c in asm.get("cores") or []:
+        cp = c.get("service_polygon") or c.get("polygon")
+        if cp and len(cp) >= 3:
+            core_union = Polygon(cp) if core_union is None else core_union.union(Polygon(cp))
+    outline = Polygon(boundary)
+    if not outline.is_valid:
+        outline = outline.buffer(0)
+    ground_outline = (outline.buffer(ground_slab_offset_m, join_style=2, mitre_limit=10.0)
+                      if ground_slab_offset_m > 0 else outline)
+
+    def add_slab(stem, storey, role, shape, z0, z1):
+        if core_union is not None:
+            shape = shape.difference(core_union)
+        for k, (outer, holes) in enumerate(_parts(shape)):
+            add(stem if k == 0 else f"{stem}.{k}", storey, role, None, outer, z0, z1, holes)
 
     for h in heights:
         i, base = h["storey"], h["z0"]
         floor_top = base + SLAB_M
         room_top = h["z1"]
-        add("slab", i, "slab", None, boundary, base, floor_top)
+        add_slab("slab", i, "slab", ground_outline if i == 0 else outline, base, floor_top)
         for c in asm.get("cores") or []:
             lob = c.get("lobby_polygon")
             if lob:
@@ -123,6 +166,9 @@ def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor
                 st = r.get("source_type")
                 add(f"{uid}/{r.get('id')}", i, "room", st if st is not None else r.get("type"),
                     r["polygon_m"], floor_top, room_top)
+            room_types = {r.get("id"): str(r.get("type") or "").lower() for r in plan.get("rooms") or []}
+            balconies = [Polygon(r["polygon_m"]) for r in plan.get("rooms") or []
+                         if str(r.get("type") or "").lower() == "balcony" and len(r.get("polygon_m") or []) >= 3]
             for k, w in enumerate(plan.get("windows_m") or []):
                 if not w.get("centre") or len(w.get("wall") or []) < 2:
                     continue
@@ -132,14 +178,18 @@ def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor
                 z1 = min(floor_top + head, room_top)
                 if z1 - z0 < 0.05:
                     continue
-                windows.append({
+                win = {
                     "id": f"{uid}/w{k}@{i}", "role": "window", "storey": i, "unit_id": uid,
                     "room": w.get("room"), "wall": _pts(w["wall"]), "centre": _pts([w["centre"]])[0],
                     "width_m": round((w.get("width_mm") or 0) / 1000.0, 4),
-                    "z0": round(z0, 4), "z1": round(z1, 4)})
-    add_roof = {"id": f"roof@{n}", "stem": "roof", "storey": n, "role": "roof", "type": None,
-                "polygon": _pts(boundary), "z0": round(z, 4), "z1": total}
-    prisms.append(add_roof)
+                    "z0": round(z0, 4), "z1": round(z1, 4)}
+                # Living/dining window with sill 0 and no balcony beside it reads as a door: split it at a transom.
+                if (window_transom_m > 0 and sill == 0 and room_types.get(w.get("room")) in GLAZED_ROOM_TYPES
+                        and not any(b.distance(Point(w["centre"])) < 0.3 for b in balconies)
+                        and z0 + window_transom_m < z1 - 0.05):
+                    win["transom_m"] = round(float(window_transom_m), 4)
+                windows.append(win)
+    add_slab("roof", n, "roof", outline, z, total)
     for c in asm.get("cores") or []:
         poly = c.get("service_polygon") or c.get("polygon")
         if poly:
@@ -159,6 +209,7 @@ def building_from_composed(composed: ComposedPlate, storeys: int, floor_to_floor
         "entrance_unit": entrance_uid if main_entrance_m is not None else None,
         "entrance": ent_note, "unit_fallbacks": fallback_units,
         "prism_count": len(prisms), "window_count": len(windows),
+        "window_transom_m": window_transom_m, "ground_slab_offset_m": ground_slab_offset_m,
     }
     return {"storeys_requested": storeys, "storeys": n, "heights": heights, "total_height_m": total,
             "prisms": prisms, "windows": windows, "report": report}

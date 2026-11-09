@@ -1701,7 +1701,7 @@ def compose_plate_export():
 @app.route("/compose_plate/massing", methods=["POST"])
 def compose_plate_massing():
     """Body: {record, storeys, floor_to_floor_m, ground_floor_to_floor_m?, max_height_m?,
-    main_entrance_m?}. Response: massing.building_from_composed (plate metres, y down, z up)."""
+    main_entrance_m?, window_transom_m? (0.9), ground_slab_offset_m? (1.5)}. Response: massing.building_from_composed (plate metres, y down, z up)."""
     from packages.floor_plate_design import compose, massing
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or not isinstance(body.get("record"), dict):
@@ -1710,7 +1710,9 @@ def compose_plate_massing():
         composed = compose.from_record(body["record"])
         building = massing.building_from_composed(
             composed, body.get("storeys", 4), body.get("floor_to_floor_m", 3.1),
-            body.get("ground_floor_to_floor_m"), body.get("max_height_m"), body.get("main_entrance_m"))
+            body.get("ground_floor_to_floor_m"), body.get("max_height_m"), body.get("main_entrance_m"),
+            body.get("window_transom_m", massing.TRANSOM_M),
+            body.get("ground_slab_offset_m", massing.GROUND_SLAB_OFFSET_M))
     except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(compose._jsonable(building))

@@ -938,9 +938,43 @@ export function createViewer3D({
     });
   }
 
+  // Shared by the Unit tab and the composed building. Draws one window as a box from y0 to y1 (scene y),
+  // centred at (cx,cz), `len` long, rotated by rotY. With transom (m above y0) it draws two glass boxes,
+  // y0 to y0+transom-0.025 and y0+transom+0.025 to y1, and fills the 50 mm gap with a thin opaque frame box.
+  const WINDOW_TRANSOM_GAP=0.05;
+  function addWindowBoxes({group,cx,cz,len,thickness,y0,y1,rotY,transom,userData}){
+    const glassMat=()=>new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75});
+    const place=(ya,yb,mat)=>{
+      const h=Math.max(0.01,yb-ya);
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(len,h,thickness),mat);
+      mesh.position.set(cx,(ya+yb)/2,cz);
+      mesh.rotation.y=rotY;
+      mesh.userData.captureRole='windows';
+      Object.assign(mesh.userData,userData||{});
+      mesh.castShadow=false;
+      mesh.receiveShadow=false;
+      group.add(mesh);
+      return mesh;
+    };
+    const tm=(typeof transom==='number'&&transom>0)?transom:0;
+    const half=WINDOW_TRANSOM_GAP/2;
+    if(tm>0&&y0+tm-half>y0&&y0+tm+half<y1){
+      place(y0,y0+tm-half,glassMat());
+      place(y0+tm+half,y1,glassMat());
+      // frame: opaque, slightly thicker than the glass so it reads as a bar
+      const frame=place(y0+tm-half,y0+tm+half,new THREE.MeshStandardMaterial({color:0x4a4a4a,roughness:0.6,metalness:0.2}));
+      frame.geometry.dispose();
+      frame.geometry=new THREE.BoxGeometry(len,WINDOW_TRANSOM_GAP,thickness*1.1);
+      return;
+    }
+    place(y0,y1,glassMat());
+  }
+
   // Generated plans: one opening box per derived window (plan.windows), from sill to head
   // (mm above the floor, read as metres like ROOM_HEIGHT), centred on the window and aligned to its wall.
-  function addGeneratedWindowGeometry(windows,state){
+  const GENERATED_TRANSOM_M=0.9; // same rule as massing.py: living/dining window, sill 0, no balcony (balconies are off)
+  function addGeneratedWindowGeometry(windows,state,rooms){
+    const typeById=new Map((rooms||[]).map((r)=>[String(r.id),String(r.type||'').toLowerCase()]));
     (windows||[]).forEach((w)=>{
       if(!Array.isArray(w?.centre)||!Array.isArray(w?.wall)||w.wall.length<2)return;
       const [cx,cz]=planPtToSceneXY(w.centre,state);
@@ -949,18 +983,10 @@ export function createViewer3D({
       const len=(w.width||0)*WORLD_SCALE;
       const sill=(w.sill_mm||0)/1000;
       const height=Math.max(0.05,((w.head_mm||2400)-(w.sill_mm||0))/1000);
-      const geom=new THREE.BoxGeometry(Math.max(len,WINDOW_THICKNESS),height,WINDOW_THICKNESS);
-      const mesh=new THREE.Mesh(
-        geom,
-        new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75})
-      );
-      mesh.position.set(cx,sill+height/2,cz);
-      mesh.rotation.y=-Math.atan2(bz-az,bx-ax);
-      mesh.userData.captureRole='windows';
-      mesh.userData.generatedWindow=true;
-      mesh.castShadow=false;
-      mesh.receiveShadow=false;
-      viewer3D.planGroup.add(mesh);
+      const rt=typeById.get(String(w.room));
+      const transom=(!(w.sill_mm>0)&&(rt==='living'||rt==='dining'))?GENERATED_TRANSOM_M:0;
+      addWindowBoxes({group:viewer3D.planGroup,cx,cz,len:Math.max(len,WINDOW_THICKNESS),thickness:WINDOW_THICKNESS,
+        y0:sill,y1:sill+height,rotY:-Math.atan2(bz-az,bx-ax),transom,userData:{generatedWindow:true}});
     });
   }
 
@@ -983,6 +1009,14 @@ export function createViewer3D({
     const shape=new THREE.Shape();
     poly.forEach(([x,y],i)=>{if(i===0)shape.moveTo(x,-y);else shape.lineTo(x,-y);});
     shape.closePath();
+    // holes (slab with the core cut out): THREE.Shape holes, same y flip as the outer ring
+    (prism.holes||[]).forEach((h)=>{
+      if(!Array.isArray(h)||h.length<3)return;
+      const path=new THREE.Path();
+      h.forEach(([x,y],i)=>{if(i===0)path.moveTo(x,-y);else path.lineTo(x,-y);});
+      path.closePath();
+      shape.holes.push(path);
+    });
     const geom=new THREE.ExtrudeGeometry(shape,{depth:prism.z1-prism.z0,bevelEnabled:false,steps:1});
     geom.rotateX(-Math.PI/2);
     const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
@@ -998,16 +1032,10 @@ export function createViewer3D({
   function addBuildingWindow(w,group){
     if(!Array.isArray(w?.centre)||!Array.isArray(w?.wall)||w.wall.length<2)return null;
     const [ax,ay]=w.wall[0],[bx,by]=w.wall[1];
-    const height=Math.max(0.05,w.z1-w.z0);
-    const mesh=new THREE.Mesh(
-      new THREE.BoxGeometry(Math.max(w.width_m||0,BUILDING_WINDOW_THICKNESS),height,BUILDING_WINDOW_THICKNESS),
-      new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75}));
-    mesh.position.set(w.centre[0],(w.z0+w.z1)/2,w.centre[1]);
-    mesh.rotation.y=-Math.atan2(by-ay,bx-ax);
-    mesh.userData.captureRole='windows';
-    mesh.userData.prismRole='window';
-    group.add(mesh);
-    return mesh;
+    addWindowBoxes({group,cx:w.centre[0],cz:w.centre[1],len:Math.max(w.width_m||0,BUILDING_WINDOW_THICKNESS),
+      thickness:BUILDING_WINDOW_THICKNESS,y0:w.z0,y1:Math.max(w.z1,w.z0+0.05),rotY:-Math.atan2(by-ay,bx-ax),
+      transom:w.transom_m,userData:{prismRole:'window',windowId:w.id}});
+    return true;
   }
 
   function build3DSceneFromBuilding(building){
@@ -1091,7 +1119,7 @@ export function createViewer3D({
       viewer3D.planGroup.add(mesh);
     });
 
-    if(gen)addGeneratedWindowGeometry(gen.windows,st);
+    if(gen)addGeneratedWindowGeometry(gen.windows,st,gen.rooms);
     else{addDoorGeometry(fp,st);addWindowGeometry(fp,st);}
 
     const boundaryShape=shapeFromPlanPolygon(boundaryPoly,st);

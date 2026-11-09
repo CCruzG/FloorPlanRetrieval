@@ -179,3 +179,73 @@ def test_bad_input():
         M.building_from_composed(composed(), 0, 3.1)
     with pytest.raises(ValueError):
         M.building_from_composed(composed(), 3, 0.1)
+
+
+def _slab_polys(b):
+    return [Polygon(p["polygon"], p.get("holes") or []) for p in b["prisms"] if p["role"] in ("slab", "roof")]
+
+
+def test_no_slab_intersects_core_footprint():
+    b = M.building_from_composed(composed(), 4, 3.1, main_entrance_m=[4, 0])
+    core = Polygon(assembler()["cores"][0]["service_polygon"])
+    slabs = [p for p in b["prisms"] if p["role"] in ("slab", "roof")]
+    assert len(slabs) == 5
+    for p in slabs:
+        assert Polygon(p["polygon"], p.get("holes") or []).intersection(core).area < 1e-6, p["id"]
+
+
+def test_slab_with_interior_core_gets_a_hole():
+    a = assembler()
+    a["cores"][0]["service_polygon"] = rect(16, 3, 19, 7)  # interior: slab keeps a hole
+    c = C.new_composed(a)
+    b = M.building_from_composed(c, 2, 3.1, ground_slab_offset_m=0)
+    roof = [p for p in b["prisms"] if p["role"] == "roof"]
+    assert len(roof) == 1 and len(roof[0]["holes"]) == 1
+    assert Polygon(roof[0]["polygon"], roof[0]["holes"]).area == pytest.approx(200 - 12)
+
+
+def test_slab_split_by_core_gives_one_prism_per_part():
+    a = assembler()
+    a["cores"][0]["service_polygon"] = rect(9, -1, 11, 11)  # cuts the 20 x 10 outline in two
+    b = M.building_from_composed(C.new_composed(a), 2, 3.1, ground_slab_offset_m=0)
+    roofs = [p for p in b["prisms"] if p["role"] == "roof"]
+    assert len(roofs) == 2 and len({p["id"] for p in roofs}) == 2
+    assert sum(Polygon(p["polygon"]).area for p in roofs) == pytest.approx(180)
+
+
+def test_living_dining_sill0_windows_carry_transom():
+    b = M.building_from_composed(composed(), 3, 3.1, main_entrance_m=[4, 0])
+    assert b["windows"] and all(w["room"] == "a" for w in b["windows"])
+    assert all(w["transom_m"] == 0.9 for w in b["windows"])
+    # bedroom window (sill 900) and a window in a bedroom with sill 0 get none
+    c = composed()
+    pl = c.slots["u2"].plan
+    pl["windows"][0]["room"] = "b"
+    pl["windows"].append(dict(pl["windows"][0], room="b", sill_mm=900))
+    b2 = M.building_from_composed(c, 2, 3.1)
+    assert not any("transom_m" in w for w in b2["windows"] if w["unit_id"] == "u2")
+    assert all("transom_m" in w for w in b2["windows"] if w["unit_id"] == "u1")
+    b3 = M.building_from_composed(composed(), 2, 3.1, window_transom_m=1.0)
+    assert all(w["transom_m"] == 1.0 for w in b3["windows"])
+    b4 = M.building_from_composed(composed(), 2, 3.1, window_transom_m=0)
+    assert not any("transom_m" in w for w in b4["windows"])
+
+
+def test_ground_slab_is_offset_outline_with_mitred_corners():
+    b = M.building_from_composed(composed(), 3, 3.1, main_entrance_m=[4, 0])
+    g = [p for p in b["prisms"] if p["role"] == "slab" and p["storey"] == 0]
+    up = [p for p in b["prisms"] if p["role"] == "slab" and p["storey"] == 1]
+    assert len(g) == 1 and len(up) == 1
+    gp, up_p = Polygon(g[0]["polygon"], g[0].get("holes") or []), Polygon(up[0]["polygon"], up[0].get("holes") or [])
+    assert gp.area > up_p.area
+    x0, y0, x1, y1 = Polygon(g[0]["polygon"]).bounds
+    assert (x0, y0, x1, y1) == pytest.approx((-1.5, -1.5, 21.5, 11.5))
+    # mitred, not rounded: full rectangle corner present
+    assert any(abs(x + 1.5) < 1e-6 and abs(y + 1.5) < 1e-6 for x, y in g[0]["polygon"])
+    assert Polygon(up[0]["polygon"]).bounds == pytest.approx((0, 0, 20, 10))
+    roof = [p for p in b["prisms"] if p["role"] == "roof"][0]
+    assert Polygon(roof["polygon"]).bounds == pytest.approx((0, 0, 20, 10))
+    # core subtracted from the ground slab too
+    assert gp.intersection(Polygon(assembler()["cores"][0]["service_polygon"])).area < 1e-6
+    b2 = M.building_from_composed(composed(), 2, 3.1, ground_slab_offset_m=3.0)
+    assert Polygon([p for p in b2["prisms"] if p["role"] == "slab" and p["storey"] == 0][0]["polygon"]).bounds == pytest.approx((-3, -3, 23, 13))

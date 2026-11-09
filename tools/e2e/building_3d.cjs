@@ -164,11 +164,32 @@ const PLATES = (process.env.PLATES || 'test-plate-001').split(',');
       check(tag('one entrance_lobby on the ground floor'), b.prisms.filter((p) => p.role === 'entrance_lobby' && p.storey === 0).length === 1);
       const top = Math.max(...b.prisms.filter((p) => p.role === 'core').map((p) => p.z1));
       check(tag('core rises above the roof'), top > b.total_height_m, JSON.stringify([top, b.total_height_m]));
+      // informational: non-slab prisms whose outline shares a collinear edge stretch with the core footprint
+      {
+        const core = b.prisms.find((p) => p.role === 'core');
+        const segs = (poly) => poly.map((q, i) => [q, poly[(i + 1) % poly.length]]);
+        const shared = (A, B) => { // collinear overlap length > 1 cm between any edge pair
+          for (const [a0, a1] of segs(A)) for (const [b0, b1] of segs(B)) {
+            const dx = a1[0] - a0[0], dy = a1[1] - a0[1], L = Math.hypot(dx, dy); if (L < 1e-9) continue;
+            const ux = dx / L, uy = dy / L;
+            const d0 = Math.abs((b0[0] - a0[0]) * uy - (b0[1] - a0[1]) * ux), d1 = Math.abs((b1[0] - a0[0]) * uy - (b1[1] - a0[1]) * ux);
+            if (d0 > 1e-3 || d1 > 1e-3) continue;
+            const t0 = (b0[0] - a0[0]) * ux + (b0[1] - a0[1]) * uy, t1 = (b1[0] - a0[0]) * ux + (b1[1] - a0[1]) * uy;
+            if (Math.min(L, Math.max(t0, t1)) - Math.max(0, Math.min(t0, t1)) > 0.01) return true;
+          }
+          return false;
+        };
+        const hits = b.prisms.filter((p) => p !== core && p.storey === 1 && shared(core.polygon, p.polygon)).map((p) => `${p.role}:${p.stem}`);
+        console.log('info: storey-1 prisms sharing a face with the core:', JSON.stringify(hits));
+      }
       let sc = await scene();
       console.log('scene', JSON.stringify(sc));
       check(tag('scene meshes = massing prisms'), sc.prisms === b.prisms.length, JSON.stringify([sc.prisms, b.prisms.length]));
-      check(tag('scene window meshes = massing windows'), sc.windows === b.windows.length, JSON.stringify([sc.windows, b.windows.length]));
-      check(tag('captureRole tags: walls, slabs, windows, ground'), sc.capture.walls > 0 && sc.capture.slabs === 5 && sc.capture.windows === b.windows.length && sc.ground === 1, JSON.stringify(sc.capture));
+      const nTransom = b.windows.filter((w) => w.transom_m).length;
+      const slabPrisms = b.prisms.filter((p) => p.role === 'slab' || p.role === 'roof').length;
+      check(tag('living/dining windows carry transom_m 0.9'), nTransom > 0 && b.windows.filter((w) => w.transom_m).every((w) => w.transom_m === 0.9), nTransom);
+      check(tag('scene window meshes = windows + 2 per transom window'), sc.windows === b.windows.length + 2 * nTransom, JSON.stringify([sc.windows, b.windows.length, nTransom]));
+      check(tag('captureRole tags: walls, slabs, windows, ground'), sc.capture.walls > 0 && sc.capture.slabs === slabPrisms && sc.capture.windows === b.windows.length + 2 * nTransom && sc.ground === 1, JSON.stringify(sc.capture));
       check(tag('scene height matches total height'), Math.abs(sc.y[1] - (b.total_height_m + 1.2)) < 0.01, JSON.stringify(sc.y));
       const status = await page.textContent('#viewer-3d-status');
       check(tag('3D status names the source'), /source: composed building/.test(status), status);
@@ -197,7 +218,7 @@ const PLATES = (process.env.PLATES || 'test-plate-001').split(',');
       check(tag('max height 8 m reduces storeys below 4'), b2.storeys >= 1 && b2.storeys < 4 && b2.total_height_m <= 8, JSON.stringify([b2.storeys, b2.total_height_m]));
       check(tag('requested stays 4, achieved reported'), b2.storeys_requested === 4 && b2.report && b2.report.storeys_achieved === b2.storeys);
       sc = await scene();
-      check(tag('scene follows the new building'), sc.prisms === b2.prisms.length && sc.windows === b2.windows.length, JSON.stringify([sc.prisms, b2.prisms.length]));
+      check(tag('scene follows the new building'), sc.prisms === b2.prisms.length && sc.windows === b2.windows.length + 2 * b2.windows.filter((w) => w.transom_m).length, JSON.stringify([sc.prisms, b2.prisms.length]));
       await page.screenshot({ path: path.join(SHOT_DIR, `building_${pid}_maxh.png`) });
 
       // source rule: 3D reached from the Unit tab does not show the building
