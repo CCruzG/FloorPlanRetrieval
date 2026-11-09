@@ -1675,6 +1675,12 @@ def compose_plate_route():
         return {**gen["plan"], "room_edges": gen["room_edges"], "sensors": gen["sensors"]}
 
     composed = compose.compose_plate(asm, retrieve, generate, allowed)
+    entrance = body.get("main_entrance_m")
+    if entrance is not None:
+        if not (isinstance(entrance, (list, tuple)) and len(entrance) == 2 and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) for v in entrance)):
+            return jsonify({"error": "main_entrance_m must be [x, y] in metres"}), 400
+        composed.options["main_entrance_m"] = [float(entrance[0]), float(entrance[1])]
     return jsonify({"status": "ok", "record": compose.to_record(composed)})
 
 
@@ -1690,6 +1696,24 @@ def compose_plate_export():
         return jsonify(compose.to_export(compose.from_record(body["record"])))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/compose_plate/massing", methods=["POST"])
+def compose_plate_massing():
+    """Body: {record, storeys, floor_to_floor_m, ground_floor_to_floor_m?, max_height_m?,
+    main_entrance_m?}. Response: massing.building_from_composed (plate metres, y down, z up)."""
+    from packages.floor_plate_design import compose, massing
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get("record"), dict):
+        return jsonify({"error": "record required"}), 400
+    try:
+        composed = compose.from_record(body["record"])
+        building = massing.building_from_composed(
+            composed, body.get("storeys", 4), body.get("floor_to_floor_m", 3.1),
+            body.get("ground_floor_to_floor_m"), body.get("max_height_m"), body.get("main_entrance_m"))
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(compose._jsonable(building))
 
 
 @app.route("/decompose", methods=["POST"])

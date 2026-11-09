@@ -2601,6 +2601,10 @@ let updateCursor=()=>{};
 let getGraphNodes=()=>null;
 let getPlateTransform=()=>null;
 
+let composedBuilding=null; // massing result of the composed plate (floor-plate-library.js showBuilding)
+let buildingSeq=0;
+let tabBefore3d=null;      // the tab that was active before the 3D tab
+
 const {
   captureDepthAndPreview,
   getCameraPerspectivePrompt,
@@ -2618,7 +2622,11 @@ const {
   // the generated overlay (Unit tab) when it has rooms: the 3D view then shows it, with its derived windows
   getGeneratedPlan:()=>(generatedRooms&&generatedRooms.length&&lastGenResp?.frame
     ?{rooms:generatedRooms,windows:lastGenResp.windows||[],boundary:lastGenResp.frame.boundary}:null),
+  // the composed building (Floor plate tab, "build 3D") when the 3D tab was reached from the Floor plate tab
+  getBuilding:()=>(composedBuilding&&tabBefore3d==='fp'?{building:composedBuilding,seq:buildingSeq}:null),
 });
+window.__viewer3D=viewer3D; // debug and E2E hooks
+window.__renderCaptureState=renderCaptureState;
 
 ({
   checkComfyConnection,
@@ -2692,6 +2700,7 @@ function clearBoundary(){
 }
 
 function setViewTab(tab,opts={}){
+  if(tab==='3d'&&activeTab!=='3d')tabBefore3d=activeTab;
   activeTab=tab;
   const panel2d=document.getElementById('panel-2d');
   const panel3d=document.getElementById('panel-3d');
@@ -2873,6 +2882,10 @@ fpLib=createFloorPlateLibrary({
   showUnitTab:()=>setViewTab('2d'),
   showPlateTab:()=>setViewTab('fp'),
   setComposedView:(rec,build)=>applyComposedView(rec,build),
+  showBuilding:(b)=>{
+    composedBuilding=b||null;
+    if(b){buildingSeq++;setViewTab('3d',{triggerBuild:true});}
+  },
   plateHit:(lx,ly)=>plateUnitAt(lx,ly),
   prepareUnitTab:()=>prepareUnitTab(),
   enterSlot:(slot)=>enterUnitSlot(slot),

@@ -27,6 +27,7 @@ export function createFloorPlateLibrary({
   showUnitTab,     // () => void: switches to the Unit tab
   showPlateTab,    // () => void: switches to the Floor plate tab
   setComposedView, // (view|null) => void: puts the composed drawing data in floorPlateState and renders
+  showBuilding,    // (building|null) => void: sets the composed building and, when given, shows the 3D tab
   plateHit,        // (logicalX, logicalY) => unit id | null (hit-test on the drawn plate)
   prepareUnitTab,  // () => void: clears generated overlay, cards and sensor panels of the previous unit
   enterSlot,       // (slot) => void: sets requirements, result cards, selection and generated overlay from a slot
@@ -411,6 +412,7 @@ export function createFloorPlateLibrary({
   function resetComposition(){
     composed=null;assembledUnits=[];activeUnit=null;plateStash=null;
     setComposedView?.(null);
+    showBuilding?.(null);
     syncReturn();
   }
 
@@ -486,6 +488,7 @@ export function createFloorPlateLibrary({
         mix:readMix(),
         street_edges:streetEdges.filter((e)=>e<n),
         north_deg:northDeg(),
+        main_entrance_m:getState().entrance?[getState().entrance.x*k,getState().entrance.y*k]:null,
       });
       if(res.status!=='ok'||!res.record)throw new Error(`${res.status||'no result'}: ${res.reason||''}`);
       const ids=Object.keys(res.record.slots);
@@ -494,6 +497,7 @@ export function createFloorPlateLibrary({
       }
       composed=res.record;
       activeUnit=null;
+      showBuilding?.(null);
       pushView();
       const slots=Object.values(composed.slots);
       const failed=slots.filter((x)=>x.status==='failed').map((x)=>x.unit_id);
@@ -504,6 +508,37 @@ export function createFloorPlateLibrary({
         (red.length?`\nhard sensor fails: ${red.join(', ')}`:''));
       const ex=$('fpl-btn-export');
       if(ex)ex.style.display='';
+      const bw=$('fpl-build-wrap');
+      if(bw)bw.style.display='flex';
+    }catch(err){setComposeStatus(err.message,true);}
+    finally{if(btn)btn.disabled=false;}
+  }
+
+  // "build 3D": storeys, floor-to-floor and maximum height go in the record's options; the
+  // massing route returns the building and the 3D tab shows it (ARCHITECTURE.md, "Plate composition").
+  async function buildBuilding(){
+    const btn=$('fpl-btn-build3d');
+    try{
+      if(!composed)throw new Error('generate all units first');
+      const storeys=parseInt($('fpl-storeys').value,10);
+      const f2f=parseFloat($('fpl-f2f').value);
+      const maxRaw=($('fpl-maxh').value||'').trim();
+      const maxH=maxRaw===''?null:parseFloat(maxRaw);
+      if(!Number.isInteger(storeys)||storeys<1)throw new Error('storeys must be a whole number of 1 or more');
+      if(!Number.isFinite(f2f)||f2f<=0.25)throw new Error('floor-to-floor must be a number above 0.25');
+      if(maxH!==null&&!(Number.isFinite(maxH)&&maxH>0))throw new Error('max height must be a positive number or blank');
+      composed.options={...(composed.options||{}),storeys,floor_to_floor_m:f2f,max_height_m:maxH};
+      if(btn)btn.disabled=true;
+      setComposeStatus('building…');
+      const b=await api('POST','/compose_plate/massing',{
+        record:composed,storeys,floor_to_floor_m:f2f,max_height_m:maxH,
+        main_entrance_m:composed.options.main_entrance_m||null,
+      });
+      const r=b.report||{};
+      setComposeStatus(
+        `${b.storeys}/${b.storeys_requested} storeys · ${b.total_height_m} m · ${b.prisms.length} prisms · ${b.windows.length} windows`+
+        `\n${r.entrance||''}`+(r.unit_fallbacks?.length?`\nno plan, shown as blocks: ${r.unit_fallbacks.join(', ')}`:''));
+      showBuilding?.(b);
     }catch(err){setComposeStatus(err.message,true);}
     finally{if(btn)btn.disabled=false;}
   }
@@ -617,7 +652,29 @@ export function createFloorPlateLibrary({
     const st=doc.createElement('div');
     st.id='fpl-compose-status';
     st.style.cssText='font-size:9px;color:var(--muted);line-height:1.4;white-space:pre-wrap';
-    box.appendChild(gen);box.appendChild(ex);box.appendChild(st);
+    const bw=doc.createElement('div');
+    bw.id='fpl-build-wrap';
+    bw.style.cssText='display:none;flex-direction:column;gap:3px';
+    const row=doc.createElement('div');
+    row.style.cssText='display:flex;gap:4px;align-items:center;font-size:9px;color:var(--muted)';
+    const mk=(id,label,val,ph)=>{
+      const l=doc.createElement('label');
+      l.style.cssText='display:flex;flex-direction:column;gap:1px;flex:1;min-width:0';
+      l.textContent=label;
+      const i=doc.createElement('input');
+      i.id=id;i.type='number';i.step=id==='fpl-storeys'?'1':'0.1';i.value=val;i.placeholder=ph||'';i.style.cssText=INP;
+      l.appendChild(i);
+      return l;
+    };
+    row.appendChild(mk('fpl-storeys','storeys','4'));
+    row.appendChild(mk('fpl-f2f','floor-to-floor m','3.1'));
+    row.appendChild(mk('fpl-maxh','max height m','','off'));
+    const b3=doc.createElement('button');
+    b3.id='fpl-btn-build3d';b3.className='clear-btn';b3.style.marginTop='0';
+    b3.textContent='build 3D';
+    b3.addEventListener('click',buildBuilding);
+    bw.appendChild(row);bw.appendChild(b3);
+    box.appendChild(gen);box.appendChild(ex);box.appendChild(bw);box.appendChild(st);
     wrap.after(box);
   }
 

@@ -28,6 +28,7 @@ export function createViewer3D({
   getSelectionState,
   getActiveTab,
   getGeneratedPlan=()=>null,
+  getBuilding=()=>null, // () => {building, seq} | null: the composed building when the 3D tab shows it
 }) {
   function getCameraPerspectivePrompt(view){
     const normalizedView=(view||'exterior').trim().toLowerCase();
@@ -963,10 +964,99 @@ export function createViewer3D({
     });
   }
 
+
+  // ── Composed building (massing.py output, plate metres, y down, z up) ────────────────────────
+  // 1 m = 1 world unit. Plate x maps to scene x, plate y to scene z (as planPtToSceneXY), z to scene y.
+  const BUILDING_ROLE_CAPTURE={
+    room:'walls',hall:'walls',lobby:'walls',core:'walls',entrance_lobby:'walls',unit_fallback:'walls',
+    slab:'slabs',roof:'slabs',window:'windows',
+  };
+  const BUILDING_ROLE_COLOR={
+    room:0xb8b8b8,hall:0xa0a8b0,lobby:0x9db0a0,core:0x6e6e6e,entrance_lobby:0xd9a066,
+    unit_fallback:0xc8b0b0,slab:0xd2d2d2,roof:0x9a9a9a,
+  };
+  const BUILDING_WINDOW_THICKNESS=0.2;
+
+  function addBuildingPrism(prism,group){
+    const poly=prism.polygon||[];
+    if(poly.length<3||!(prism.z1>prism.z0))return null;
+    const shape=new THREE.Shape();
+    poly.forEach(([x,y],i)=>{if(i===0)shape.moveTo(x,-y);else shape.lineTo(x,-y);});
+    shape.closePath();
+    const geom=new THREE.ExtrudeGeometry(shape,{depth:prism.z1-prism.z0,bevelEnabled:false,steps:1});
+    geom.rotateX(-Math.PI/2);
+    const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
+      color:BUILDING_ROLE_COLOR[prism.role]??0xb8b8b8,roughness:0.85,metalness:0.05,side:THREE.DoubleSide}));
+    mesh.position.y=prism.z0;
+    mesh.userData.captureRole=BUILDING_ROLE_CAPTURE[prism.role]||'walls';
+    mesh.userData.prismRole=prism.role;
+    mesh.userData.prismId=prism.id;
+    group.add(mesh);
+    return mesh;
+  }
+
+  function addBuildingWindow(w,group){
+    if(!Array.isArray(w?.centre)||!Array.isArray(w?.wall)||w.wall.length<2)return null;
+    const [ax,ay]=w.wall[0],[bx,by]=w.wall[1];
+    const height=Math.max(0.05,w.z1-w.z0);
+    const mesh=new THREE.Mesh(
+      new THREE.BoxGeometry(Math.max(w.width_m||0,BUILDING_WINDOW_THICKNESS),height,BUILDING_WINDOW_THICKNESS),
+      new THREE.MeshStandardMaterial({color:0x8a8a8a,roughness:0.35,metalness:0.15,transparent:true,opacity:0.75}));
+    mesh.position.set(w.centre[0],(w.z0+w.z1)/2,w.centre[1]);
+    mesh.rotation.y=-Math.atan2(by-ay,bx-ax);
+    mesh.userData.captureRole='windows';
+    mesh.userData.prismRole='window';
+    group.add(mesh);
+    return mesh;
+  }
+
+  function build3DSceneFromBuilding(building){
+    const empty=document.getElementById('viewer-3d-empty');
+    clear3DPlanGroup();
+    if(!building||!Array.isArray(building.prisms)||!building.prisms.length){
+      if(empty)empty.style.display='flex';
+      setViewer3DStatus('No composed building to show.');
+      return;
+    }
+    if(empty)empty.style.display='none';
+    const group=viewer3D.planGroup;
+    building.prisms.forEach((p)=>addBuildingPrism(p,group));
+    (building.windows||[]).forEach((w)=>addBuildingWindow(w,group));
+
+    const bounds=new THREE.Box3().setFromObject(group);
+    const size=bounds.getSize(new THREE.Vector3());
+    const centre=bounds.getCenter(new THREE.Vector3());
+    // ground plane: tagged 'ground', hidden during capture, top face at y = 0
+    const gw=Math.max(size.x,size.z)*3+10;
+    const ground=new THREE.Mesh(
+      new THREE.BoxGeometry(gw,0.1,gw),
+      new THREE.MeshStandardMaterial({color:0xe2e2e2,roughness:0.95,metalness:0}));
+    ground.position.set(centre.x,-0.05,centre.z);
+    ground.userData.captureRole='ground';
+    group.add(ground);
+
+    if(viewer3D.grid)viewer3D.grid.visible=false;
+    const radius=Math.max(1,bounds.getBoundingSphere(new THREE.Sphere()).radius);
+    const dist=radius*2.4;
+    viewer3D.camera.near=Math.max(0.1,dist/500);
+    viewer3D.camera.far=Math.max(100,dist*6);
+    viewer3D.camera.updateProjectionMatrix();
+    viewer3D.camera.position.set(centre.x+dist*0.55,centre.y+dist*0.45,centre.z+dist*0.7);
+    viewer3D.controls.target.set(centre.x,centre.y,centre.z);
+    viewer3D.controls.update();
+    viewer3D.lastBuild={
+      source:'building',storeys:building.storeys,prisms:building.prisms.length,
+      windows:(building.windows||[]).length,totalHeight:building.total_height_m,
+    };
+    setViewer3DStatus(`source: composed building · ${building.storeys} storeys, ${building.total_height_m} m, ${building.prisms.length} prisms, ${(building.windows||[]).length} windows.`);
+  }
+
   function build3DSceneFromActivePlan(){
     const s=getActiveFPState();
     const empty=document.getElementById('viewer-3d-empty');
     clear3DPlanGroup();
+    if(viewer3D.grid)viewer3D.grid.visible=true;
+    viewer3D.lastBuild={source:'plan'};
     if(!s||!s.fp){
       if(empty)empty.style.display='flex';
       setViewer3DStatus('No active plan selected.');
@@ -1042,7 +1132,7 @@ export function createViewer3D({
     const finalCenterZ=viewer3D.planGroup.position.z+cz;
     viewer3D.controls.target.set(finalCenterX,0,finalCenterZ);
     viewer3D.controls.update();
-    setViewer3DStatus(`Scene built: ${rooms.length} rooms extruded.`);
+    setViewer3DStatus(`source: ${gen?'generated unit':'retrieved plan'} · scene built: ${rooms.length} rooms extruded.`);
   }
 
   async function sync3DSceneIfNeeded(force=false){
@@ -1050,9 +1140,11 @@ export function createViewer3D({
     try{
       await init3DViewer();
       resize3DViewer();
-      const fp=getCurrentPlanFingerprint();
+      const bld=getBuilding();
+      const fp=bld?`building|${bld.seq}`:getCurrentPlanFingerprint();
       if(force||fp!==viewer3D.lastFingerprint){
-        build3DSceneFromActivePlan();
+        if(bld)build3DSceneFromBuilding(bld.building);
+        else build3DSceneFromActivePlan();
         viewer3D.lastFingerprint=fp;
       }
     }catch(err){
