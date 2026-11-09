@@ -261,7 +261,8 @@ def fit(source_spec, boundary, edge_types=None, entrance=None, mm_per_unit=None,
 def build_options(core_placement=False, core_block=True, area_lift=True,
                   source_rooms=None, pair_weights=None, cpsat_seed=CPSAT_SEED,
                   cpsat_workers=CPSAT_WORKERS, cpsat_time_s=CPSAT_TIME_S,
-                  cpsat_det_time=None, source_grid=False):
+                  cpsat_det_time=None, source_grid=False, door_width_mm=900.0,
+                  door_jamb_mm=100.0, door_min_wall_mm=1000.0, entrance_door_mm=900.0):
     """Generator and solver switches. Not part of the Spec: no move edits them.
 
     core_placement : False|True|"greedy"|"cpsat"|"cpsat_dim" (step 0)
@@ -275,6 +276,8 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
     source_grid    : experiment 2026-11-05. True: grid lines at the source_rooms
                      walls, cells owned by the source room, gap widths kept close
                      to the source. "flex": the same with the slack-by-flex solve.
+    door_*_mm      : door derivation (floorplan_core/doors.py): width, near-jamb offset
+                     from the wall end, shortest wall that takes a door, entrance width
     """
     return {
         "core_placement": core_placement,
@@ -287,6 +290,10 @@ def build_options(core_placement=False, core_block=True, area_lift=True,
         "cpsat_time_s": cpsat_time_s,
         "cpsat_det_time": cpsat_det_time,
         "source_grid": source_grid,
+        "door_width_mm": door_width_mm,
+        "door_jamb_mm": door_jamb_mm,
+        "door_min_wall_mm": door_min_wall_mm,
+        "entrance_door_mm": entrance_door_mm,
     }
 
 

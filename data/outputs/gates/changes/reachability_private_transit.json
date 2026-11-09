@@ -1,0 +1,10 @@
+{
+  "name": "reachability sensor also fails when a shared room (TRANSIT) is reachable only through a private room",
+  "written_before_code": true,
+  "may_move": {
+    "gen_passed_mean": {"direction": "worse", "max": 0.3},
+    "src_passed_mean": {"direction": "worse", "max": 0.3},
+    "plans_regressed": {"direction": "better", "max": null}
+  },
+  "must_improve": {}
+}

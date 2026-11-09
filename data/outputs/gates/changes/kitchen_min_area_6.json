@@ -1,0 +1,10 @@
+{
+  "name": "kitchen minimum area 8 -> 6 m2 (schema.MINIMUM_SIZES; Camilo 2026-11-09)",
+  "written_before_code": true,
+  "may_move": {
+    "gen_passed_mean": {"direction": "better", "max": null},
+    "src_passed_mean": {"direction": "better", "max": null},
+    "plans_regressed": {"direction": "worse", "max": null}
+  },
+  "must_improve": {}
+}

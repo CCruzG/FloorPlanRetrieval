@@ -13,6 +13,7 @@ const API_PROXY_TARGET = `http://127.0.0.1:${process.env.GATE_API_PORT || 5002}`
 const API_ROUTES = [
   "/config",
   "/assemble_floor_plate",
+  "/compose_plate",
   "/retrieve",
   "/fit",
   "/fit_schema",

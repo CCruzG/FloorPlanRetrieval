@@ -57,6 +57,7 @@ from packages.floorplan_core.rectangular_arrange import (
 # rectangular_arrange._label passes the raw spelling through, which missed every
 # MINIMUM_SIZES / FLEX key, so the solver ran with zero minimums.
 from packages.floorplan_core.topo_signature import _label
+from packages.floorplan_core.doors import derive_doors
 from packages.floorplan_core.spec import (
     build_options, validate_spec, CPSAT_SEED, CPSAT_WORKERS, CPSAT_TIME_S,
 )
@@ -816,7 +817,7 @@ def _realise(spec, options, claim_choice):
     if not nodes or len(boundary) < 3:
         return {"rooms": [], "edges": spec.get("adjacencies", []),
                 "entrance": spec.get("entrance"), "node_pos": {},
-                "feasible": False,
+                "doors": [], "feasible": False,
                 "report": {"reason": "no nodes or degenerate boundary",
                            "debug_steps": []}}
 
@@ -1464,13 +1465,22 @@ def _realise(spec, options, claim_choice):
                         "clipped_out": clipped_out,
                         "all_nodes_inside": all_nodes_inside})
 
+    # ── 5. doors (decision 2026-11-04): derived from the geometry, not stated in the Spec
+    doors, doors_unplaced = derive_doors(out_rooms, recon_edges, boundary, spec.get("entrance"),
+                                         mm, options)
+
     return {
         "rooms": out_rooms,
         "edges": recon_edges,
         "entrance": spec.get("entrance"),
         "node_pos": node_pos_out,
+        "doors": doors,
+        # What the drawing needs to read the plan alone (plan units; 1 unit = mm_per_unit mm).
+        "frame": {"boundary": [list(p) for p in boundary], "edge_types": list(spec.get("edge_types") or []),
+                  "mm_per_unit": mm},
         "feasible": feasible,
         "report": {
+            "doors_unplaced": doors_unplaced,
             "grid": [ncol, nrow],
             "grid_lines": grid_lines,
             "precedence": precedence_report,

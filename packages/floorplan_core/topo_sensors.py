@@ -33,6 +33,7 @@ from packages.floorplan_core.topo_signature import (
     _label,
     BEDROOMS,
     COMMON,
+    PRIVATE,
     TRANSIT,
     DAYLIGHT_NEEDING,
     WINDOW_MIN_WIDTH_M,   # shared with the raycast that drops narrower contacts
@@ -294,10 +295,57 @@ def check_reachability(ctx):
                 seen.add(nb)
                 queue.append(nb)
     unreachable = [rid for rid in all_ids if rid not in seen]
-    ok = not unreachable
-    detail = "all rooms reachable from entry" if ok else \
-        f"unreachable from entry {_nm(ctx, entry)}: {_nms(ctx, unreachable)}"
-    return {"ok": ok, "failing_rooms": unreachable, "margin": -float(len(unreachable)),
+
+    # Second test: private rooms are leaves (entered, not expanded), except the
+    # entry room itself. Every shared room (TRANSIT: living, dining, kitchen,
+    # circulation) must still be reached. Balconies and other rooms are not held
+    # to it: a balcony off a bedroom is normal (626 of 2000 RPlan plans, 2026-11-09).
+    lab = ctx["label_by_id"]
+    parent = {entry: None}
+    queue2 = [entry]
+    while queue2:
+        cur = queue2.pop(0)
+        if cur != entry and lab.get(cur) in PRIVATE:
+            continue
+        for nb in sorted(ctx["door_adj"].get(cur, ()), key=str):
+            if nb not in parent:
+                parent[nb] = cur
+                queue2.append(nb)
+    via_private = [rid for rid in all_ids
+                   if rid in seen and rid not in parent and lab.get(rid) in TRANSIT]
+
+    # Name the private room on the shortest route (BFS over the full graph,
+    # first private room met after the entry).
+    full_parent = {entry: None}
+    q3 = [entry]
+    while q3:
+        cur = q3.pop(0)
+        for nb in sorted(ctx["door_adj"].get(cur, ()), key=str):
+            if nb not in full_parent:
+                full_parent[nb] = cur
+                q3.append(nb)
+
+    def _private_on_route(rid):
+        node, found = rid, None
+        while node is not None:
+            node = full_parent.get(node)
+            if node is not None and node != entry and lab.get(node) in PRIVATE:
+                found = node
+        return found
+
+    failing = list(unreachable) + [r for r in via_private if r not in unreachable]
+    ok = not failing
+    parts = []
+    if unreachable:
+        parts.append(f"unreachable from entry {_nm(ctx, entry)}: {_nms(ctx, unreachable)}")
+    if via_private:
+        items = []
+        for rid in sorted(via_private, key=str):
+            pv = _private_on_route(rid)
+            items.append(f"{_nm(ctx, rid)} via {_nm(ctx, pv)}" if pv is not None else _nm(ctx, rid))
+        parts.append("reachable only through a private room: " + ", ".join(items))
+    detail = "all rooms reachable from entry" if ok else "; ".join(parts)
+    return {"ok": ok, "failing_rooms": failing, "margin": -float(len(failing)),
             "detail": detail}
 
 

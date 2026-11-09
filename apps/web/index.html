@@ -446,6 +446,12 @@ details.ss[open] > summary { margin-bottom:8px; }
       <div id="fpl-list" style="display:flex;flex-direction:column;gap:5px;margin-top:4px"></div>
     </div>
 
+    <div class="ss" id="unit-return" style="display:none">
+      <div class="sl">plate composition</div>
+      <div id="unit-return-label" style="font-size:10px;color:var(--muted);margin-bottom:4px"></div>
+      <button class="run-btn" id="btn-back-to-plate" style="margin-top:0">back to plate</button>
+    </div>
+
     <div class="ss">
       <div class="sl">requirements</div>
       <div class="stat" title="area of the drawn boundary; updates while drawing">
@@ -484,6 +490,8 @@ details.ss[open] > summary { margin-bottom:8px; }
         show graph</label>
         <label><input type="checkbox" id="chk-plan-geom" checked>
         plan geometry</label>
+        <label><input type="checkbox" id="chk-draw-walls" checked>
+        draw walls</label>
       </div>
       <details class="ss" style="padding:0;border:none;margin-bottom:8px">
         <summary>weights &amp; results</summary>
@@ -522,7 +530,7 @@ details.ss[open] > summary { margin-bottom:8px; }
       <button class="clear-btn" id="btn-generate-swap" style="width:100%;margin-top:4px" disabled>generate + swap selected</button>
       <button class="clear-btn" id="btn-generate-reset" style="width:100%;margin-top:4px;display:none">reset generate</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer" title="one rectangle per node: hallway arms become spaces open to the living area. Off: one rectangle per room."><input type="checkbox" id="chk-node-generate" checked> generate from node graph</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer" title="experiment: grid lines at the retrieved plan's walls, cells owned by its rooms, widths kept close to it. Tested with placement off."><input type="checkbox" id="chk-source-grid"> grid from source walls</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer" title="experiment: grid lines at the retrieved plan's walls, cells owned by its rooms, widths kept close to it. Tested with placement off."><input type="checkbox" id="chk-source-grid" checked> grid from source walls</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:6px;cursor:pointer"><input type="checkbox" id="chk-area-lift" checked> min_area lift (step 3)</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:4px;cursor:pointer"><input type="checkbox" id="chk-core-block" checked> core block (step 3 · min_edge on a room rectangle)</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:10px;margin-top:4px;cursor:pointer">core placement (step 0 places cores, moves nodes)

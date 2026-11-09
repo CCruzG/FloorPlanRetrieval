@@ -1,0 +1,38 @@
+{
+ "date": "2026-11-06",
+ "git_hash": "38def56",
+ "dirty": true,
+ "argv": [
+  "--fast"
+ ],
+ "baseline": "main",
+ "change": null,
+ "overall": "PASS",
+ "seconds": {
+  "unit": 1.7036712169647217,
+  "selftest": 0.11188602447509766,
+  "moves": 81.43637299537659,
+  "determinism": 31.197810888290405
+ },
+ "stages": {
+  "unit": {
+   "status": "PASS",
+   "detail": "113 passed, 1 warning in 1.43s",
+   "failures": []
+  },
+  "selftest": {
+   "status": "PASS",
+   "detail": "exit 0",
+   "failures": []
+  },
+  "moves": {
+   "status": "PASS",
+   "detail": "SetConnection 14/14 predicted=actual, mismatches 0; SetPrecedence 12/12 predicted=actual, mismatches 0",
+   "failures": []
+  },
+  "determinism": {
+   "status": "PASS",
+   "detail": "12 cases (3 plans x rooms/nodes x cpsat/cpsat_dim), byte-identical twice in-process and across 2 processes"
+  }
+ }
+}

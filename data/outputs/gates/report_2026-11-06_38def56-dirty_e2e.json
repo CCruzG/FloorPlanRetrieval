@@ -1,0 +1,32 @@
+{
+ "date": "2026-11-06",
+ "git_hash": "38def56",
+ "dirty": true,
+ "argv": [
+  "--stage",
+  "e2e"
+ ],
+ "baseline": "main",
+ "change": null,
+ "overall": "FAIL",
+ "seconds": {
+  "e2e": 42.891061305999756
+ },
+ "stages": {
+  "e2e": {
+   "status": "FAIL",
+   "detail": "31/32 checks",
+   "failures": [
+    "c(cpsat): boundary_contacts.entrance.met is true :: {\"applied\":true,\"entry_room\":\"r_3/primary\",\"met\":false}"
+   ],
+   "shots": [
+    "data/outputs/gates/shots/38def56/01_005b_retrieved.png",
+    "data/outputs/gates/shots/38def56/02_generate_nodes_off.png",
+    "data/outputs/gates/shots/38def56/03_generate_nodes_cpsat.png",
+    "data/outputs/gates/shots/38def56/04_after_reset.png",
+    "data/outputs/gates/shots/38def56/05_generate_swap.png",
+    "data/outputs/gates/shots/38def56/06_generate_rooms_mode.png"
+   ]
+  }
+ }
+}

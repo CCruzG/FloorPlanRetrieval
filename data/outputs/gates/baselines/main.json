@@ -1,9 +1,9 @@
 {
  "name": "main",
- "git_hash": "de0d24a",
+ "git_hash": "2b833f0",
  "dirty": true,
- "date": "2026-11-05",
- "reason": "dining term off by default (2026-11-05): retrieval no longer favours the 1.6% of plans with a dining room, so placement runs on different plans. Reviewed and accepted by Camilo.",
+ "date": "2026-11-09",
+ "reason": "2026-11-09: (1) reachability fails a shared room (TRANSIT) reachable only through a private room; (2) kitchen minimum area 8 -> 6 m2 (Camilo). Doors derived in the Generator move no metric. CP-SAT modes (not adopted) move both ways; node-driven placement improves.",
  "solver": {
   "workers": 1,
   "det_time": 1.0,
@@ -22,38 +22,38 @@
     "placement/cpsat/sensors_passed": 101,
     "placement/cpsat/entrance_fail": 1,
     "placement/cpsat/reachability_fail": 0,
-    "placement/cpsat/d24_failing": 11,
+    "placement/cpsat/d24_failing": 10,
     "placement/cpsat/lost_source_door_open_edges": 5,
     "placement/cpsat/infeasible": 0,
-    "placement/cpsat/order_violated": 22,
+    "placement/cpsat/order_violated": 26,
     "placement/cpsat_dim/sensors_passed": 93,
     "placement/cpsat_dim/entrance_fail": 1,
     "placement/cpsat_dim/reachability_fail": 6,
     "placement/cpsat_dim/d24_failing": 11,
     "placement/cpsat_dim/lost_source_door_open_edges": 10,
     "placement/cpsat_dim/infeasible": 0,
-    "placement/cpsat_dim/order_violated": 14,
+    "placement/cpsat_dim/order_violated": 11,
     "placement/nodes+off/sensors_passed": 85,
     "placement/nodes+off/entrance_fail": 1,
     "placement/nodes+off/reachability_fail": 6,
-    "placement/nodes+off/d24_failing": 15,
+    "placement/nodes+off/d24_failing": 11,
     "placement/nodes+off/lost_source_door_open_edges": 5,
     "placement/nodes+off/infeasible": 2,
     "placement/nodes+off/order_violated": 0,
-    "placement/nodes+cpsat/sensors_passed": 100,
+    "placement/nodes+cpsat/sensors_passed": 103,
     "placement/nodes+cpsat/entrance_fail": 0,
     "placement/nodes+cpsat/reachability_fail": 0,
-    "placement/nodes+cpsat/d24_failing": 8,
-    "placement/nodes+cpsat/lost_source_door_open_edges": 1,
+    "placement/nodes+cpsat/d24_failing": 6,
+    "placement/nodes+cpsat/lost_source_door_open_edges": 2,
     "placement/nodes+cpsat/infeasible": 3,
-    "placement/nodes+cpsat/order_violated": 21,
-    "placement/nodes+cpsat_dim/sensors_passed": 98,
+    "placement/nodes+cpsat/order_violated": 18,
+    "placement/nodes+cpsat_dim/sensors_passed": 99,
     "placement/nodes+cpsat_dim/entrance_fail": 0,
     "placement/nodes+cpsat_dim/reachability_fail": 1,
-    "placement/nodes+cpsat_dim/d24_failing": 10,
-    "placement/nodes+cpsat_dim/lost_source_door_open_edges": 3,
-    "placement/nodes+cpsat_dim/infeasible": 4,
-    "placement/nodes+cpsat_dim/order_violated": 11
+    "placement/nodes+cpsat_dim/d24_failing": 7,
+    "placement/nodes+cpsat_dim/lost_source_door_open_edges": 2,
+    "placement/nodes+cpsat_dim/infeasible": 5,
+    "placement/nodes+cpsat_dim/order_violated": 10
    },
    "per_plan": {
     "placement/off/test_boundary_001#1": {
@@ -110,11 +110,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
+      "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/nodes+cpsat_dim/test_boundary_001#1": {
      "sensors_ok": {
@@ -123,10 +123,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/off/test_boundary_001#2": {
      "sensors_ok": {
@@ -147,10 +147,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/cpsat_dim/test_boundary_001#2": {
      "sensors_ok": {
@@ -183,10 +183,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/nodes+cpsat_dim/test_boundary_001#2": {
      "sensors_ok": {
@@ -218,11 +218,11 @@
       "access_typed": true,
       "entrance_valid": false,
       "daylight": true,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/cpsat_dim/test_boundary_001#3": {
      "sensors_ok": {
@@ -519,10 +519,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+off/test_boundary_003#1": {
      "sensors_ok": {
@@ -555,10 +555,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/off/test_boundary_003#2": {
      "sensors_ok": {
@@ -579,10 +579,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/cpsat_dim/test_boundary_003#2": {
      "sensors_ok": {
@@ -591,10 +591,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+off/test_boundary_003#2": {
      "sensors_ok": {
@@ -758,11 +758,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": false,
-      "room_depth": true,
+      "room_depth": false,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/nodes+cpsat_dim/test_boundary_004#1": {
      "sensors_ok": {
@@ -771,10 +771,10 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": true,
+      "min_room_size": false,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 5
     },
     "placement/off/test_boundary_004#2": {
      "sensors_ok": {
@@ -830,11 +830,11 @@
       "access_typed": true,
       "entrance_valid": true,
       "daylight": true,
-      "room_depth": false,
+      "room_depth": true,
       "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 6
+     "passed": 7
     },
     "placement/nodes+cpsat_dim/test_boundary_004#2": {
      "sensors_ok": {
@@ -843,8 +843,8 @@
       "entrance_valid": true,
       "daylight": true,
       "room_depth": false,
-      "min_room_size": false,
-      "node_in_room": true
+      "min_room_size": true,
+      "node_in_room": false
      },
      "passed": 5
     },
@@ -939,10 +939,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/cpsat_dim/test_boundary_001b#1": {
      "sensors_ok": {
@@ -987,10 +987,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": false,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 4
+     "passed": 5
     },
     "placement/off/test_boundary_001b#2": {
      "sensors_ok": {
@@ -1263,10 +1263,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/nodes+cpsat_dim/test_boundary_005b#2": {
      "sensors_ok": {
@@ -1275,10 +1275,10 @@
       "entrance_valid": true,
       "daylight": false,
       "room_depth": true,
-      "min_room_size": false,
+      "min_room_size": true,
       "node_in_room": true
      },
-     "passed": 5
+     "passed": 6
     },
     "placement/off/test_boundary_005b#3": {
      "sensors_ok": {
@@ -1361,57 +1361,57 @@
     "round_trip_dev/rooms/describe/off/plans_losing_door": 184,
     "round_trip_dev/rooms/describe/off/lost_door_open": 255,
     "round_trip_dev/rooms/describe/off/entrance_missed": 46,
-    "round_trip_dev/rooms/describe/off/gen_passed_mean": 4.51,
+    "round_trip_dev/rooms/describe/off/gen_passed_mean": 4.52,
     "round_trip_dev/rooms/describe/off/plans_regressed": 205,
     "round_trip_dev/rooms/identity/off/feasible": 267,
-    "round_trip_dev/rooms/identity/off/iou_median": 0.621,
+    "round_trip_dev/rooms/identity/off/iou_median": 0.622,
     "round_trip_dev/rooms/identity/off/plans_losing_door": 160,
     "round_trip_dev/rooms/identity/off/lost_door_open": 209,
     "round_trip_dev/rooms/identity/off/entrance_missed": 35,
     "round_trip_dev/rooms/identity/off/gen_passed_mean": 4.65,
     "round_trip_dev/rooms/identity/off/plans_regressed": 196,
     "round_trip_dev/nodes/describe/off/feasible": 293,
-    "round_trip_dev/nodes/describe/off/iou_median": 0.654,
+    "round_trip_dev/nodes/describe/off/iou_median": 0.655,
     "round_trip_dev/nodes/describe/off/plans_losing_door": 137,
     "round_trip_dev/nodes/describe/off/lost_door_open": 187,
     "round_trip_dev/nodes/describe/off/entrance_missed": 21,
     "round_trip_dev/nodes/describe/off/gen_passed_mean": 4.81,
-    "round_trip_dev/nodes/describe/off/plans_regressed": 154,
+    "round_trip_dev/nodes/describe/off/plans_regressed": 153,
     "round_trip_dev/nodes/identity/off/feasible": 278,
     "round_trip_dev/nodes/identity/off/iou_median": 0.624,
     "round_trip_dev/nodes/identity/off/plans_losing_door": 138,
     "round_trip_dev/nodes/identity/off/lost_door_open": 183,
     "round_trip_dev/nodes/identity/off/entrance_missed": 17,
-    "round_trip_dev/nodes/identity/off/gen_passed_mean": 4.76,
-    "round_trip_dev/nodes/identity/off/plans_regressed": 165,
+    "round_trip_dev/nodes/identity/off/gen_passed_mean": 4.77,
+    "round_trip_dev/nodes/identity/off/plans_regressed": 164,
     "round_trip_dev/rooms/describe/cpsat/feasible": 23,
-    "round_trip_dev/rooms/describe/cpsat/iou_median": 0.383,
+    "round_trip_dev/rooms/describe/cpsat/iou_median": 0.381,
     "round_trip_dev/rooms/describe/cpsat/plans_losing_door": 5,
     "round_trip_dev/rooms/describe/cpsat/lost_door_open": 5,
-    "round_trip_dev/rooms/describe/cpsat/entrance_missed": 13,
-    "round_trip_dev/rooms/describe/cpsat/gen_passed_mean": 5.93,
-    "round_trip_dev/rooms/describe/cpsat/plans_regressed": 12,
+    "round_trip_dev/rooms/describe/cpsat/entrance_missed": 12,
+    "round_trip_dev/rooms/describe/cpsat/gen_passed_mean": 5.83,
+    "round_trip_dev/rooms/describe/cpsat/plans_regressed": 13,
     "round_trip_dev/rooms/identity/cpsat/feasible": 23,
-    "round_trip_dev/rooms/identity/cpsat/iou_median": 0.318,
+    "round_trip_dev/rooms/identity/cpsat/iou_median": 0.359,
     "round_trip_dev/rooms/identity/cpsat/plans_losing_door": 5,
     "round_trip_dev/rooms/identity/cpsat/lost_door_open": 5,
-    "round_trip_dev/rooms/identity/cpsat/entrance_missed": 12,
-    "round_trip_dev/rooms/identity/cpsat/gen_passed_mean": 5.87,
-    "round_trip_dev/rooms/identity/cpsat/plans_regressed": 14,
-    "round_trip_dev/nodes/describe/cpsat/feasible": 20,
-    "round_trip_dev/nodes/describe/cpsat/iou_median": 0.39,
+    "round_trip_dev/rooms/identity/cpsat/entrance_missed": 11,
+    "round_trip_dev/rooms/identity/cpsat/gen_passed_mean": 5.73,
+    "round_trip_dev/rooms/identity/cpsat/plans_regressed": 13,
+    "round_trip_dev/nodes/describe/cpsat/feasible": 19,
+    "round_trip_dev/nodes/describe/cpsat/iou_median": 0.434,
     "round_trip_dev/nodes/describe/cpsat/plans_losing_door": 11,
     "round_trip_dev/nodes/describe/cpsat/lost_door_open": 13,
-    "round_trip_dev/nodes/describe/cpsat/entrance_missed": 7,
-    "round_trip_dev/nodes/describe/cpsat/gen_passed_mean": 5.9,
-    "round_trip_dev/nodes/describe/cpsat/plans_regressed": 9,
+    "round_trip_dev/nodes/describe/cpsat/entrance_missed": 6,
+    "round_trip_dev/nodes/describe/cpsat/gen_passed_mean": 5.87,
+    "round_trip_dev/nodes/describe/cpsat/plans_regressed": 7,
     "round_trip_dev/nodes/identity/cpsat/feasible": 19,
-    "round_trip_dev/nodes/identity/cpsat/iou_median": 0.406,
+    "round_trip_dev/nodes/identity/cpsat/iou_median": 0.446,
     "round_trip_dev/nodes/identity/cpsat/plans_losing_door": 11,
     "round_trip_dev/nodes/identity/cpsat/lost_door_open": 14,
-    "round_trip_dev/nodes/identity/cpsat/entrance_missed": 6,
-    "round_trip_dev/nodes/identity/cpsat/gen_passed_mean": 5.77,
-    "round_trip_dev/nodes/identity/cpsat/plans_regressed": 11,
+    "round_trip_dev/nodes/identity/cpsat/entrance_missed": 7,
+    "round_trip_dev/nodes/identity/cpsat/gen_passed_mean": 5.67,
+    "round_trip_dev/nodes/identity/cpsat/plans_regressed": 10,
     "round_trip_dev/all/errors": 0
    },
    "per_plan": {
@@ -1652,7 +1652,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/18790": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/77144": {
@@ -1704,7 +1704,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/31220": {
-     "gen_passed": 4,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/54084": {
@@ -1784,7 +1784,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/57864": {
-     "gen_passed": 3,
+     "gen_passed": 4,
      "feasible": false
     },
     "round_trip_dev/rooms/describe/off/47375": {
@@ -2224,7 +2224,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/58741": {
-     "gen_passed": 4,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/78604": {
@@ -2564,7 +2564,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/61377": {
-     "gen_passed": 5,
+     "gen_passed": 4,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/off/17097": {
@@ -2984,7 +2984,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/off/57864": {
-     "gen_passed": 3,
+     "gen_passed": 4,
      "feasible": false
     },
     "round_trip_dev/rooms/identity/off/47375": {
@@ -3224,7 +3224,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/off/39474": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/off/67481": {
@@ -5128,7 +5128,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/14274": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/80515": {
@@ -5372,7 +5372,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/77923": {
-     "gen_passed": 4,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/43916": {
@@ -5448,7 +5448,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/23284": {
-     "gen_passed": 2,
+     "gen_passed": 3,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/26162": {
@@ -5720,7 +5720,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/63159": {
-     "gen_passed": 3,
+     "gen_passed": 4,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/off/48796": {
@@ -6252,11 +6252,11 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/49734": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/21922": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/75410": {
@@ -6292,7 +6292,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/6609": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/63467": {
@@ -6300,15 +6300,15 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/59241": {
-     "gen_passed": 4,
-     "feasible": true
-    },
-    "round_trip_dev/rooms/describe/cpsat/24861": {
      "gen_passed": 5,
      "feasible": true
     },
-    "round_trip_dev/rooms/describe/cpsat/43042": {
+    "round_trip_dev/rooms/describe/cpsat/24861": {
      "gen_passed": 7,
+     "feasible": true
+    },
+    "round_trip_dev/rooms/describe/cpsat/43042": {
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/69442": {
@@ -6332,15 +6332,15 @@
      "feasible": true
     },
     "round_trip_dev/rooms/describe/cpsat/80515": {
-     "gen_passed": 6,
-     "feasible": true
-    },
-    "round_trip_dev/rooms/identity/cpsat/24978": {
      "gen_passed": 5,
      "feasible": true
     },
-    "round_trip_dev/rooms/identity/cpsat/72664": {
+    "round_trip_dev/rooms/identity/cpsat/24978": {
      "gen_passed": 6,
+     "feasible": true
+    },
+    "round_trip_dev/rooms/identity/cpsat/72664": {
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/rooms/identity/cpsat/38209": {
@@ -6364,15 +6364,15 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/44478": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/4039": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/49734": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/21922": {
@@ -6412,7 +6412,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/6609": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/63467": {
@@ -6420,15 +6420,15 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/59241": {
-     "gen_passed": 5,
-     "feasible": true
-    },
-    "round_trip_dev/rooms/identity/cpsat/24861": {
      "gen_passed": 6,
      "feasible": true
     },
-    "round_trip_dev/rooms/identity/cpsat/43042": {
+    "round_trip_dev/rooms/identity/cpsat/24861": {
      "gen_passed": 7,
+     "feasible": true
+    },
+    "round_trip_dev/rooms/identity/cpsat/43042": {
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/69442": {
@@ -6440,7 +6440,7 @@
      "feasible": false
     },
     "round_trip_dev/rooms/identity/cpsat/13626": {
-     "gen_passed": 5,
+     "gen_passed": 6,
      "feasible": false
     },
     "round_trip_dev/rooms/identity/cpsat/71339": {
@@ -6452,7 +6452,7 @@
      "feasible": true
     },
     "round_trip_dev/rooms/identity/cpsat/80515": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/24978": {
@@ -6460,15 +6460,15 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/72664": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/38209": {
-     "gen_passed": 7,
-     "feasible": true
+     "gen_passed": 5,
+     "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/35896": {
-     "gen_passed": 5,
+     "gen_passed": 7,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/14957": {
@@ -6476,7 +6476,7 @@
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/65900": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/72600": {
@@ -6484,7 +6484,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/44478": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/4039": {
@@ -6500,7 +6500,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/75410": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/58925": {
@@ -6508,7 +6508,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/62007": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/16510": {
@@ -6532,19 +6532,19 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/6609": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/63467": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/59241": {
-     "gen_passed": 3,
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/24861": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/43042": {
@@ -6556,11 +6556,11 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/12897": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/13626": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/71339": {
@@ -6568,7 +6568,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/describe/cpsat/14274": {
-     "gen_passed": 6,
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/nodes/describe/cpsat/80515": {
@@ -6580,7 +6580,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/72664": {
-     "gen_passed": 4,
+     "gen_passed": 6,
      "feasible": false
     },
     "round_trip_dev/nodes/identity/cpsat/38209": {
@@ -6588,19 +6588,19 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/35896": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": false
     },
     "round_trip_dev/nodes/identity/cpsat/14957": {
-     "gen_passed": 5,
+     "gen_passed": 3,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/65900": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/72600": {
-     "gen_passed": 5,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/44478": {
@@ -6616,11 +6616,11 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/21922": {
-     "gen_passed": 6,
+     "gen_passed": 7,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/75410": {
-     "gen_passed": 7,
+     "gen_passed": 5,
      "feasible": false
     },
     "round_trip_dev/nodes/identity/cpsat/58925": {
@@ -6668,7 +6668,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/43042": {
-     "gen_passed": 7,
+     "gen_passed": 6,
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/69442": {
@@ -6688,7 +6688,7 @@
      "feasible": true
     },
     "round_trip_dev/nodes/identity/cpsat/14274": {
-     "gen_passed": 6,
+     "gen_passed": 4,
      "feasible": false
     },
     "round_trip_dev/nodes/identity/cpsat/80515": {

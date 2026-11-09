@@ -1,5 +1,6 @@
 import { COMMON_AREA_TYPES, METRES_PER_UNIT, RCOLS, ROOM_TYPES, VR } from './constants.js';
 import { bdryCenter, rotatePtAround } from './geometry.js';
+import { drawWallGeometry } from './plan-drawing-renderer.js';
 
 // id -> abbr lookup for the debug type label drawn on each room in drawFP.
 const ROOM_ABBR = Object.fromEntries((ROOM_TYPES.types || []).map((t) => [t.id, t.abbr]));
@@ -35,6 +36,7 @@ export function createCanvasRenderer({
   }
 
   let lastGraphNodes=null;
+  let lastPlateT=null;
 
   function render(){
     const {
@@ -77,6 +79,7 @@ export function createCanvasRenderer({
       generatedGrid,
       generatedEdges,
       generatedRoomEdges,
+      generatedWalls,
       measureMode,
       measureA,
       measureB,
@@ -101,7 +104,9 @@ export function createCanvasRenderer({
 
     drawScaleGrid(ctx,cW,cH);
 
-    if(devMode?.enabled&&devMode?.showFloorPlateOverlay&&floorPlateState){
+    // Plate overlay only on the Floor plate tab (2026-11-09): elsewhere it hid the
+    // unit opened from an assembled plate and its retrieved plan.
+    if(activeTab==='fp'&&devMode?.enabled&&devMode?.showFloorPlateOverlay&&floorPlateState){
       renderFloorPlate(ctx,floorPlateState,cW,cH,devMode);
       ctx.restore();
       drawScaleBar(ctx,cW,cH,vpZoom);
@@ -335,7 +340,12 @@ export function createCanvasRenderer({
       // boundary. Dashed slate = cut between node bands (moves with the solve);
       // solid amber = pinned to a boundary vertex (notch-aligned, never moves);
       // hatched = cell outside the boundary (no owner, no area credited).
-      const G=generatedGrid;
+      // Walls and doors (plan-drawing-renderer, via the adapter): on by default, independent
+      // of the graph toggle. The graph layers below draw only when the graph toggle is on.
+      const drawnWalls=!!(params.drawWalls!==false&&generatedWalls);
+      const showGen=!drawnWalls||params.showGraph;
+      const MM_UNIT=METRES_PER_UNIT*1000;
+      const G=showGen?generatedGrid:null;   // grid, cores, placement are diagnostics: with walls drawn they follow the graph toggle
       if(G&&Array.isArray(G.xs)&&Array.isArray(G.ys)&&G.xs.length>1&&G.ys.length>1){
         ctx.save();ctx.globalAlpha=0.3;   // faint: context under the rooms, not content
         const gx=G.xs,gy=G.ys,x0=gx[0],x1=gx[gx.length-1],y0=gy[0],y1=gy[gy.length-1];
@@ -367,13 +377,15 @@ export function createCanvasRenderer({
         ctx.closePath();
         // Hallways are amber, as in the node graph, so generated circulation reads at once.
         ctx.fillStyle=(room.label==='Hallway'||room.type==='hallway')?'#f59e0bcc':GPAL[ri%GPAL.length]+'99';ctx.fill();
-        ctx.strokeStyle='#1e293b';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
+        // With walls drawn the poché is the outline; an open edge then shows no line.
+        if(!drawnWalls){ctx.strokeStyle='#1e293b';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();}
         const cx=room.polygon.reduce((a,p)=>a+p[0],0)/room.polygon.length;
         const cy=room.polygon.reduce((a,p)=>a+p[1],0)/room.polygon.length;
         const[lx,ly]=toPx([cx,cy]);
         ctx.fillStyle='#0f172a';ctx.font='10px monospace';ctx.textAlign='center';
         ctx.fillText(String(room.type??room.id),lx,ly);
       });
+      if(drawnWalls)drawWallGeometry(ctx,generatedWalls,([x,y])=>toPx([x/MM_UNIT,y/MM_UNIT]));
       // Core blocks over the rooms (report.grid_lines.cores): the rectangle of each
       // room's cells that step 3 holds to min_edge. Green dashed = at least
       // min_edge on both sides and still whole after clip + arms; red = short or
@@ -424,7 +436,7 @@ export function createCanvasRenderer({
       // own edges (reflects a Stage-2 SetConnection edit); falls back to the
       // retrieved source's edges when nothing has been generated with edits yet.
       const genEdges=generatedEdges||(results[selected]?.fp?.edges)||[];
-      genEdges.forEach((e)=>{
+      (showGen?genEdges:[]).forEach((e)=>{
         const a=generatedNodes?.[String(e.u)],b=generatedNodes?.[String(e.v)];
         if(!Array.isArray(a)||!Array.isArray(b))return;
         const[ax,ay]=toPx(a),[bx,by]=toPx(b);
@@ -446,7 +458,7 @@ export function createCanvasRenderer({
       // too (the graph view only draws them when the overlay is off).
       const _etc={external:'#22c55e',shared_wall:'#64748b',facing_corridor:'#eab308'};
       const genRE=generatedRoomEdges||{};
-      Object.entries(genRE).forEach(([rid,conns])=>{
+      Object.entries(showGen?genRE:{}).forEach(([rid,conns])=>{
         const node=generatedNodes?.[String(rid)];
         if(!Array.isArray(node)||node.length<2)return;
         const[gnx,gny]=toPx(node);
@@ -459,7 +471,7 @@ export function createCanvasRenderer({
         });
       });
       ctx.setLineDash([]);
-      Object.values(generatedNodes||{}).forEach((p)=>{
+      Object.values(showGen?(generatedNodes||{}):{}).forEach((p)=>{
         if(!Array.isArray(p)||p.length<2)return;
         const[px,py]=toPx(p);
         ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);
@@ -690,6 +702,7 @@ export function createCanvasRenderer({
     const xOffset=(W-scale*spanX)/2-minX*scale;
     const yOffset=(H-scale*spanY)/2-minY*scale;
     const t=([x,y])=>[x*scale+xOffset,y*scale+yOffset];
+    lastPlateT={scale,xOffset,yOffset};   // for click hit-tests on units (plate composition)
     const centroid=(poly)=>{
       const n=poly.length;
       if(!n)return[0,0];
@@ -806,6 +819,44 @@ export function createCanvasRenderer({
         const poly=unit.polygon;
         drawPoly(poly,{fill:'rgba(16,185,129,0.12)',stroke:'rgba(5,150,105,0.9)',lineWidth:1.5});
 
+        // Plate composition: the unit's generated rooms (floorPlate.composed[unitIdx], mm),
+        // filled by room type, with labels. The outline is drawn again over the room strokes.
+        const composedUnit=floorPlate.composed?.[unitIdx];
+        const composedRooms=composedUnit?.rooms||[];
+        if(composedRooms.length){
+          composedRooms.forEach((room)=>{
+            const rpoly=room.polygon;
+            if(!Array.isArray(rpoly)||rpoly.length<3)return;
+            c.beginPath();
+            rpoly.forEach((pt,i)=>{const[rx,ry]=t(pt);i===0?c.moveTo(rx,ry):c.lineTo(rx,ry);});
+            c.closePath();
+            c.fillStyle=(RCOLS[room.source_type]??'#ccc')+'cc';
+            c.fill();
+            if(!composedUnit.walls){
+              c.strokeStyle='#00000040';
+              c.lineWidth=0.75;
+              c.setLineDash([]);
+              c.stroke();
+            }
+          });
+          // Walls and doors of the generated plan (adapter + plan-drawing-renderer), under the labels.
+          if(composedUnit.walls)drawWallGeometry(c,composedUnit.walls,t);
+          composedRooms.forEach((room)=>{
+            const rpoly=room.polygon;
+            const txt=String(room.label||'');
+            if(!txt||!Array.isArray(rpoly)||rpoly.length<3)return;
+            const pts=rpoly.map(t);
+            const px=pts.map((q)=>q[0]),py=pts.map((q)=>q[1]);
+            const bw=Math.max(...px)-Math.min(...px),bh=Math.max(...py)-Math.min(...py);
+            if(bw<26||bh<11)return;
+            c.fillStyle='#1f2937';
+            c.font='8px monospace';
+            c.textAlign='center';
+            c.fillText(txt.slice(0,Math.max(3,Math.floor(bw/5))),(Math.min(...px)+Math.max(...px))/2,(Math.min(...py)+Math.max(...py))/2+3);
+          });
+          drawPoly(poly,{stroke:'rgba(5,150,105,0.9)',lineWidth:1.5});
+        }
+
         if(Array.isArray(unit.typed_edges)){
           unit.typed_edges.forEach((typedEdge)=>{
             const edgeIndex=typedEdge.edge_index;
@@ -840,10 +891,12 @@ export function createCanvasRenderer({
         c.textAlign='center';
         const labelType=unit.type||'unit';
         const unitLabel=showElementIds?`${unit.id||'unit'} (${labelType})`:labelType;
-        c.fillText(unitLabel,ux,uy-2);
-        const area=resolveUnitAreaM2(unit,poly);
-        c.fillStyle='#0f766e';
-        c.fillText(`${area.toFixed(2)} m2`,ux,uy+10);
+        if(!composedRooms.length){
+          c.fillText(unitLabel,ux,uy-2);
+          const area=resolveUnitAreaM2(unit,poly);
+          c.fillStyle='#0f766e';
+          c.fillText(`${area.toFixed(2)} m2`,ux,uy+10);
+        }
 
         // Retrieved plan id, when a layout has been retrieved for this unit.
         // Makes it readable at a glance which units drew the SAME source plan
@@ -863,7 +916,7 @@ export function createCanvasRenderer({
           const from=poly[i];
           const to=poly[(i+1)%poly.length];
           const lenM=linM(Math.hypot(to[0]-from[0],to[1]-from[1]));
-          if(lenM<0.05)continue;
+          if(lenM<0.05||composedRooms.length)continue;
           const label=`${lenM.toFixed(2)}m`;
           const [x1,y1]=t(from);
           const [x2,y2]=t(to);
@@ -977,6 +1030,23 @@ export function createCanvasRenderer({
               c.setLineDash([]);
             }
           });
+        }
+
+        // Plate composition badge, e.g. "u1 2B1b 5/7". Red when a hard sensor fails or generation failed.
+        if(composedUnit?.badge){
+          const pts=(poly||[]).map(t);
+          const bx=Math.min(...pts.map((q)=>q[0]))+3,by=Math.min(...pts.map((q)=>q[1]))+3;
+          c.save();
+          c.font='bold 9px monospace';
+          c.textAlign='left';
+          c.textBaseline='top';
+          const label=composedUnit.badge.text;
+          const bwid=c.measureText(label).width+8;
+          c.fillStyle=composedUnit.badge.fail?'#dc2626':'#047857';
+          c.fillRect(bx,by,bwid,14);
+          c.fillStyle='#ffffff';
+          c.fillText(label,bx+4,by+3);
+          c.restore();
         }
       });
     }
@@ -1665,5 +1735,6 @@ export function createCanvasRenderer({
     render,
     updateCursor,
     getGraphNodes: () => lastGraphNodes,
+    getPlateTransform: () => lastPlateT,
   };
 }

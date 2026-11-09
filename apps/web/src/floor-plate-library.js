@@ -4,6 +4,7 @@
 // packages/floor_plate_design/library.py). Canvas units are normalised; the file is
 // in metres (canvas frame, y down), converted with METRES_PER_UNIT.
 import { METRES_PER_UNIT } from './constants.js';
+import { wallGeometryForPlan } from './plan-drawing-adapter.js';
 import { createLoadedBoundaryState } from './queryState.js';
 
 const BTN='flex-shrink:0;padding:1px 4px;font-size:9px;font-family:var(--mono);background:transparent;border:1px solid var(--border2);border-radius:3px;color:var(--muted);cursor:pointer;line-height:1.5';
@@ -23,6 +24,13 @@ export function createFloorPlateLibrary({
   checkReady,
   loadAssembled,   // (assemblerResult) => void: puts the result in floorPlateState
   clearAssembled,  // () => void: drops an assembled result from floorPlateState
+  showUnitTab,     // () => void: switches to the Unit tab
+  showPlateTab,    // () => void: switches to the Floor plate tab
+  setComposedView, // (view|null) => void: puts the composed drawing data in floorPlateState and renders
+  plateHit,        // (logicalX, logicalY) => unit id | null (hit-test on the drawn plate)
+  prepareUnitTab,  // () => void: clears generated overlay, cards and sensor panels of the previous unit
+  enterSlot,       // (slot) => void: sets requirements, result cards, selection and generated overlay from a slot
+  captureSlot,     // () => Promise<{requirements,candidates,chosen,plan,sensors,options}|null>
 }) {
   const $=(id)=>doc.getElementById(id);
   let plates=[];
@@ -30,6 +38,13 @@ export function createFloorPlateLibrary({
   let streetEdges=[];
   let visible=false;
   let fetched=false;
+  // Plate composition (2026-11-09): the record from POST /compose_plate (app units; see
+  // packages/floor_plate_design/compose.py), the units of the last assemble, the unit open in
+  // the Unit tab, and the plate outline to restore when the Floor plate tab shows again.
+  let composed=null;
+  let assembledUnits=[];
+  let activeUnit=null;
+  let plateStash=null;
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const northDeg=()=>{
@@ -151,6 +166,7 @@ export function createFloorPlateLibrary({
       edgeTypes:(p.edge_types||[]).map((t)=>t||undefined),
     }));
     clearAssembled?.();
+    resetComposition();
     showAssembleResult('');
     loadedId=p.id;
     streetEdges=Array.isArray(p.street_edges)?p.street_edges.slice():[];
@@ -345,6 +361,264 @@ export function createFloorPlateLibrary({
     if(!el)return;
     el.textContent=txt;
     el.style.color=isErr?'var(--red)':'var(--muted)';
+    $('fpl-unit-buttons')?.remove();
+    $('fpl-compose')?.remove();
+  }
+
+  // One button per assembled unit. Click: Unit tab, boundary = unit polygon,
+  // entrance = unit.entrance_point, edge types = unit.typed_edges, boundary closed.
+  // Retrieval is not run. Unit data is metres, canvas frame, y down.
+  function openUnit(u){
+    const k=METRES_PER_UNIT;
+    const types=[];
+    (u.typed_edges||[]).forEach((e)=>{types[e.edge_index]=e.type;});
+    if(!plateStash){
+      const st=getState();
+      plateStash={
+        boundary:st.boundary.map(({x,y})=>({x,y})),
+        entrance:st.entrance?{x:st.entrance.x,y:st.entrance.y}:null,
+        edgeTypes:(st.edgeTypes||[]).slice(),
+      };
+    }
+    showUnitTab?.();
+    prepareUnitTab?.();
+    applyState(createLoadedBoundaryState({
+      vertices:u.polygon.map(([x,y])=>({x:x/k,y:y/k})),
+      entrance:u.entrance_point?{x:u.entrance_point[0]/k,y:u.entrance_point[1]/k}:null,
+      edgeTypes:types,
+    }));
+    $('entrance-controls').style.display='block';
+    $('btn-entrance-mode').classList.remove('active');
+    if(getState().entrance){updateEntranceInfo();}
+    $('canvas-hint').textContent=`unit ${u.id} loaded · press retrieve`;
+    $('s-bv').textContent=getState().boundary.length;
+    $('result-count').textContent='';
+    fitViewport();
+    checkReady();
+    render();
+    activeUnit=u.id;
+    const slot=composed?.slots?.[u.id];
+    if(slot){
+      enterSlot?.(slot);
+      $('canvas-hint').textContent=`unit ${u.id} from the plate · pick a rank, generate, then back to plate`;
+    }
+    syncReturn();
+  }
+
+  // ── plate composition: generate all, drill-down return, export ────────────
+  const SLOT_DONE=['generated','failed','edited'];
+
+  function resetComposition(){
+    composed=null;assembledUnits=[];activeUnit=null;plateStash=null;
+    setComposedView?.(null);
+    syncReturn();
+  }
+
+  function sensorsRecord(sensors){
+    if(!sensors||typeof sensors!=='object')return null;
+    const checks=Array.isArray(sensors.checks)?sensors.checks:[];
+    return {summary:sensors.summary||{},failing:checks.filter((c)=>c&&!c.ok&&!c.skipped)};
+  }
+
+  // Drawing data for the canvas: {unitIdx: {rooms (mm), badge{text,fail}}}, joined to
+  // floor_plate.units by id. The record itself stays in this module.
+  function viewFromRecord(rec,units){
+    if(!rec)return null;
+    const k=METRES_PER_UNIT*1000;
+    const view={};
+    (units||[]).forEach((u,idx)=>{
+      const slot=rec.slots?.[u.id];
+      if(!slot||!SLOT_DONE.includes(slot.status))return;
+      const s=slot.sensors?.summary||{};
+      if(slot.status==='failed'||!slot.plan){
+        view[idx]={rooms:[],badge:{text:`${u.id} ${u.type} failed`,fail:true}};
+        return;
+      }
+      const rooms=(slot.plan.rooms||[]).map((r)=>({
+        polygon:(r.polygon||[]).map(([x,y])=>[x*k,y*k]),
+        source_type:r.source_type??r.type,
+        label:r.label||(typeof r.type==='string'?r.type:'')||'',
+      }));
+      const score=(typeof s.passed==='number'&&typeof s.total==='number')?` ${s.passed}/${s.total}`:'';
+      let walls=null;
+      if(slot.plan.frame){
+        try{walls=wallGeometryForPlan(slot.plan);}catch(e){console.warn('wall drawing failed',u.id,e);}
+      }
+      view[idx]={rooms,walls,badge:{
+        text:`${u.id} ${u.type}${score}${slot.status==='edited'?' edited':''}`,
+        fail:s.gates_pass===false,
+      }};
+    });
+    return view;
+  }
+
+  function pushView(){
+    setComposedView?.(composed,viewFromRecord);
+  }
+
+  function readMix(){
+    const mix={};
+    MIX_TYPES.forEach((t)=>{
+      const v=parseFloat($(`fpl-mix-${t}`).value);
+      mix[t]=Number.isFinite(v)&&v>0?v:0;
+    });
+    return mix;
+  }
+
+  function setComposeStatus(txt,isErr=false){
+    const el=$('fpl-compose-status');
+    if(!el)return;
+    el.textContent=txt;
+    el.style.color=isErr?'var(--red)':'var(--muted)';
+  }
+
+  async function composeAll(){
+    const btn=$('fpl-btn-compose');
+    try{
+      if(!assembledUnits.length)throw new Error('assemble the plate first');
+      const { boundary }=getState();
+      const k=METRES_PER_UNIT;
+      const n=boundary.length;
+      if(btn)btn.disabled=true;
+      setComposeStatus('generating all units…');
+      const res=await api('POST','/compose_plate',{
+        boundary_m:boundary.map(({x,y})=>[x*k,y*k]),
+        mix:readMix(),
+        street_edges:streetEdges.filter((e)=>e<n),
+        north_deg:northDeg(),
+      });
+      if(res.status!=='ok'||!res.record)throw new Error(`${res.status||'no result'}: ${res.reason||''}`);
+      const ids=Object.keys(res.record.slots);
+      if(ids.length!==assembledUnits.length||!assembledUnits.every((u)=>ids.includes(u.id))){
+        throw new Error('the plate changed since it was assembled: assemble again');
+      }
+      composed=res.record;
+      activeUnit=null;
+      pushView();
+      const slots=Object.values(composed.slots);
+      const failed=slots.filter((x)=>x.status==='failed').map((x)=>x.unit_id);
+      const red=slots.filter((x)=>x.status!=='failed'&&x.sensors?.summary?.gates_pass===false).map((x)=>x.unit_id);
+      setComposeStatus(
+        `${slots.length-failed.length}/${slots.length} units generated`+
+        (failed.length?`\nfailed: ${failed.join(', ')}`:'')+
+        (red.length?`\nhard sensor fails: ${red.join(', ')}`:''));
+      const ex=$('fpl-btn-export');
+      if(ex)ex.style.display='';
+    }catch(err){setComposeStatus(err.message,true);}
+    finally{if(btn)btn.disabled=false;}
+  }
+
+  async function exportComposed(){
+    try{
+      if(!composed)throw new Error('generate all units first');
+      const data=await api('POST','/compose_plate/export',{record:composed});
+      const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+      const a=doc.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='composed-plate.json';
+      doc.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+      setComposeStatus('exported composed-plate.json');
+    }catch(err){setComposeStatus(err.message,true);}
+  }
+
+  // Show or hide the "back to plate" block (Unit tab, while a unit from the plate is open).
+  function syncReturn(){
+    const box=$('unit-return');
+    if(!box)return;
+    box.style.display=(activeUnit&&!visible)?'block':'none';
+    const lbl=$('unit-return-label');
+    if(lbl)lbl.textContent=activeUnit?`unit ${activeUnit} opened from the plate`:'';
+  }
+
+  // Write the unit's current selection, generated plan, sensors and options into its slot
+  // (status edited), then show the plate. With no generated plan and no selection the slot
+  // is left as it was.
+  async function backToPlate(){
+    const btn=$('btn-back-to-plate');
+    const slot=activeUnit?composed?.slots?.[activeUnit]:null;
+    try{
+      if(btn)btn.disabled=true;
+      if(slot){
+        const work=await captureSlot?.();
+        if(work){
+          slot.requirements=work.requirements;
+          slot.candidates=work.candidates;
+          slot.chosen=work.chosen;
+          slot.plan=work.plan;
+          slot.options=work.options;
+          slot.sensors=sensorsRecord(work.sensors);
+          slot.status='edited';
+          slot.error=null;
+        }
+      }
+      activeUnit=null;
+      pushView();
+      showPlateTab?.();
+      syncReturn();
+    }catch(err){
+      $('canvas-hint').textContent=`back to plate failed: ${err.message}`;
+    }finally{if(btn)btn.disabled=false;}
+  }
+
+  // Click on the drawn plate (Floor plate tab): open the unit under the pointer.
+  function clickPlate(lx,ly){
+    if(!visible||!assembledUnits.length)return false;
+    const id=plateHit?.(lx,ly);
+    const u=id?assembledUnits.find((x)=>x.id===id):null;
+    if(!u)return false;
+    openUnit(u);
+    return true;
+  }
+
+  // The Floor plate tab shows again: put the plate outline back as the boundary.
+  function restorePlate(){
+    if(!plateStash)return;
+    const st=plateStash;
+    plateStash=null;
+    prepareUnitTab?.();
+    applyState(createLoadedBoundaryState({vertices:st.boundary,entrance:st.entrance,edgeTypes:st.edgeTypes}));
+    const vp=getViewport();
+    vp.zoom=1;vp.panX=0;vp.panY=0;
+    if(getState().entrance)updateEntranceInfo();
+    $('canvas-hint').textContent='floor plate loaded';
+    $('s-bv').textContent=getState().boundary.length;
+    $('result-count').textContent='';
+    checkReady();
+    render();
+  }
+
+  function showUnitButtons(units){
+    const out=$('fpl-assemble-result');
+    if(!out)return;
+    const wrap=doc.createElement('div');
+    wrap.id='fpl-unit-buttons';
+    wrap.style.cssText='display:flex;flex-direction:column;gap:2px;margin-top:4px';
+    units.forEach((u)=>{
+      const b=doc.createElement('button');
+      b.className='clear-btn';
+      b.dataset.unit=u.id;
+      b.textContent=`open ${u.id} (${u.type}, ${Math.round(u.area)} m²)`;
+      b.addEventListener('click',()=>openUnit(u));
+      wrap.appendChild(b);
+    });
+    out.after(wrap);
+    const box=doc.createElement('div');
+    box.id='fpl-compose';
+    box.style.cssText='display:flex;flex-direction:column;gap:3px;margin-top:6px';
+    const gen=doc.createElement('button');
+    gen.id='fpl-btn-compose';gen.className='clear-btn';gen.style.marginTop='0';
+    gen.textContent='generate all units';
+    gen.addEventListener('click',composeAll);
+    const ex=doc.createElement('button');
+    ex.id='fpl-btn-export';ex.className='clear-btn';ex.style.cssText='margin-top:0;display:none';
+    ex.textContent='export composed plate';
+    ex.addEventListener('click',exportComposed);
+    const st=doc.createElement('div');
+    st.id='fpl-compose-status';
+    st.style.cssText='font-size:9px;color:var(--muted);line-height:1.4;white-space:pre-wrap';
+    box.appendChild(gen);box.appendChild(ex);box.appendChild(st);
+    wrap.after(box);
   }
 
   async function assemble(){
@@ -352,15 +626,12 @@ export function createFloorPlateLibrary({
     try{
       const { boundary, closed }=getState();
       if(!closed||boundary.length<3)throw new Error('close the boundary first');
-      const mix={};
-      MIX_TYPES.forEach((t)=>{
-        const v=parseFloat($(`fpl-mix-${t}`).value);
-        mix[t]=Number.isFinite(v)&&v>0?v:0;
-      });
+      const mix=readMix();
       if(!Object.values(mix).some((v)=>v>0))throw new Error('give at least one mix weight above 0');
       const k=METRES_PER_UNIT;
       const n=boundary.length;
       if(btn)btn.disabled=true;
+      resetComposition();
       showAssembleResult('assembling…');
       const res=await api('POST','/assemble_floor_plate',{
         boundary_m:boundary.map(({x,y})=>[x*k,y*k]),
@@ -374,9 +645,11 @@ export function createFloorPlateLibrary({
         return;
       }
       loadAssembled(res);
+      assembledUnits=res.units||[];
       const counts=MIX_TYPES.filter((t)=>(m.achieved_counts||{})[t]).map((t)=>`${m.achieved_counts[t]}×${t}`).join(' ');
       showAssembleResult(
         `status: ok\n${m.units} units: ${counts}\ncommons ${m.commons_pct}% · farthest walk ${m.max_walk_m} m · residual ${m.residual_m2} m²`);
+      showUnitButtons(res.units||[]);
     }catch(err){showAssembleResult(err.message,true);}
     finally{if(btn)btn.disabled=false;}
   }
@@ -387,6 +660,8 @@ export function createFloorPlateLibrary({
     const sec=$('fpl-section');
     if(sec)sec.style.display=on?'block':'none';
     if(!on&&getState().mode==='streetEdge'){setMode('select');syncModeButton();}
+    if(on)restorePlate();
+    syncReturn();
     if(on){
       if(!fetched)refresh().catch((err)=>setStatus(err.message,true));
       sync();
@@ -398,6 +673,7 @@ export function createFloorPlateLibrary({
     streetEdges=[];
     loadedId=null;
     clearAssembled?.();
+    resetComposition();
     showAssembleResult('');
     if(visible){renderList();sync();}
   }
@@ -407,9 +683,10 @@ export function createFloorPlateLibrary({
     $('fpl-btn-save-new')?.addEventListener('click',saveNew);
     $('fpl-btn-update')?.addEventListener('click',updateLoaded);
     $('fpl-north')?.addEventListener('input',()=>render());
+    $('btn-back-to-plate')?.addEventListener('click',backToPlate);
   }
   buildAssembleBlock();
   bind();
 
-  return { setVisible, sync, overlay, clickStreetEdge, onBoundaryCleared, syncModeButton };
+  return { setVisible, sync, overlay, clickStreetEdge, onBoundaryCleared, syncModeButton, clickPlate };
 }

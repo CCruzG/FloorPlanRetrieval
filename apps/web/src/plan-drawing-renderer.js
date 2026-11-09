@@ -125,6 +125,25 @@ function doorCutRect(a, b, centre, width, wallThickness) {
   ];
 }
 
+/** The door leaf: a thin rectangle of `width` along a->b, `leaf` thick, centred on `centre`. */
+function doorLeafRect(a, b, centre, width, leaf) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const hw = width / 2;
+  const ht = leaf / 2;
+  const nx = -uy;
+  const ny = ux;
+  return [
+    [centre[0] - ux * hw + nx * ht, centre[1] - uy * hw + ny * ht],
+    [centre[0] + ux * hw + nx * ht, centre[1] + uy * hw + ny * ht],
+    [centre[0] + ux * hw - nx * ht, centre[1] + uy * hw - ny * ht],
+    [centre[0] - ux * hw - nx * ht, centre[1] - uy * hw - ny * ht],
+  ];
+}
+
 /**
  * Build the wall poché as a set of Clipper paths (mm, un-scaled), plus the
  * list of door openings (for drawing swing arcs separately).
@@ -138,25 +157,47 @@ export function computeWallGeometry(fixture, options = {}) {
   const doorCuts = [];
   const doors = [];
 
-  // --- Boundary: one closed band, uniform thickness for now (v1 —
-  // per-edge-type boundary thickness needs corner-aware segment offsetting,
-  // deferred; see pipeline-architecture.md task list). Uses the "external"
-  // default since that is the majority edge type on every fixture seen so far.
-  const boundaryHalf = thickness.external / 2;
-  const outer = offsetClosedPolygon(boundary.polygon, boundaryHalf);
-  const inner = offsetClosedPolygon(boundary.polygon, -boundaryHalf);
-  const boundaryBand = differencePaths(outer, inner);
-  wallPaths.push(...boundaryBand);
+  // --- Boundary. Default: one closed band, uniform thickness (v1). With
+  // options.perEdgeBoundary, one band per typed edge, thickness by edge type
+  // (external / shared_wall / facing_corridor); the union resolves the corners.
+  if (options.perEdgeBoundary) {
+    for (const te of boundary.typed_edges) {
+      const half = (thickness[te.type] ?? thickness.external) / 2;
+      wallPaths.push(...offsetOpenSegment(te.start, te.end, half));
+    }
+  } else {
+    const boundaryHalf = thickness.external / 2;
+    const outer = offsetClosedPolygon(boundary.polygon, boundaryHalf);
+    const inner = offsetClosedPolygon(boundary.polygon, -boundaryHalf);
+    wallPaths.push(...differencePaths(outer, inner));
+  }
 
-  // Front door opening at the boundary's entrance point.
-  const entranceEdge = boundary.typed_edges[boundary.entrance_edge_index];
-  if (entranceEdge) {
-    const cut = doorCutRect(
-      entranceEdge.start, entranceEdge.end, boundary.entrance_point,
-      doorWidth, thickness.external,
-    );
-    doorCuts.push(toPath(cut));
-    doors.push({ centre: boundary.entrance_point, edge: entranceEdge, kind: 'entrance' });
+  // Explicit doors (plan.doors, from the Generator: centre, width, wall endpoints, kind)
+  // replace the legacy rules below (entrance_point, edge.has_door at the midpoint).
+  const explicit = Array.isArray(plan.doors);
+  const leafMm = options.doorLeafMm ?? 40;
+  if (explicit) {
+    for (const d of plan.doors) {
+      const [a, b] = d.wall;
+      const t = d.kind === 'entrance' ? (thickness[d.edgeType] ?? thickness.external) : thickness.internal;
+      // cut: along the wall by the door width, across it by ~0.7 x thickness each side
+      doorCuts.push(toPath(doorCutRect(a, b, d.centre, d.width, t * 0.35)));
+      doors.push({
+        centre: d.centre, edge: { start: a, end: b }, kind: d.kind, width: d.width,
+        leaf: doorLeafRect(a, b, d.centre, d.width, leafMm),
+      });
+    }
+  } else {
+    // Front door opening at the boundary's entrance point.
+    const entranceEdge = boundary.typed_edges[boundary.entrance_edge_index];
+    if (entranceEdge) {
+      const cut = doorCutRect(
+        entranceEdge.start, entranceEdge.end, boundary.entrance_point,
+        doorWidth, thickness.external,
+      );
+      doorCuts.push(toPath(cut));
+      doors.push({ centre: boundary.entrance_point, edge: entranceEdge, kind: 'entrance' });
+    }
   }
 
   // --- Internal partition walls: one offset rectangle per room-to-room edge.
@@ -164,10 +205,10 @@ export function computeWallGeometry(fixture, options = {}) {
     if (!edge.room_b) continue; // boundary-touching edge — covered by the boundary band
     if (dist(edge.start, edge.end) < 1) continue; // degenerate (zero-length) — see schema.py note
 
-    const half = thickness.internal / 2;
+    const half = (edge.thickness_mm ?? thickness.internal) / 2;
     wallPaths.push(...offsetOpenSegment(edge.start, edge.end, half));
 
-    if (edge.has_door) {
+    if (edge.has_door && !explicit) {
       const centre = midpoint(edge.start, edge.end);
       const cut = doorCutRect(edge.start, edge.end, centre, doorWidth, thickness.internal);
       doorCuts.push(toPath(cut));
@@ -182,6 +223,37 @@ export function computeWallGeometry(fixture, options = {}) {
     wallPolygons: withOpenings.map(fromPath),
     doors,
   };
+}
+
+/**
+ * Fills the wall poché and (when `doorFill` is given) the door leaves of a
+ * computeWallGeometry result. `map([x, y])` takes fixture mm to ctx coordinates,
+ * so a caller with its own transform (the Unit and Floor plate canvases) reuses
+ * the same geometry. Door leaves use `doorFill`; walls use `wallFill`.
+ */
+export function drawWallGeometry(ctx, geo, map = (p) => p, wallFill = '#2b2b2b', doorFill = '#b45309') {
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.fillStyle = wallFill;
+  // One path for all rings: a ring that is a hole (a room walled in on every side) must stay
+  // empty, which separate fills would not do.
+  ctx.beginPath();
+  for (const poly of geo.wallPolygons) {
+    poly.forEach((p, i) => { const [x, y] = map(p); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.closePath();
+  }
+  ctx.fill('evenodd');
+  if (doorFill) {
+    ctx.fillStyle = doorFill;
+    for (const d of geo.doors) {
+      if (!d.leaf) continue;
+      ctx.beginPath();
+      d.leaf.forEach((p, i) => { const [x, y] = map(p); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 function drawDoorSwing(ctx, door, scale) {
@@ -258,20 +330,22 @@ export function renderPlanDrawing(ctx, fixture, options = {}) {
     const geo = computeWallGeometry(fixture, options);
     doors = geo.doors;
     if (showWalls) {
-      ctx.save();
-      ctx.fillStyle = '#2b2b2b';
-      for (const poly of geo.wallPolygons) {
-        ctx.beginPath();
-        poly.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-        ctx.closePath();
-        ctx.fill('evenodd');
-      }
-      ctx.restore();
+      drawWallGeometry(ctx, geo, (p) => p, '#2b2b2b', null);
     }
   }
 
   if (showDoors) {
-    for (const door of doors) drawDoorSwing(ctx, door, scale);
+    for (const door of doors) {
+      if (door.leaf) {
+        ctx.save();
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        door.leaf.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else drawDoorSwing(ctx, door, scale);
+    }
   }
 
   if (showLabels) {

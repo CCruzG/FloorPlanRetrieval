@@ -1393,6 +1393,8 @@ def generate_route():
         "rooms": plan["rooms"],
         "edges": plan.get("edges", []),
         "node_pos": plan.get("node_pos", {}),
+        "doors": plan.get("doors", []),
+        "frame": plan.get("frame"),
         "room_edges": gen["room_edges"],
         "spec_nodes": spec["nodes"],
         "feasible": plan["feasible"],
@@ -1587,18 +1589,15 @@ def floor_plates_delete(plate_id):
     return _plate_call(lambda pid: (plate_library.delete_plate(pid), {"deleted": pid})[1], plate_id)
 
 
-@app.route("/assemble_floor_plate", methods=["POST"])
-def assemble_floor_plate():
-    """Plate assembler (ARCHITECTURE.md, "Plate assembler"). Body: plate_id or boundary_m,
-    mix {1B1b, 2B1b, 2B2b, 3B2b: weight}, optional street_edges. Always 200 for a result
-    (status ok / infeasible / unsupported); 400 for a malformed body; 404 for an unknown plate_id."""
+def _assemble_from_body(body):
+    """Shared by /assemble_floor_plate and /compose_plate. Body: plate_id or boundary_m, mix,
+    optional street_edges, north_deg. Returns (assembler result, None) or (None, error response)."""
     from packages.floor_plate_design.assembler import assemble_plate
-    body = request.get_json(silent=True)
     if not isinstance(body, dict):
-        return jsonify({"error": "invalid JSON body"}), 400
+        return None, (jsonify({"error": "invalid JSON body"}), 400)
     mix = body.get("mix")
     if not isinstance(mix, dict):
-        return jsonify({"error": "mix must be an object of weights"}), 400
+        return None, (jsonify({"error": "mix must be an object of weights"}), 400)
     street = body.get("street_edges")
     north = body.get("north_deg")
     boundary = body.get("boundary_m")
@@ -1607,9 +1606,9 @@ def assemble_floor_plate():
         try:
             plate = plate_library.get_plate(plate_id)
         except plate_library.PlateNotFoundError:
-            return jsonify({"error": f"floor plate '{plate_id}' not found"}), 404
+            return None, (jsonify({"error": f"floor plate '{plate_id}' not found"}), 404)
         except plate_library.LibraryFileError as exc:
-            return jsonify({"error": str(exc)}), 500
+            return None, (jsonify({"error": str(exc)}), 500)
         boundary = plate["boundary_m"]
         if street is None:
             street = plate.get("street_edges", [])
@@ -1618,14 +1617,76 @@ def assemble_floor_plate():
     if not isinstance(boundary, list) or len(boundary) < 3 or not all(
             isinstance(p, (list, tuple)) and len(p) == 2 and all(
                 isinstance(v, (int, float)) and not isinstance(v, bool) for v in p) for p in boundary):
-        return jsonify({"error": "plate_id or boundary_m ([[x, y], ...], metres) is required"}), 400
+        return None, (jsonify({"error": "plate_id or boundary_m ([[x, y], ...], metres) is required"}), 400)
     street = [] if street is None else street
     if not isinstance(street, list) or not all(isinstance(e, int) and not isinstance(e, bool) for e in street):
-        return jsonify({"error": "street_edges must be a list of integers"}), 400
+        return None, (jsonify({"error": "street_edges must be a list of integers"}), 400)
     if north is not None and (isinstance(north, bool) or not isinstance(north, (int, float))):
-        return jsonify({"error": "north_deg must be a number"}), 400
+        return None, (jsonify({"error": "north_deg must be a number"}), 400)
     try:
-        return jsonify(assemble_plate(boundary, mix, street, north or 0.0))
+        return assemble_plate(boundary, mix, street, north or 0.0), None
+    except ValueError as exc:
+        return None, (jsonify({"error": str(exc)}), 400)
+
+
+@app.route("/assemble_floor_plate", methods=["POST"])
+def assemble_floor_plate():
+    """Plate assembler (ARCHITECTURE.md, "Plate assembler"). Body: plate_id or boundary_m,
+    mix {1B1b, 2B1b, 2B2b, 3B2b: weight}, optional street_edges. Always 200 for a result
+    (status ok / infeasible / unsupported); 400 for a malformed body; 404 for an unknown plate_id."""
+    result, err = _assemble_from_body(request.get_json(silent=True))
+    return err if err else jsonify(result)
+
+
+@app.route("/compose_plate", methods=["POST"])
+def compose_plate_route():
+    """Plate composition (ARCHITECTURE.md, "Plate composition"). Body: as /assemble_floor_plate,
+    plus optional options (generator flags). Assembles, then for each unit retrieves (top 5),
+    takes rank 1, generates and scores. A failing unit is marked failed; the others continue.
+    Response: {status:"ok", record} (record = compose.to_record) or the assembler result when
+    its status is not ok."""
+    from packages.floor_plate_design import compose
+    if INDEX_STORE is None:
+        return jsonify({"error": "index not loaded"}), 503
+    body = request.get_json(silent=True)
+    asm, err = _assemble_from_body(body)
+    if err:
+        return err
+    if asm.get("status") != "ok":
+        return jsonify(asm)
+    opts = body.get("options")
+    if opts is not None and not isinstance(opts, dict):
+        return jsonify({"error": "options must be an object"}), 400
+    allowed = {k: v for k, v in (opts or {}).items() if k in compose.DEFAULT_OPTIONS}
+
+    def retrieve(boundary, entrance, typed_edges, requirements, topn):
+        node_graphs = _node_graphs() if os.environ.get("NODE_DAYLIGHT", "1") == "1" else None
+        payload = run_retrieval(
+            index_store=INDEX_STORE, boundary=[[x, y, 0, 0] for x, y in boundary],
+            entrance_point=entrance, requirements=requirements, topn=topn,
+            shape_w=1.0, ent_w=2.0, room_w=1.0, logger=logger,
+            typed_edges=typed_edges, node_graphs=node_graphs)
+        return payload.get("plans") or []
+
+    def generate(fp, boundary, entrance, typed_edges, requirements, options):
+        gen = _generate_plan(fp, boundary, entrance, typed_edges=typed_edges,
+                             requirements=requirements, **options)
+        return {**gen["plan"], "room_edges": gen["room_edges"], "sensors": gen["sensors"]}
+
+    composed = compose.compose_plate(asm, retrieve, generate, allowed)
+    return jsonify({"status": "ok", "record": compose.to_record(composed)})
+
+
+@app.route("/compose_plate/export", methods=["POST"])
+def compose_plate_export():
+    """Body: {record} as returned by /compose_plate (possibly edited in the browser).
+    Response: compose.to_export (room polygons in plate metres)."""
+    from packages.floor_plate_design import compose
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get("record"), dict):
+        return jsonify({"error": "record required"}), 400
+    try:
+        return jsonify(compose.to_export(compose.from_record(body["record"])))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 

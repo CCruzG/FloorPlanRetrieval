@@ -26,6 +26,7 @@ import {
 import { createBoundaryEditor } from './boundary-editor.js';
 import { createFloorPlateLibrary } from './floor-plate-library.js';
 import { createCanvasRenderer } from './canvas-renderer.js';
+import { wallGeometryForPlan } from './plan-drawing-adapter.js';
 import {
   autoLoadIndex,
   checkReadyState,
@@ -103,6 +104,7 @@ let arapDebugLabel=null;
 // target-space overlay (canvas-renderer.js, gated on genActive). Rooms are in the
 // drawn-boundary frame; generatedNodes are the node positions the solver used.
 let generatedRooms=null;
+let lastGenResp=null;   // the /generate response (or slot plan) behind the generated overlay
 let generatedNodes=null;
 // The solver grid behind the generated rooms (report.grid_lines): drawn under the
 // rooms so it is visible how the geometry was cut. null when nothing is generated.
@@ -113,6 +115,18 @@ let generatedGrid=null;
 // never reflects an edit. null when nothing is generated.
 let generatedEdges=null;
 let generatedRoomEdges=null;
+// Wall poché and door leaves of the generated plan (mm), computed once per generate result
+// by the plan-drawing adapter. Null when the result carries no frame (older records).
+const _wallCache=new WeakMap();
+function generatedWallsFor(resp){
+  if(!resp||!resp.frame)return null;
+  if(!_wallCache.has(resp)){
+    let g=null;
+    try{g=wallGeometryForPlan(resp);}catch(e){console.warn('wall drawing failed',e);}
+    _wallCache.set(resp,g);
+  }
+  return _wallCache.get(resp);
+}
 
 // Stage 2 (agent harness, moves) — the session's SetConnection edits, applied
 // (in order) to the Spec on every /generate call via `connections`, and the
@@ -2585,6 +2599,7 @@ let renderFloorPlate;
 let render=()=>{};
 let updateCursor=()=>{};
 let getGraphNodes=()=>null;
+let getPlateTransform=()=>null;
 
 const {
   captureDepthAndPreview,
@@ -2766,6 +2781,7 @@ function getActiveFPState(){
   render,
   updateCursor,
   getGraphNodes,
+  getPlateTransform,
 } = createCanvasRenderer({
   canvas,
   ctx,
@@ -2813,6 +2829,7 @@ function getActiveFPState(){
     generatedGrid,
     generatedEdges,
     generatedRoomEdges,
+    generatedWalls:generatedWallsFor(lastGenResp),
     measureMode,
     measureA,
     measureB,
@@ -2850,7 +2867,108 @@ fpLib=createFloorPlateLibrary({
   checkReady,
   loadAssembled:(res)=>loadAssembledPlate(res),
   clearAssembled:()=>{if(floorPlateState?.floor_plate?.id==='fp-assembler')floorPlateState=null;},
+  showUnitTab:()=>setViewTab('2d'),
+  showPlateTab:()=>setViewTab('fp'),
+  setComposedView:(rec,build)=>applyComposedView(rec,build),
+  plateHit:(lx,ly)=>plateUnitAt(lx,ly),
+  prepareUnitTab:()=>prepareUnitTab(),
+  enterSlot:(slot)=>enterUnitSlot(slot),
+  captureSlot:()=>captureUnitWork(),
 });
+
+// ── Plate composition (compose.py; wiring in floor-plate-library.js) ─────────
+// Drawing data for the composed units goes in floor_plate.composed; the assembler fields stay.
+function applyComposedView(record,build){
+  if(!floorPlateState?.floor_plate)return;
+  const fp={...floorPlateState.floor_plate};
+  if(record&&build)fp.composed=build(record,fp.units||[]);
+  else delete fp.composed;
+  floorPlateState={...floorPlateState,floor_plate:fp};
+  render();
+}
+
+// Unit under a logical-canvas point on the drawn plate (the renderer's last plate transform).
+function plateUnitAt(lx,ly){
+  const T=getPlateTransform();
+  const fp=floorPlateState?.floor_plate;
+  if(!T||!fp?.units||fp.id!=='fp-assembler')return null;
+  const pt=[(lx-T.xOffset)/T.scale,(ly-T.yOffset)/T.scale];
+  const hit=fp.units.find((u)=>Array.isArray(u.polygon)&&ptInPoly(pt,u.polygon));
+  return hit?hit.id:null;
+}
+
+// A unit opened from the plate starts clean: no overlay, cards or sensor panels of the last one.
+function prepareUnitTab(){
+  generatedRooms=null;generatedNodes=null;generatedGrid=null;generatedEdges=null;generatedRoomEdges=null;
+  lastGenResp=null;
+  resetConnectionEdits();
+  renderAdaptedResults([]);
+  renderStage1Sensors(null);
+  renderRoomAreas(null,null);
+  const rc=document.getElementById('result-count');
+  if(rc)rc.textContent='';
+  const ro=document.getElementById('generate-readout');
+  if(ro)ro.textContent='';
+}
+
+function setRangeControl(id,value){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.value=String(value);
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+}
+
+// Drill-down: requirements, result cards (rank chosen selected) and generated overlay come from
+// the slot. Nothing is retrieved or generated.
+function enterUnitSlot(slot){
+  const rq=slot.requirements||{};
+  if(Number.isFinite(rq.bedrooms))setRangeControl('rng-bedrooms',rq.bedrooms);
+  if(Number.isFinite(rq.bathrooms))setRangeControl('rng-bathrooms',rq.bathrooms);
+  const bal=document.getElementById('chk-balcony');
+  if(bal){bal.checked=!!rq.balcony;bal.dispatchEvent(new Event('change',{bubbles:true}));}
+  const plans=(slot.candidates||[]).map((c)=>c.plan).filter(Boolean);
+  if(!plans.length)return;
+  renderAdaptedResults(plans);
+  const rc=document.getElementById('result-count');
+  if(rc)rc.textContent=plans.length+' results';
+  const idx=Math.min(plans.length-1,Math.max(0,((slot.chosen&&slot.chosen.rank)||1)-1));
+  selectResult(idx);
+  if(slot.plan&&slot.plan.rooms){
+    const sens=slot.sensors?{summary:slot.sensors.summary,checks:slot.sensors.failing||[]}:null;
+    applyGenerated({...slot.plan,sensors:sens},false,document.getElementById('generate-readout'));
+  }
+  checkReady();
+}
+
+// Back to plate: what the unit tab holds now. Generates first when the selected result has no
+// generated plan yet. Null when nothing is selected or generation failed.
+async function captureUnitWork(){
+  if(selected===null||!results[selected])return null;
+  if(!generatedRooms)await runGenerate(false);
+  if(!generatedRooms||!lastGenResp)return null;
+  return {
+    requirements:{bedrooms:req.bedrooms,bathrooms:req.bathrooms,balcony:!!req.balcony},
+    candidates:results.map((r,i)=>({
+      plan_id:r.fp?.id??r.retrieval?.source_id??null,rank:i+1,dist:r.retrieval?.dist??null,plan:r.fp,
+    })),
+    chosen:{rank:selected+1,mirror:false},
+    plan:{
+      rooms:generatedRooms,edges:generatedEdges||[],node_pos:generatedNodes||{},
+      room_edges:generatedRoomEdges||{},feasible:lastGenResp.feasible,report:lastGenResp.report||{},
+      doors:lastGenResp.doors||[],frame:lastGenResp.frame||null,
+    },
+    sensors:lastGenResp.sensors||null,
+    options:{
+      area_lift:document.getElementById('chk-area-lift')?.checked!==false,
+      core_block:document.getElementById('chk-core-block')?.checked!==false,
+      core_placement:(()=>{const v=document.getElementById('sel-core-placement')?.value||'off';return v==='off'?false:v;})(),
+      expand_nodes:document.getElementById('chk-node-generate')?.checked!==false,
+      source_grid:document.getElementById('chk-source-grid')?.checked===true,
+      connections:connectionPayload(),
+      precedence:precedencePayload(),
+    },
+  };
+}
 
 // Plate assembler result (metres) -> the existing contract-candidate conversion -> floorPlateState.
 function loadAssembledPlate(res){
@@ -3260,6 +3378,18 @@ async function runGenerate(useSwap){
       precedence:precedencePayload(),
     },{timeoutMs:15000});
     if(resp.error)throw new Error(resp.error);
+    applyGenerated(resp,useSwap,el);
+  }catch(err){
+    console.error('[stage0] generate failed:',err);
+    if(el)el.textContent=`generate failed: ${err.message}`;
+    renderStage1Sensors(null);
+    renderRoomAreas(null,null);
+  }
+}
+
+// Show a generate result (a /generate response, or a slot's plan with its sensors) as the
+// generated overlay: rooms, nodes, grid, edges, room edges, readout and sensor panels.
+function applyGenerated(resp,useSwap,el){
     // Draw the generated geometry as a target-space overlay (the solver already
     // placed it in the drawn boundary) — do NOT mutate results[selected].fp, so
     // the retrieved plan stays the stable generate-source and reset is trivial.
@@ -3282,6 +3412,7 @@ async function runGenerate(useSwap){
     // graph show generated contacts after a reset (005b: a hallway on the entrance).
     generatedRoomEdges=resp.room_edges||{};
     if(useSwap)graphSelection=[];
+    lastGenResp=resp;   // before render(): the canvas reads its doors and frame for the walls
     // Candidates were proposed against the plan before this generate; stale now.
     moveCandidates=[];
     renderMoveCandidates();
@@ -3323,16 +3454,12 @@ async function runGenerate(useSwap){
     if(el)el.textContent=`${flag} · solver grid ${(r.grid||[]).join('×')} · coverage ${cov}%${areaFit}${lift}${core}${issues.length?' · '+issues.join(', '):''}`;
     renderStage1Sensors(resp.sensors);
     renderRoomAreas(resp.report,resp.sensors);
-  }catch(err){
-    console.error('[stage0] generate failed:',err);
-    if(el)el.textContent=`generate failed: ${err.message}`;
-    renderStage1Sensors(null);
-    renderRoomAreas(null,null);
-  }
+    lastGenResp=resp;
 }
 
 function resetGenerate(){
   generatedRooms=null;
+  lastGenResp=null;
   generatedNodes=null;
   generatedGrid=null;
   generatedEdges=null;
@@ -3769,6 +3896,9 @@ canvas.addEventListener('click',e=>{
     return;
   }
 
+  // Floor plate tab: a click on an assembled unit opens it in the Unit tab.
+  if(activeTab==='fp'&&mode==='select'&&closed&&fpLib?.clickPlate(cx,cy))return;
+
   if(mode!=='draw'||closed)return;
   if(e.shiftKey&&boundary.length>0){
     const l=boundary[boundary.length-1];
@@ -3947,6 +4077,7 @@ function selectResult(i){
   arapDebugLabel=null;
   // Same for the Stage-0 generated overlay — it belonged to the old selection.
   generatedRooms=null;
+  lastGenResp=null;
   generatedNodes=null;
   generatedGrid=null;
   generatedEdges=null;
@@ -4422,6 +4553,7 @@ function wirePhase1UI(){
 
   on('chk-graph','change',(e)=>{params.showGraph=e.target.checked;render();});
   on('chk-plan-geom','change',(e)=>{params.showPlanGeom=e.target.checked;render();});
+  on('chk-draw-walls','change',(e)=>{params.drawWalls=e.target.checked;render();});
   on('run-btn','click',()=>runRetrieval());
   on('btn-draw-architectural','click',()=>drawSelectedArchitecturally());
   on('btn-arap-align-canvas','click',()=>runArapCanvasStep('align','align'));
