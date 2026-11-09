@@ -13,7 +13,9 @@ plan's edges and places them:
   * Entrance door: `entrance_door_mm` (900) on the boundary edge nearest the
     entrance point, centred on the point, moved inward until both jambs are at
     least `door_jamb_mm` from the edge's ends. A boundary edge shorter than
-    `door_min_wall_mm` gets none (listed as unplaced, v = "entrance").
+    `door_min_wall_mm` but at least `entrance_min_edge_mm` (700) gets the entrance
+    door centred on the edge, width min(`entrance_door_mm`, edge - 2 x 50 mm).
+    A shorter edge gets none (listed as unplaced, v = "entrance").
 
 Parameters live in `options` (spec.build_options); same inputs give the same
 output. Coordinates are plan units (boundary units); one unit = `mm_per_unit` mm.
@@ -28,6 +30,7 @@ DEFAULTS = {
     "door_jamb_mm": 100.0,
     "door_min_wall_mm": 1000.0,
     "entrance_door_mm": 900.0,
+    "entrance_min_edge_mm": 700.0,
 }
 
 # Lower = more public. Unlisted types rank 4 (between kitchen and the private rooms).
@@ -172,9 +175,18 @@ def derive_doors(rooms, edges, boundary, entrance, mm_per_unit, options=None):
             _, _, a, b = best
             L = math.hypot(b[0] - a[0], b[1] - a[1])
             L_mm = L * mm
-            if L_mm < opt["door_min_wall_mm"] - 1e-6:
+            if L_mm < opt["entrance_min_edge_mm"] - 1e-6:
                 unplaced.append({"u": "entrance", "v": None, "segment_mm": round(L_mm, 1),
-                                 "reason": f"boundary edge shorter than {opt['door_min_wall_mm']:.0f} mm"})
+                                 "reason": f"boundary edge shorter than {opt['entrance_min_edge_mm']:.0f} mm"})
+            elif L_mm < opt["door_min_wall_mm"] - 1e-6:
+                w_mm = min(opt["entrance_door_mm"], L_mm - 100.0)
+                ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+                doors.append({"u": "entrance", "v": None, "kind": "entrance",
+                              "centre": [a[0] + ux * L / 2.0, a[1] + uy * L / 2.0],
+                              "width": w_mm / mm, "width_mm": w_mm,
+                              "segment": [list(map(float, a)), list(map(float, b))],
+                              "segment_mm": round(L_mm, 1),
+                              "wall": [list(map(float, a)), list(map(float, b))]})
             else:
                 ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
                 ew = opt["entrance_door_mm"] / mm

@@ -81,6 +81,31 @@ def test_entrance_near_corner_is_moved_inward():
     assert doors[0]["centre"][0] * MM >= 550 - 1e-6
 
 
+def _entrance_on_edge(edge_m):
+    # boundary: bottom edge has length edge_m (units of 10 m); entrance at its middle
+    w = edge_m / 10.0
+    bnd = [[0, 0], [w, 0], [w, 0.5], [0, 0.5]]
+    return derive_doors([], [], bnd, [w / 2, 0, w / 2, 0], MM)
+
+
+def test_entrance_on_800_mm_edge_gets_700_mm_door():
+    doors, unplaced = _entrance_on_edge(0.8)
+    assert unplaced == [] and len(doors) == 1
+    assert abs(doors[0]["width_mm"] - 700.0) < 1e-6
+    assert abs(doors[0]["centre"][0] * MM - 400.0) < 1e-6
+
+
+def test_entrance_on_600_mm_edge_is_unplaced():
+    doors, unplaced = _entrance_on_edge(0.6)
+    assert doors == [] and len(unplaced) == 1 and unplaced[0]["u"] == "entrance"
+
+
+def test_entrance_on_1200_mm_edge_unchanged():
+    doors, unplaced = _entrance_on_edge(1.2)
+    assert unplaced == [] and len(doors) == 1 and doors[0]["width_mm"] == 900.0
+    assert abs(doors[0]["centre"][0] * MM - 600.0) < 1e-6
+
+
 def test_missing_room_is_listed():
     doors, unplaced = derive_doors(_rooms(), [{"u": "liv", "v": "ghost", "connection": 1}],
                                    _rect(0, 0, 1, 0.45), None, MM)
