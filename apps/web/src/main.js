@@ -1517,7 +1517,7 @@ async function runRetrieveFitHarness(){
         ? '   daylight: '+Object.entries(per).map(([k,v])=>`${k} ${v}`).join(', ')+(t.mirror?'  mirror:Y':'')
         : '';
       return `#${i+1} ${r.name}  topo ${t.score.toFixed(3)}  `
-        +`[dayfit ${(c.daylight_fit??0).toFixed(2)} · prog ${(c.program??0).toFixed(2)} · ent ${(c.entrance_access??0).toFixed(2)} · priv ${(c.private_access??0).toFixed(2)}]`
+        +`[dayfit ${(c.daylight_fit??0).toFixed(2)} · ent ${(c.entrance_access??0).toFixed(2)}]`
         +`  shape-dist ${r.dist.toFixed(3)}`
         +(perStr?`\n${perStr}`:'');
     }).join('\n');

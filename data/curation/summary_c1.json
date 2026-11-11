@@ -1,0 +1,109 @@
+{
+  "rules": "c1",
+  "reject_walk_in": false,
+  "data": "/Users/camilo/Documents/Work_FBI/Artefacts/project-44/data/RPlan-dataset-json",
+  "plans": 80791,
+  "excluded": 3481,
+  "kept": 77310,
+  "reasons": {
+    "no_access:bathroom": 1128,
+    "no_access:bedroom": 907,
+    "no_access:master_bedroom": 676,
+    "ensuite": 292,
+    "no_access:study": 283,
+    "no_access:storage": 249,
+    "no_bathroom": 80
+  },
+  "notes": {
+    "walk_in": 300,
+    "no_shared_bathroom": 34
+  },
+  "by_config": {
+    "2B1b": {
+      "plans": 46435,
+      "kept": 45225,
+      "excluded": 1210,
+      "excluded_ensuite_only": 177
+    },
+    "3B1b": {
+      "plans": 15905,
+      "kept": 15151,
+      "excluded": 754,
+      "excluded_ensuite_only": 83
+    },
+    "3B2b": {
+      "plans": 9222,
+      "kept": 8665,
+      "excluded": 557
+    },
+    "2B2b": {
+      "plans": 6707,
+      "kept": 5983,
+      "excluded": 724
+    },
+    "1B1b": {
+      "plans": 1884,
+      "kept": 1837,
+      "excluded": 47
+    },
+    "4B1b": {
+      "plans": 178,
+      "kept": 154,
+      "excluded": 24,
+      "excluded_ensuite_only": 1
+    },
+    "1B2b": {
+      "plans": 171,
+      "kept": 130,
+      "excluded": 41
+    },
+    "4B2b": {
+      "plans": 85,
+      "kept": 74,
+      "excluded": 11
+    },
+    "2B3b": {
+      "plans": 55,
+      "kept": 29,
+      "excluded": 26
+    },
+    "3B3b": {
+      "plans": 49,
+      "kept": 44,
+      "excluded": 5
+    },
+    "2B0b": {
+      "plans": 45,
+      "excluded": 45
+    },
+    "3B0b": {
+      "plans": 27,
+      "excluded": 27
+    },
+    "0B1b": {
+      "plans": 8,
+      "kept": 8
+    },
+    "4B0b": {
+      "plans": 5,
+      "excluded": 5
+    },
+    "1B3b": {
+      "plans": 5,
+      "kept": 3,
+      "excluded": 2
+    },
+    "5B1b": {
+      "plans": 4,
+      "kept": 4
+    },
+    "1B0b": {
+      "plans": 3,
+      "excluded": 3
+    },
+    "0B2b": {
+      "plans": 3,
+      "kept": 3
+    }
+  }
+}

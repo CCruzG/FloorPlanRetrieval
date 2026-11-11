@@ -43,6 +43,7 @@ Public API:
 The Spec itself (builder, options, validator) lives in spec.py.
 """
 
+import copy
 import math
 from collections import deque
 
@@ -827,6 +828,21 @@ def _realise(spec, options, claim_choice):
     BW, BH = bx1 - bx0, by1 - by0
     mm = spec.get("mm_per_unit")           # boundary-units -> mm, for min-size
     debug_steps = []
+    # options["trace"] (2026-11-11, for the process diagrams): snapshots of the grid
+    # and cell owners after each step, returned as report["trace"]. Off by default;
+    # it records only, so the plan is the same with it on or off.
+    trace = [] if options.get("trace") else None
+
+    def _snap(step, **kw):
+        if trace is not None:
+            rec = {"step": step}
+            for k_, v_ in kw.items():
+                if isinstance(v_, dict) and v_ and isinstance(next(iter(v_)), tuple):
+                    v_ = [[c[0], c[1], str(r)] for c, r in v_.items()]
+                elif isinstance(v_, (set, frozenset)):
+                    v_ = sorted([list(c) for c in v_])
+                rec[k_] = copy.deepcopy(v_)
+            trace.append(rec)
 
     # ── 0. core placement (SPIKE, options["core_placement"], default off): a core
     # block per room, sized by use and placed inside the boundary; nodes move into
@@ -921,6 +937,9 @@ def _realise(spec, options, claim_choice):
               if bpoly_g.contains(SPoint((xs[i] + xs[i + 1]) / 2.0,
                                          (ys[j] + ys[j + 1]) / 2.0))}
 
+    _snap("1_grid", xs=list(xs), ys=list(ys), inside=inside,
+          walls={str(k): list(g_.exterior.coords) for k, g_ in src_polys.items()})
+
     # ── 2. assign cells: seed each node's CONTAINING cell to it, then fill the
     # rest by nearest node. Seeding guarantees a node owns the cell it sits in,
     # so (with the node remap in step 3b) every node lands inside its own room.
@@ -989,6 +1008,8 @@ def _realise(spec, options, claim_choice):
                     best, bd = n["id"], d
             owner[(i, j)] = best
 
+    _snap("2_assign", owner=dict(owner))
+
     # ── 2b. boundary-contact repair (topology -> geometry): honour each room's
     # demanded room↔boundary fronts by transferring border cells, preserving
     # contiguity and every donor's own fronts. Demand keys are normalized to the
@@ -1034,6 +1055,8 @@ def _realise(spec, options, claim_choice):
                         "satisfied": len(contacts_report["satisfied"]),
                         "unmet": len(contacts_report["unmet"]),
                         "transfers": len(contacts_report["transfers"])})
+
+    _snap("2b_contacts", owner=dict(owner), report=contacts_report)
 
     # ── 2c. precedence core claim (SetPrecedence): spec["precedence"] is a list
     # of [winner, loser]; each winner is re-cut as a rectangle over its own and the
@@ -1198,6 +1221,8 @@ def _realise(spec, options, claim_choice):
                 _, ok = solve(mins, spans)
 
     xt, yt, x_ok, y_ok = _solve_axes(min_x, min_y)
+    _snap("3_solve", xs=list(xt), ys=list(yt), min_x={str(k): v for k, v in min_x.items()},
+          min_y={str(k): v for k, v in min_y.items()}, room_bbox={str(k): list(v) for k, v in room_bbox.items()})
 
     # ── area lift: min_edge alone can satisfy both bbox edges and still miss
     # min_area (e.g. a room with width*height < min_area, each edge individually
@@ -1304,6 +1329,8 @@ def _realise(spec, options, claim_choice):
             "relaxed": [a for a in ("x", "y") if rid in core_relaxed[a]],
         }
 
+    _snap("3_resolve", xs=list(xt), ys=list(yt), owner=dict(owner))
+
     # ── 3b. remap node positions through the same warp the grid underwent, so a
     # node keeps its fractional spot inside its (re-dimensioned) cell — i.e. stays
     # inside its own room. Without this, re-solving the separators to fill the
@@ -1385,6 +1412,8 @@ def _realise(spec, options, claim_choice):
             "arm_donor_to": [],
             "area_lift": round(lift_factor.get(rid, 1.0), 4),
         })
+    _snap("4_polygons", rooms=out_rooms)
+
     # ── 4b. thin-arm carve: for a boundary demand the rectangular partition could
     # not satisfy, let the room annex a thin corridor to reach its demanded edge,
     # becoming L-shaped (the source's thin reach). Donors stay whole and keep their
@@ -1511,6 +1540,7 @@ def _realise(spec, options, claim_choice):
             "boundary_contacts": contacts_report,
             "rooms": room_report,
             "debug_steps": debug_steps,
+            **({"trace": trace} if trace is not None else {}),
         },
     }
 

@@ -62,11 +62,16 @@ N_SAMPLES = 96          # perimeter sampling resolution
 # presence lands on external target arcs — enough for a real window, not a sliver.
 DAYLIGHT_MIN_EXTERNAL_FRAC = 0.34
 
+ENTRANCE_MIN_M = 0.9   # entrance test: a door's width along the corridor edge
+
+# Re-rank weights (2026-11-11): two tests, both read off the target's edge types,
+# which the corpus lacks. Programme was dropped (the room code already counts it in
+# the search distance); private access moved to corpus curation
+# (tools/curate_corpus.py, excluded_c1.txt, applied in index_store). 0.75/0.25 is a
+# starting choice: on the gate's six boundaries the top 5 did not depend on it.
 WEIGHTS = {
-    "program": 0.25,
-    "daylight_fit": 0.50,   # the boundary-coupled discriminator
-    "entrance_access": 0.10,
-    "private_access": 0.15,
+    "daylight_fit": 0.75,   # the boundary-coupled discriminator
+    "entrance_access": 0.25,
 }
 
 
@@ -764,6 +769,90 @@ def contact_runs(poly, tpts, eps=None):
     return out
 
 
+def corridor_frontage(plan, target_boundary, target_edge_types, entrance_point, mirror):
+    """Re-rank entrance test (2026-11-11): how far a common or circulation room runs
+    along the target's corridor edge, for a RETRIEVED plan placed in the target.
+
+    The plan is placed by the display transform (as the raycast). A room wall counts
+    when it lies on the plan perimeter and both its placed ends sit within PROX_TOL
+    (the contain-scale inset, as the raycast) of a corridor edge's line. Its overlap
+    is its projection onto that edge, clipped to the edge; one room's runs on one
+    edge are merged. Unlike the raycast's width_m (the wall's own length), this is
+    the length actually along the corridor edge.
+
+    Corridor edges are the target edges typed facing_corridor; with none typed, the
+    edge nearest the entrance point. Returns {"best_m", "room", "edge", "by_room":
+    {room_id: overlap_m}} or None when there is no corridor edge to test."""
+    tpts = _xy(target_boundary or [])
+    bpts = _xy(plan.get("boundary") or [])
+    n, nb = len(tpts), len(bpts)
+    if n < 3 or nb < 3:
+        return None
+    types = target_edge_types or []
+    edges = [i for i in range(n) if i < len(types) and types[i] == CORRIDOR]
+    if not edges and entrance_point is not None:
+        ep = (float(entrance_point[0]), float(entrance_point[1]))
+        edges = [min(range(n), key=lambda i: _pt_seg_dist2(ep, tpts[i], tpts[(i + 1) % n]))]
+    if not edges:
+        return None
+    to_target, _ = _display_transform(
+        bpts, tpts, _entrance_point_of_plan(plan), entrance_point, mirror)
+    SCALE_M = SCALE / 1000.0
+    EPS2 = 0.02 ** 2                      # plan units: wall on the plan perimeter (raycast)
+    _txs = [p[0] for p in tpts]; _tys = [p[1] for p in tpts]
+    tdiag = math.hypot(max(_txs) - min(_txs), max(_tys) - min(_tys)) or 1.0
+    PROX_TOL = 0.15 * tdiag               # the raycast's inset tolerance
+    eps = boundary_eps(tpts)
+    by_room, best = {}, (0.0, None, None)
+    for r in plan.get("rooms") or []:
+        if _label(r) not in TRANSIT:
+            continue
+        poly = r.get("polygon")
+        if not poly or len(poly) < 3:
+            continue
+        runs = {}
+        m = len(poly)
+        for k in range(m):
+            ax, ay = poly[k]
+            bx, by = poly[(k + 1) % m]
+            mid = ((ax + bx) / 2.0, (ay + by) / 2.0)
+            if min(_pt_seg_dist2(mid, bpts[j], bpts[(j + 1) % nb]) for j in range(nb)) >= EPS2:
+                continue
+            (tax, tay), (tbx, tby) = to_target(ax, ay), to_target(bx, by)
+            for i in edges:
+                px, py = tpts[i]
+                qx, qy = tpts[(i + 1) % n]
+                L = math.hypot(qx - px, qy - py)
+                if L < eps:
+                    continue
+                ux, uy = (qx - px) / L, (qy - py) / L
+                if (abs((tax - px) * uy - (tay - py) * ux) > PROX_TOL
+                        or abs((tbx - px) * uy - (tby - py) * ux) > PROX_TOL):
+                    continue
+                ta = (tax - px) * ux + (tay - py) * uy
+                tb = (tbx - px) * ux + (tby - py) * uy
+                lo, hi = max(min(ta, tb), 0.0), min(max(ta, tb), L)
+                if hi - lo > eps:
+                    runs.setdefault(i, []).append((lo, hi))
+        room_best = 0.0
+        for i, ivs in runs.items():
+            ivs.sort()
+            merged = [list(ivs[0])]
+            for lo, hi in ivs[1:]:
+                if lo <= merged[-1][1] + eps:
+                    merged[-1][1] = max(merged[-1][1], hi)
+                else:
+                    merged.append([lo, hi])
+            w = max(h - l for l, h in merged) * SCALE_M
+            if w > room_best:
+                room_best = w
+            if w > best[0]:
+                best = (w, str(r.get("id")), i)
+        if room_best > 0:
+            by_room[str(r.get("id"))] = round(room_best, 3)
+    return {"best_m": round(best[0], 3), "room": best[1], "edge": best[2], "by_room": by_room}
+
+
 def exact_room_edges(plan, target_boundary, target_edge_types):
     """Room↔target-edge contacts read EXACTLY off generated geometry (2026-10-30).
 
@@ -918,20 +1007,20 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
     """Topological fitness of a retrieved plan to the target boundary, in [0, 1].
 
     Components (combined by WEIGHTS):
-      • program         — room multiset vs requested bedrooms/bathrooms
       • daylight_fit    — perimeter-ring alignment: fraction of daylight-needing
                           rooms landing on external arcs of the target (approach B);
                           with node_graph, a room's circulation/storage nodes are
                           excluded from its daylight (2026-11-03)
-      • entrance_access — common areas reachable from the entrance through transit
-      • private_access  — private rooms adjacent to a transit provider
+      • entrance_access — 1 if a common or circulation room runs along the target's
+                          corridor edge for >= ENTRANCE_MIN_M (corridor_frontage),
+                          else 0; 0.5 with no target or no corridor edge (2026-11-11)
+    Programme and private access were removed on 2026-11-11 (see WEIGHTS).
     """
     rooms = plan.get("rooms") or []
     label_by_id = {r.get("id"): _label(r) for r in rooms}
     counts = {}
     for lab in label_by_id.values():
         counts[lab] = counts.get(lab, 0) + 1
-    adj = _adjacency(plan)
 
     # daylight_fit (approach B) — the boundary-coupled discriminator
     if target_boundary is not None:
@@ -953,8 +1042,7 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
         room_edges = {}
         node_pos = {}
 
-    # entrance access (intrinsic graph term)
-    commons = [rid for rid, lab in label_by_id.items() if lab in COMMON]
+    # source entry room (nearest the SOURCE entrance), for callers (cpsat_dim)
     entry = None
     ent_pt = _entrance_point_of_plan(plan)
     if ent_pt is not None:
@@ -969,30 +1057,24 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
                 continue
             if d < best_d:
                 entry, best_d = r.get("id"), d
-    reachable = _reachable_through_transit(adj, label_by_id, entry)
-    if commons and entry is not None:
-        entrance_access = sum(1 for rid in commons if rid in reachable) / len(commons)
-    elif entry is None:
+    # entrance access (2026-11-11): a common or circulation room must run along the
+    # target's corridor edge for at least a door's width, so the entrance can open
+    # onto it. The door's exact position is left to refinement (SlideEntrance).
+    # Replaces the reachability-from-the-source-entry-room term, which passed every
+    # pool plan on the gate's six boundaries.
+    entrance_detail = None
+    if target_boundary is not None:
+        entrance_detail = corridor_frontage(
+            plan, target_boundary, target_edge_types, entrance_point, mirror)
+    if entrance_detail is None:
         entrance_access = 0.5
     else:
-        entrance_access = 1.0
+        entrance_access = 1.0 if entrance_detail["best_m"] >= ENTRANCE_MIN_M else 0.0
 
-    # private access (intrinsic graph term)
-    privates = [rid for rid, lab in label_by_id.items() if lab in PRIVATE]
-    if privates:
-        served = sum(
-            1 for rid in privates
-            if any(label_by_id.get(nb) in TRANSIT for nb in adj.get(rid, ()))
-        )
-        private_access = served / len(privates)
-    else:
-        private_access = 1.0
 
     components = {
-        "program": round(_program_match(counts, requirements), 3),
         "daylight_fit": round(dfit, 3),
         "entrance_access": round(entrance_access, 3),
-        "private_access": round(private_access, 3),
     }
     score = sum(WEIGHTS[k] * components[k] for k in WEIGHTS)
     return {
@@ -1000,6 +1082,7 @@ def topological_fitness(plan, target_boundary=None, target_edge_types=None,
         "components": components,
         "counts": counts,
         "daylight_detail": dfit_detail,
+        "entrance_detail": entrance_detail,
         "mirror": mirror,
         "room_edges": room_edges,
         "node_pos": node_pos,

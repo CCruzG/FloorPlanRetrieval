@@ -46,7 +46,18 @@ def build_index_store(
     )
 
 
-def build_index_store_from_npz(*, npz_path, data_dir, logger):
+EXCLUDE_DEFAULT = Path(__file__).resolve().parents[2] / "data" / "curation" / "excluded_c1.txt"
+
+
+def load_exclusions(path):
+    """Plan ids (file stems) to leave out of the search, one per line."""
+    p = Path(path)
+    if not p.exists():
+        return set()
+    return {ln.strip() for ln in p.read_text().splitlines() if ln.strip()}
+
+
+def build_index_store_from_npz(*, npz_path, data_dir, logger, exclude=EXCLUDE_DEFAULT):
     """Load the canonical .npz index (typed arrays, complex64 shape descriptors)
     into an IndexStore. This is the canonical retrieval index format — see
     retrieval-prototype/geo_ent_num_retrieval.py's load_index()/build_index().
@@ -57,6 +68,17 @@ def build_index_store_from_npz(*, npz_path, data_dir, logger):
     from .geo_ent_num_retrieval import load_index as load_npz_index
 
     names, shapes, ents, rooms = load_npz_index(npz_path)
+    # Corpus curation (2026-11-11, tools/curate_corpus.py rules c1): plans that
+    # fail private access or have no bathroom are dropped from the search arrays.
+    # exclude=None (or a missing file) keeps the full corpus.
+    excluded = load_exclusions(exclude) if exclude else set()
+    if excluded:
+        keep = np.array([Path(str(n)).stem not in excluded for n in names])
+        names = [n for n, k in zip(names, keep) if k]
+        shapes, ents, rooms = shapes[keep], ents[keep], rooms[keep]
+        if logger:
+            logger.info("curation: %d plans excluded (%s), %d searched",
+                        int((~keep).sum()), Path(exclude).name, len(names))
     plan_cache = load_plans(data_dir, logger=logger)
     return IndexStore(
         descs=None,
