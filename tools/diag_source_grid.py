@@ -6,7 +6,9 @@ the slack solve; on = the same with the source-width solve. Compares with
 the source mapped into the target frame, so this tests adaptation at a NEW boundary.
 Hallway area and room overlap measure correspondence. Sensors and doors measure cost.
 
-Usage: tools/diag_source_grid.py [--case FILE] [--png FILE] [--tag name]
+Usage: tools/diag_source_grid.py [--case FILE] [--png FILE] [--tag name] [--topn 3] [--modes off,flex,on]
+--topn, --modes (2026-11-10): the A3 rank test runs --topn 5 --modes on. A rank table
+then reports, per mode, sensors passed by retrieval rank and how often rank 1 is best.
 --case: a JSON with B, ent, te, req, plans. Draws its rank 1 both ways to --png.
 Output: data/outputs/diagnostics/source_grid_<date>[_tag].json, table on stdout.
 """
@@ -155,12 +157,48 @@ def draw(case, fp, off, on, path):
     fig.savefig(path, dpi=140)
 
 
+def rank_table(rows, keys, topn):
+    """A3 rank test: does retrieval rank predict sensors passed after generation?
+    Per group and mode: mean sensors passed per rank (infeasible or error counts 0);
+    queries where rank 1 is best (ties count as best) and where it is strictly best;
+    mean gain of picking the best of the top n over rank 1."""
+    out = []
+    print(f"\nA3 rank test | group | mode | queries | passed by rank 1..{topn} | rank 1 best (tie) | strictly | best-of-n gain")
+    for group in ("library", "unit shapes"):
+        for key in keys:
+            q = {}
+            for r in rows:
+                if r["group"] != group:
+                    continue
+                m = r.get(key) or {}
+                v = 0 if ("error" in m or not m.get("feasible")) else m.get("passed", 0)
+                q.setdefault(r["name"], {})[r["rank"]] = v
+            q = {n: v for n, v in q.items() if 1 in v}
+            if not q:
+                continue
+            by_rank = [round(statistics.mean(v[k] for v in q.values() if k in v), 2)
+                       if any(k in v for v in q.values()) else None for k in range(1, topn + 1)]
+            best = sum(v[1] >= max(v.values()) for v in q.values())
+            strict = sum(v[1] > max([x for k, x in v.items() if k != 1] or [-1]) for v in q.values())
+            gain = round(statistics.mean(max(v.values()) - v[1] for v in q.values()), 2)
+            rec = {"group": group, "mode": key, "queries": len(q), "passed_by_rank": by_rank,
+                   "rank1_best": best, "rank1_strict": strict, "best_of_n_gain": gain,
+                   "per_query": q}
+            out.append(rec)
+            print(f"{group:12} | {key:4} | {len(q)} | {by_rank} | {best} | {strict} | +{gain}")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--case")
     ap.add_argument("--png")
     ap.add_argument("--tag", default="")
+    ap.add_argument("--topn", type=int, default=3)
+    ap.add_argument("--modes", default="off,flex,on")
     a = ap.parse_args()
+    MODES = {"off": False, "flex": "flex", "on": True}
+    modes = [(k, MODES[k]) for k in a.modes.split(",")]
     S.INDEX_STORE = build_index_store_from_npz(npz_path=str(REPO / "data/index/rplan_index_v5.npz"), data_dir=str(DATA), logger=logging.getLogger("x"))
     client = S.app.test_client()
     if a.case:
@@ -179,10 +217,10 @@ def main():
     rows = []
     for group, entries in (("library", library()), ("unit shapes", unit_shapes())):
         for e in entries:
-            r = client.post("/retrieve", json={"boundary": e["B"], "entrance_point": e["ent"], "requirements": e["req"], "topn": 3, "typed_edges": e["te"]}).get_json()
-            for rank, fp in enumerate(r.get("plans", [])[:3], 1):
+            r = client.post("/retrieve", json={"boundary": e["B"], "entrance_point": e["ent"], "requirements": e["req"], "topn": a.topn, "typed_edges": e["te"]}).get_json()
+            for rank, fp in enumerate(r.get("plans", [])[:a.topn], 1):
                 rec = {"group": group, "name": e["name"], "rank": rank, "id": fp["id"]}
-                for key, on in (("off", False), ("flex", "flex"), ("on", True)):
+                for key, on in modes:
                     try:
                         rec[key] = measure(e, fp, run(client, e, fp, on))
                     except Exception as exc:  # reported, never hidden
@@ -193,7 +231,7 @@ def main():
     summary = []
     for group in ("library", "unit shapes"):
         sub = [r for r in rows if r["group"] == group]
-        for key in ("off", "flex", "on"):
+        for key, _ in modes:
             ok = [r[key] for r in sub if "error" not in r[key]]
             if not ok:
                 continue
@@ -205,10 +243,11 @@ def main():
                    "total": ok[0]["total"], "lost_pct": round(100 * sum(x["lost"] > 0 for x in ok) / len(ok), 1)}
             summary.append(rec)
             print(f"{group:12} {rec['plans']:>3} | {key:4} | {rec['errors']} {rec['infeasible']} | {rec['iou']} | {rec['hall_src']} {rec['hall_gen']} x{rec['hall_ratio']} | {rec['notched']} | {rec['sensors']}/{rec['total']} | {rec['lost_pct']}")
+    ranks = rank_table(rows, [k for k, _ in modes], a.topn)
     tag = f"_{a.tag}" if a.tag else ""
     path = REPO / f"data/outputs/diagnostics/source_grid_{datetime.date.today()}{tag}.json"
     with open(path, "w") as fh:
-        json.dump({"summary": summary, "rows": rows}, fh)
+        json.dump({"topn": a.topn, "modes": a.modes, "summary": summary, "ranks": ranks, "rows": rows}, fh)
     print("wrote", path)
     errs = [r for r in rows if "error" in r.get("on", {}) or "error" in r.get("off", {})][:3]
     if errs:

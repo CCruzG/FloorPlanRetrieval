@@ -1,0 +1,310 @@
+{
+ "corpus": {
+  "1B1b": {
+   "p10": 66.0,
+   "median": 73.5,
+   "p90": 89.5,
+   "min": 62.7,
+   "n": 1884
+  },
+  "2B1b": {
+   "p10": 68.1,
+   "median": 77.6,
+   "p90": 94.0,
+   "min": 62.4,
+   "n": 46435
+  },
+  "2B2b": {
+   "p10": 79.1,
+   "median": 92.8,
+   "p90": 109.1,
+   "min": 64.3,
+   "n": 6707
+  },
+  "3B2b": {
+   "p10": 83.9,
+   "median": 96.9,
+   "p90": 111.5,
+   "min": 70.1,
+   "n": 9222
+  }
+ },
+ "rows": [
+  {
+   "type": "1B1b",
+   "depth": 8.0,
+   "target_m2": 50,
+   "top5": 5,
+   "pool60": 38,
+   "first_rank": 0,
+   "top1_id": "58144",
+   "top1_type": "1B1b",
+   "top1_src_m2": 71.4,
+   "area_ratio_top1": 0.7,
+   "match_src_m2": 76.3,
+   "shape_dist": 0.272,
+   "room_dist": 0,
+   "pool60_no_dining": 38,
+   "top5_types": [
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b"
+   ]
+  },
+  {
+   "type": "1B1b",
+   "depth": 10.0,
+   "target_m2": 50,
+   "top5": 5,
+   "pool60": 32,
+   "first_rank": 0,
+   "top1_id": "77855",
+   "top1_type": "1B1b",
+   "top1_src_m2": 74.4,
+   "area_ratio_top1": 0.67,
+   "match_src_m2": 74.4,
+   "shape_dist": 0.059,
+   "room_dist": 0,
+   "pool60_no_dining": 32,
+   "top5_types": [
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b"
+   ]
+  },
+  {
+   "type": "1B1b",
+   "depth": 12.0,
+   "target_m2": 50,
+   "top5": 5,
+   "pool60": 42,
+   "first_rank": 0,
+   "top1_id": "6969",
+   "top1_type": "1B1b",
+   "top1_src_m2": 74.0,
+   "area_ratio_top1": 0.68,
+   "match_src_m2": 74.0,
+   "shape_dist": 0.036,
+   "room_dist": 0,
+   "pool60_no_dining": 42,
+   "top5_types": [
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b",
+    "1B1b"
+   ]
+  },
+  {
+   "type": "2B1b",
+   "depth": 8.0,
+   "target_m2": 65,
+   "top5": 5,
+   "pool60": 57,
+   "first_rank": 0,
+   "top1_id": "66068",
+   "top1_type": "2B1b",
+   "top1_src_m2": 95.4,
+   "area_ratio_top1": 0.68,
+   "match_src_m2": 85.2,
+   "shape_dist": 0.199,
+   "room_dist": 0,
+   "pool60_no_dining": 57,
+   "top5_types": [
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b"
+   ]
+  },
+  {
+   "type": "2B1b",
+   "depth": 10.0,
+   "target_m2": 65,
+   "top5": 5,
+   "pool60": 59,
+   "first_rank": 0,
+   "top1_id": "34120",
+   "top1_type": "2B1b",
+   "top1_src_m2": 96.1,
+   "area_ratio_top1": 0.68,
+   "match_src_m2": 79.4,
+   "shape_dist": 0.094,
+   "room_dist": 0,
+   "pool60_no_dining": 59,
+   "top5_types": [
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b"
+   ]
+  },
+  {
+   "type": "2B1b",
+   "depth": 12.0,
+   "target_m2": 65,
+   "top5": 5,
+   "pool60": 59,
+   "first_rank": 0,
+   "top1_id": "32873",
+   "top1_type": "2B1b",
+   "top1_src_m2": 80.5,
+   "area_ratio_top1": 0.81,
+   "match_src_m2": 71.8,
+   "shape_dist": 0.088,
+   "room_dist": 0,
+   "pool60_no_dining": 59,
+   "top5_types": [
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b",
+    "2B1b"
+   ]
+  },
+  {
+   "type": "2B2b",
+   "depth": 8.0,
+   "target_m2": 80,
+   "top5": 5,
+   "pool60": 22,
+   "first_rank": 0,
+   "top1_id": "4971",
+   "top1_type": "2B2b",
+   "top1_src_m2": 71.8,
+   "area_ratio_top1": 1.11,
+   "match_src_m2": 86.5,
+   "shape_dist": 0.491,
+   "room_dist": 0,
+   "pool60_no_dining": 22,
+   "top5_types": [
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b"
+   ]
+  },
+  {
+   "type": "2B2b",
+   "depth": 10.0,
+   "target_m2": 80,
+   "top5": 5,
+   "pool60": 23,
+   "first_rank": 0,
+   "top1_id": "26934",
+   "top1_type": "2B2b",
+   "top1_src_m2": 100.9,
+   "area_ratio_top1": 0.79,
+   "match_src_m2": 100.9,
+   "shape_dist": 0.216,
+   "room_dist": 0,
+   "pool60_no_dining": 23,
+   "top5_types": [
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b"
+   ]
+  },
+  {
+   "type": "2B2b",
+   "depth": 12.0,
+   "target_m2": 80,
+   "top5": 5,
+   "pool60": 21,
+   "first_rank": 0,
+   "top1_id": "70213",
+   "top1_type": "2B2b",
+   "top1_src_m2": 86.0,
+   "area_ratio_top1": 0.93,
+   "match_src_m2": 86.0,
+   "shape_dist": 0.171,
+   "room_dist": 0,
+   "pool60_no_dining": 21,
+   "top5_types": [
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b",
+    "2B2b"
+   ]
+  },
+  {
+   "type": "3B2b",
+   "depth": 8.0,
+   "target_m2": 100,
+   "top5": 5,
+   "pool60": 44,
+   "first_rank": 0,
+   "top1_id": "31244",
+   "top1_type": "3B2b",
+   "top1_src_m2": 98.5,
+   "area_ratio_top1": 1.02,
+   "match_src_m2": 93.8,
+   "shape_dist": 0.349,
+   "room_dist": 0,
+   "pool60_no_dining": 44,
+   "top5_types": [
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b"
+   ]
+  },
+  {
+   "type": "3B2b",
+   "depth": 10.0,
+   "target_m2": 100,
+   "top5": 5,
+   "pool60": 23,
+   "first_rank": 0,
+   "top1_id": "40551",
+   "top1_type": "3B2b",
+   "top1_src_m2": 110.9,
+   "area_ratio_top1": 0.9,
+   "match_src_m2": 99.2,
+   "shape_dist": 0.655,
+   "room_dist": 0,
+   "pool60_no_dining": 23,
+   "top5_types": [
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b"
+   ]
+  },
+  {
+   "type": "3B2b",
+   "depth": 12.0,
+   "target_m2": 100,
+   "top5": 5,
+   "pool60": 16,
+   "first_rank": 0,
+   "top1_id": "73152",
+   "top1_type": "3B2b",
+   "top1_src_m2": 116.9,
+   "area_ratio_top1": 0.86,
+   "match_src_m2": 111.1,
+   "shape_dist": 0.665,
+   "room_dist": 0,
+   "pool60_no_dining": 16,
+   "top5_types": [
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b",
+    "3B2b"
+   ]
+  }
+ ]
+}

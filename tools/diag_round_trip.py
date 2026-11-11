@@ -13,6 +13,9 @@ Compared with the source plan:
 
 Usage: tools/diag_round_trip.py [--n 300] [--n-cpsat 30] [--seed 4] [--tag name]
          [--plan-set dev|holdout] [--workers N] [--det-time T] [--out PATH]
+         [--source-grid off|on|flex]
+--source-grid (2026-11-10): generate with options["source_grid"], the plan's own rooms
+as source_rooms (same frame in a round trip). Default off, as the gate runs it.
 --plan-set draws the ids from data/outputs/gates/plan_sets.json (in file order, no
 GATE_IDS prefix); cpsat uses the first --n-cpsat ids of the set. --workers and
 --det-time set the CP-SAT workers and deterministic time (gate runs: 1 and 1.0).
@@ -129,7 +132,9 @@ def main():
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--det-time", type=float, default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--source-grid", choices=("off", "on", "flex"), default="off")
     a = ap.parse_args()
+    sg = {"off": False, "on": True, "flex": "flex"}[a.source_grid]
     if a.plan_set:
         ids = json.loads((REPO / "data/outputs/gates/plan_sets.json").read_text())[a.plan_set]
     else:
@@ -155,7 +160,12 @@ def main():
                         if probs:
                             invalid[key] = invalid.get(key, 0) + 1
                             continue
-                        r = compare(p, spec, options)
+                        opts = options
+                        if sg:
+                            opts = dict(options, source_grid=sg, source_rooms={
+                                str(rm["id"]): rm["polygon"] for rm in p["rooms"]
+                                if len(rm.get("polygon") or []) >= 3})
+                        r = compare(p, spec, opts)
                         r["id"] = pid
                         out.setdefault(key, []).append(r)
             except Exception as exc:  # report and go on: a crash is a finding, not a stop
@@ -166,7 +176,7 @@ def main():
         REPO / "data/outputs/diagnostics" / f"round_trip_{stamp}{'_' + a.tag if a.tag else ''}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"generated_at": stamp, "n": a.n, "n_cpsat": a.n_cpsat, "seed": a.seed,
-                                "plan_set": a.plan_set, "solver": solver_kw,
+                                "plan_set": a.plan_set, "solver": solver_kw, "source_grid": a.source_grid,
                                 "totals": totals, "invalid_specs": invalid, "errors": errors,
                                 "plans": out}, indent=1))
     print(json.dumps({"totals": totals, "invalid_specs": invalid, "n_errors": len(errors),
