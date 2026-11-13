@@ -1,4 +1,6 @@
 """
+LEGACY floor plate generator (2026-11-13): not used by the demo chain; `assembler.py` is the floor plate route.
+
 generate_initial_layout — Main entry point for floor plate generation.
 
 Takes a boundary polygon and unit mix, returns a complete FloorPlateState

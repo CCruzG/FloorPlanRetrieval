@@ -63,19 +63,18 @@ class ComposedPlate:
 
 # ── requirements ─────────────────────────────────────────────────────────────
 
-def requirements_for(unit: Dict[str, Any]) -> Dict[str, Any]:
+def requirements_for(unit: Dict[str, Any], balcony: bool = False) -> Dict[str, Any]:
     """Retrieval requirements for an assembled unit: bedrooms from the first digit of the
-    type ("2B1b" -> 2), one bathroom, no balcony. The balcony field exists so retrieval
-    receives it; nothing in the UI sets it yet."""
+    type ("2B1b" -> 2), one bathroom, balcony from the argument (the compose block checkbox)."""
     t = str(unit.get("type") or "")
     bedrooms = int(t[0]) if t[:1].isdigit() else 1
-    return {"bedrooms": bedrooms, "bathrooms": 1, "balcony": False}
+    return {"bedrooms": bedrooms, "bathrooms": 1, "balcony": bool(balcony)}
 
 
 # ── slots ────────────────────────────────────────────────────────────────────
 
-def new_slot(unit: Dict[str, Any]) -> Slot:
-    return Slot(unit_id=str(unit["id"]), requirements=requirements_for(unit))
+def new_slot(unit: Dict[str, Any], balcony: bool = False) -> Slot:
+    return Slot(unit_id=str(unit["id"]), requirements=requirements_for(unit, balcony))
 
 
 def _move(slot: Slot, status: str) -> None:
@@ -168,9 +167,12 @@ def now_iso() -> str:
 
 
 def new_composed(assembler: Dict[str, Any], options: Optional[Dict[str, Any]] = None,
-                 created: Optional[str] = None) -> ComposedPlate:
-    opts = {**DEFAULT_OPTIONS, **(options or {})}
-    slots = {str(u["id"]): new_slot(u) for u in assembler.get("units", [])}
+                 created: Optional[str] = None, balcony: bool = False) -> ComposedPlate:
+    """`balcony` goes to every slot's requirements and is kept in `options["balcony"]` so the
+    record carries it. compose_unit passes `options` to the generator, so the key is dropped
+    there (generator options and requirements stay separate)."""
+    opts = {**DEFAULT_OPTIONS, **(options or {}), "balcony": bool(balcony)}
+    slots = {str(u["id"]): new_slot(u, balcony) for u in assembler.get("units", [])}
     return ComposedPlate(assembler=assembler, slots=slots, options=opts, created=created or now_iso())
 
 
@@ -202,10 +204,11 @@ def compose_unit(unit: Dict[str, Any], slot: Slot, options: Dict[str, Any],
 
 
 def compose_plate(assembler: Dict[str, Any], retrieve, generate,
-                  options: Optional[Dict[str, Any]] = None) -> ComposedPlate:
-    composed = new_composed(assembler, options)
+                  options: Optional[Dict[str, Any]] = None, balcony: bool = False) -> ComposedPlate:
+    composed = new_composed(assembler, options, balcony=balcony)
+    gen_opts = {k: v for k, v in composed.options.items() if k != "balcony"}
     for u in assembler.get("units", []):
-        compose_unit(u, composed.slots[str(u["id"])], composed.options, retrieve, generate)
+        compose_unit(u, composed.slots[str(u["id"])], gen_opts, retrieve, generate)
     return composed
 
 

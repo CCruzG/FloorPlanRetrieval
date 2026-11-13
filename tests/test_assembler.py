@@ -17,13 +17,16 @@ from packages.floor_plate_design import library as lib  # noqa: E402
 from packages.floor_plate_design.assembler import PARAMS, TYPES, assemble_plate, verify_result  # noqa: E402
 
 MIXES = {"1100": {"1B1b": 1, "2B1b": 1}, "1010": {"1B1b": 1, "2B2b": 1}, "1101": {"1B1b": 1, "2B1b": 1, "3B2b": 1}}
+# Weight 0 excludes a type. Plate 002 has units above 100.8 m², which only 3B2b takes, so these
+# two mixes (3B2b weight 0) are infeasible there; every other plate and mix is feasible.
+EXCLUSION_INFEASIBLE = {("test-plate-002", "1100"), ("test-plate-002", "1010")}
 RECT36 = [[0, 0], [36, 0], [36, 14], [0, 14]]
 
 
 @pytest.fixture(scope="module")
 def plates(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("lib") / "library.json"
-    shutil.copy(REPO / "data" / "floor_plates" / "library.json", tmp)
+    shutil.copy(REPO / "tests" / "fixtures" / "floor_plates_g0.json", tmp)  # fixed G0 plates; the live library is user data
     old = os.environ.get(lib.ENV_VAR)
     os.environ[lib.ENV_VAR] = str(tmp)
     try:
@@ -41,6 +44,8 @@ def results(plates):
     out = {}
     for p in plates:
         for m in MIXES:
+            if (p["id"], m) in EXCLUSION_INFEASIBLE:
+                continue
             out[(p["id"], m)] = assemble_plate(p["boundary_m"], MIXES[m], p["street_edges"], p["north_deg"])
     return out
 
@@ -179,6 +184,8 @@ def test_core_avoids_sun_side_facade_when_an_alternative_exists(plates, results)
     # library plates: the assembler's own report and an independent check agree
     for p in plates:
         for m in MIXES:
+            if (p["id"], m) in EXCLUSION_INFEASIBLE:
+                continue
             res = results[(p["id"], m)]
             facs = core_facades(res, p["north_deg"])
             sun_len = sum(L for _, b, L in facs if sun_side(b))
@@ -328,3 +335,50 @@ def test_bad_mix():
         assemble_plate(RECT36, {"1B1b": 0})
     with pytest.raises(ValueError):
         assemble_plate(RECT36, {"4B": 1})
+
+
+# ── weight 0 excludes a type (Task A, B) ─────────────────────────────────────
+
+NO_3B = {"1B1b": 1, "2B1b": 1, "2B2b": 1, "3B2b": 0}
+ALL_1 = {t: 1 for t in TYPES}
+
+
+def _plate(plates, pid):
+    return next(p for p in plates if p["id"] == pid)
+
+
+def _run(p, mix):
+    return assemble_plate(p["boundary_m"], mix, p["street_edges"], p["north_deg"])
+
+
+def test_weight_zero_excludes_the_type(plates):
+    for pid in ("test-plate-001", "test-plate-002-2"):
+        r = _run(_plate(plates, pid), NO_3B)
+        assert r["status"] == "ok", pid
+        assert all(u["type"] != "3B2b" for u in r["units"])
+        assert "excluded_types" not in r
+    # a different excluded type
+    r = _run(_plate(plates, "test-plate-001"), {"1B1b": 1, "2B1b": 1, "2B2b": 0, "3B2b": 1})
+    assert r["status"] == "ok" and all(u["type"] != "2B2b" for u in r["units"])
+    assert verify_result(r, allowed_types=("1B1b", "2B1b", "3B2b")) == verify_result(r)
+    assert verify_result(r, allowed_types=("1B1b",))["bad_type"] == len(r["units"]) - sum(u["type"] == "1B1b" for u in r["units"])
+
+
+def test_plate_002_without_3b_is_infeasible_and_says_why(plates):
+    r = _run(_plate(plates, "test-plate-002"), NO_3B)
+    assert r["status"] == "infeasible" and r["units"] == []
+    assert r["excluded_types"] == ["3B2b"]
+    b = r["blocked_by_exclusion"]
+    cap = PARAMS["max_area_factor"] * PARAMS["types"]["2B2b"]["target_area"]
+    assert b["count"] > 0 and b["min_area_m2"] > cap - 0.1 and b["min_area_m2"] <= b["max_area_m2"]
+    assert "3B2b" in r["reason"] and f"{cap:.1f}" in r["reason"] and f"{b['count']} candidate units" in r["reason"]
+    # no leak from the previous call: the same plate with 3B2b allowed is feasible again
+    assert _run(_plate(plates, "test-plate-002"), ALL_1)["status"] == "ok"
+
+
+def test_all_weights_above_zero_is_deterministic_and_has_no_exclusion_fields(plates):
+    for pid in ("test-plate-001", "test-plate-002", "test-plate-002-2"):
+        p = _plate(plates, pid)
+        a, b = _run(p, ALL_1), _run(p, dict(ALL_1))
+        assert a["status"] == "ok" and a == b
+        assert "excluded_types" not in a and "blocked_by_exclusion" not in a

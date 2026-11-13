@@ -132,3 +132,29 @@ def test_windows_travel_in_the_record_and_export_in_metres():
     assert w["centre"] == [4.5, 0.0] and w["wall"] == [[0.0, 0.0], [9.0, 0.0]]
     assert w["room"] == "r_1/primary" and w["sill_mm"] == 0.0 and w["head_mm"] == 2400.0
     assert C._plan_export(C.plan_record(gen_result(), server_plan()))["windows_m"] == []
+
+
+def test_balcony_flag_reaches_retrieve_and_record_keeps_it():
+    asm = {"units": [unit("u1"), unit("u2", "3B2b")], "boundary": SQ}
+    seen_req, seen_opts = [], []
+
+    def retrieve(b, e, t, req, topn):
+        seen_req.append(req)
+        return [server_plan(7)]
+
+    def generate(fp, b, e, t, req, opts):
+        seen_opts.append(dict(opts))
+        return gen_result()
+
+    comp = C.compose_plate(asm, retrieve, generate, balcony=True)
+    assert all(r["balcony"] is True for r in seen_req) and len(seen_req) == 2
+    assert all(s.requirements["balcony"] is True for s in comp.slots.values())
+    assert comp.options["balcony"] is True
+    assert all("balcony" not in o for o in seen_opts)  # generator options stay separate
+    assert all("balcony" not in s.options for s in comp.slots.values())
+    back = C.from_record(json.loads(json.dumps(C.to_record(comp))))
+    assert back.options["balcony"] is True
+    assert all(s.requirements["balcony"] is True for s in back.slots.values())
+    off = C.compose_plate(asm, retrieve, generate)
+    assert off.options["balcony"] is False and off.slots["u1"].requirements["balcony"] is False
+    assert C.requirements_for({"type": "2B1b"}, balcony=True)["balcony"] is True

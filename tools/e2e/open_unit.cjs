@@ -19,7 +19,7 @@ const APP = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}`;
 const SHOT_DIR = process.env.SHOT_DIR || os.tmpdir();
 const PY = process.env.PYTHON || path.join(REPO, '.venv', 'bin', 'python');
-const REAL_LIB = path.join(REPO, 'data', 'floor_plates', 'library.json');
+const REAL_LIB = path.join(REPO, 'tests', 'fixtures', 'floor_plates_g0.json');  // fixed G0 plates; the live library is user data
 
 function findPlaywright() {
   const cands = [];

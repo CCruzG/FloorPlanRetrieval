@@ -5,7 +5,7 @@
 // FLOOR_PLATE_LIBRARY is a temp copy of data/floor_plates/library.json; the real file is never touched.
 //
 // Env: API_PORT (5025), WEB_PORT (5196), SHOT_DIR (screenshots, default os.tmpdir()), PLAYWRIGHT_PATH (optional).
-// Per plate (test-plate-001, -002, -002-2; mix 1B1b:1, 2B1b:1): assemble, "generate all units", check one badge per unit
+// Per plate (test-plate-001, -002, -002-2; mix all 1): assemble, "generate all units", check one badge per unit
 // and room labels in the main-canvas text, screenshot compose_<id>_before.png; open u1, choose rank 2, generate, back to plate,
 // check u1 badge reads edited, screenshot compose_<id>_after.png; export JSON; click a unit on the canvas.
 // Exit: 0 pass, 1 assertion failed, 3 Playwright not found.
@@ -21,7 +21,7 @@ const APP = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}`;
 const SHOT_DIR = process.env.SHOT_DIR || os.tmpdir();
 const PY = process.env.PYTHON || path.join(REPO, '.venv', 'bin', 'python');
-const REAL_LIB = path.join(REPO, 'data', 'floor_plates', 'library.json');
+const REAL_LIB = path.join(REPO, 'tests', 'fixtures', 'floor_plates_g0.json');  // fixed G0 plates; the live library is user data
 
 function findPlaywright() {
   const cands = [];
@@ -86,7 +86,11 @@ const BADGE = /^(u\d+) (\S+) (\d+\/\d+|failed)( edited)?$/;
     let asmRes = null;
     let cmpRes = null;
     let retrieveReqs = 0;
-    page.on('request', (r) => { if (r.url().endsWith('/retrieve')) retrieveReqs++; });
+    let composeBody = null;
+    page.on('request', (r) => {
+      if (r.url().endsWith('/retrieve')) retrieveReqs++;
+      if (r.url().endsWith('/compose_plate') && !composeBody) { try { composeBody = JSON.parse(r.postData() || '{}'); } catch (e) { composeBody = {}; } }
+    });
     page.on('response', async (r) => {
       try {
         if (r.url().endsWith('/assemble_floor_plate')) asmRes = await r.json();
@@ -122,7 +126,7 @@ const BADGE = /^(u\d+) (\S+) (\d+\/\d+|failed)( edited)?$/;
       await page.waitForSelector('.fpl-row', { timeout: 5000 });
       await page.click(`.fpl-row[data-id="${pid}"] .fpl-load`);
       await sleep(400);
-      for (const [t, v] of [['1B1b', '1'], ['2B1b', '1'], ['2B2b', '0'], ['3B2b', '0']]) await page.fill(`#fpl-mix-${t}`, v);
+      for (const [t, v] of [['1B1b', '1'], ['2B1b', '1'], ['2B2b', '1'], ['3B2b', '1']]) await page.fill(`#fpl-mix-${t}`, v);
       const bv0 = await page.textContent('#s-bv');
       asmRes = null;
       await page.click('#fpl-btn-assemble');
@@ -135,12 +139,14 @@ const BADGE = /^(u\d+) (\S+) (\d+\/\d+|failed)( edited)?$/;
 
       // generate all
       cmpRes = null;
+      check(tag('balconies checkbox present, off by default'), (await page.$('#fpl-chk-balcony')) !== null && !(await page.isChecked('#fpl-chk-balcony')));
       await page.click('#fpl-btn-compose');
       for (let i = 0; i < 1800 && !cmpRes; i++) await sleep(100);
       await sleep(800);
       check(tag('compose ok'), cmpRes && cmpRes.status === 'ok', JSON.stringify(cmpRes).slice(0, 200));
       const slots = cmpRes && cmpRes.record ? cmpRes.record.slots : {};
       check(tag('one slot per unit, none pending'), Object.keys(slots).length === units.length && Object.values(slots).every((s) => s.status !== 'pending'), JSON.stringify(Object.values(slots).map((s) => s.status)));
+      check(tag('request body carries balcony false'), composeBody && composeBody.balcony === false, JSON.stringify(composeBody && composeBody.balcony));
       check(tag('requests balcony false and bedrooms from type'), units.every((u) => slots[u.id] && slots[u.id].requirements.balcony === false && slots[u.id].requirements.bedrooms === Number(u.type[0])));
       let b = await badges();
       console.log('badges:', JSON.stringify(b));

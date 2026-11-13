@@ -1642,7 +1642,7 @@ def assemble_floor_plate():
 @app.route("/compose_plate", methods=["POST"])
 def compose_plate_route():
     """Plate composition (ARCHITECTURE.md, "Plate composition"). Body: as /assemble_floor_plate,
-    plus optional options (generator flags). Assembles, then for each unit retrieves (top 5),
+    plus optional options (generator flags) and balcony (bool, retrieval requirement for every unit). Assembles, then for each unit retrieves (top 5),
     takes rank 1, generates and scores. A failing unit is marked failed; the others continue.
     Response: {status:"ok", record} (record = compose.to_record) or the assembler result when
     its status is not ok."""
@@ -1674,7 +1674,10 @@ def compose_plate_route():
                              requirements=requirements, **options)
         return {**gen["plan"], "room_edges": gen["room_edges"], "sensors": gen["sensors"]}
 
-    composed = compose.compose_plate(asm, retrieve, generate, allowed)
+    balcony = body.get("balcony", False)
+    if not isinstance(balcony, bool):
+        return jsonify({"error": "balcony must be a boolean"}), 400
+    composed = compose.compose_plate(asm, retrieve, generate, allowed, balcony=balcony)
     entrance = body.get("main_entrance_m")
     if entrance is not None:
         if not (isinstance(entrance, (list, tuple)) and len(entrance) == 2 and all(

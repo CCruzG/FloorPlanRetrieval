@@ -334,8 +334,20 @@ def _type_mask(area, frontage):
     return m
 
 
+def _allowed_mask(props):
+    """Bit mask of the types with a mix weight above 0. A weight of 0 excludes the type."""
+    m = 0
+    for i, t in enumerate(TYPES):
+        if props[t] > 0:
+            m |= 1 << i
+    return m
+
+
 class _Ctx:
-    def __init__(self, pts, street_edges, north_deg):
+    def __init__(self, pts, street_edges, north_deg, allowed=None):
+        self.allowed = (1 << len(TYPES)) - 1 if allowed is None else allowed
+        # units rejected only because their area/frontage fit excluded types: parts -> (area, raw mask)
+        self.blocked = {}
         self.pts = pts
         self.north_deg = north_deg
         self.edges = _edge_rects(pts)
@@ -488,9 +500,12 @@ def _unit_eval(parts, doors, ctx, walk_c):
         viol.add("unit_no_door")
     if facade < P["facade_min"] - 1e-9:
         viol.add("unit_no_facade")
-    mask = _type_mask(area, facade)
+    raw = _type_mask(area, facade)
+    mask = raw & ctx.allowed
     if mask == 0 and "unit_below_min_area" not in viol and "unit_not_rect_or_L" not in viol:
         viol.add("unit_outside_type_limits")
+        if raw != 0 and len(viol) == 1:
+            ctx.blocked[tuple(parts)] = (area, raw)
     walk = abs(ent[0] - walk_c[0]) + abs(ent[1] - walk_c[1])
     return (area, None, depth, facade, door, ent, mask, walk), viol
 
@@ -779,7 +794,7 @@ def _hall_ends_needed(wall_ends, combo):
 
 def _search(pts, props, street_edges, north_deg):
     P = PARAMS
-    ctx = _Ctx(pts, street_edges, north_deg)
+    ctx = _Ctx(pts, street_edges, north_deg, _allowed_mask(props))
     decs = _decompositions(pts)
     if decs is None:
         return None, {"reason": f"more than {P['max_reflex']} reflex vertices"}
@@ -1023,8 +1038,9 @@ def _build(sk, var, combo, req, ctx, props):
 
 # ── verification of an output dict (shapely; independent of the construction) ─
 
-def verify_result(result):
-    """Check an assembler output against the hard rules. Returns counts per rule (all 0 = pass)."""
+def verify_result(result, allowed_types=None):
+    """Check an assembler output against the hard rules. Returns counts per rule (all 0 = pass).
+    allowed_types: types a unit may take (default all); any other type counts as bad_type."""
     P = PARAMS
     out = {k: 0 for k in REJECT_KEYS}
     out["bad_type"] = 0
@@ -1045,7 +1061,7 @@ def verify_result(result):
     doors = unary_union(lobbies + halls)
     for u, g in zip(result["units"], units):
         spec = P["types"].get(u["type"])
-        if spec is None:
+        if spec is None or (allowed_types is not None and u["type"] not in allowed_types):
             out["bad_type"] += 1
             continue
         if g.area < spec["min_area"] - 1e-6:
@@ -1130,12 +1146,13 @@ def assemble_plate(boundary_m, mix, street_edges=(), north_deg=0.0):
     if found is None:
         return _empty("unsupported", fail["reason"], boundary, props)
     ctx = found["ctx"]
+    allowed = tuple(t for t in TYPES if props[t] > 0)
     base_metrics = {"candidates_tried": found["tried"], "candidates_survived": found["survived"]}
     for key, (sk, var, combo, req, others) in found["best"]:
         sk = dict(sk)
         sk["others_wings"] = sorted(o[0] for o in others)
         res = _build(sk, var, combo, req, ctx, props)
-        bad = verify_result(res)
+        bad = verify_result(res, allowed)
         if sum(bad.values()) == 0:
             res["status"] = "ok"
             res["reason"] = ""
@@ -1146,4 +1163,29 @@ def assemble_plate(boundary_m, mix, street_edges=(), north_deg=0.0):
             if k in found["rejects"]:
                 found["rejects"][k] += v
     reason = "no candidate satisfies the hard rules" if found["survived"] == 0 else "no verified candidate"
-    return _empty("infeasible", reason, boundary, props, base_metrics, found["rejects"])
+    res = _empty("infeasible", reason, boundary, props, base_metrics, found["rejects"])
+    excluded = [t for t in TYPES if t not in allowed]
+    if excluded:
+        _explain_exclusion(res, ctx, excluded, allowed)
+    return res
+
+
+def _explain_exclusion(res, ctx, excluded, allowed):
+    """Task B: say what the excluded types cost. Adds excluded_types and blocked_by_exclusion
+    to an infeasible result, and one sentence to its reason when candidate units were blocked."""
+    P = PARAMS
+    areas = [a for a, _ in ctx.blocked.values()]
+    fit = sorted({i for _, raw in ctx.blocked.values() for i, t in enumerate(TYPES) if raw >> i & 1 and t in excluded})
+    info = {"count": len(areas),
+            "min_area_m2": round(min(areas), 1) if areas else None,
+            "max_area_m2": round(max(areas), 1) if areas else None}
+    res["excluded_types"] = list(excluded)
+    res["blocked_by_exclusion"] = info
+    if not areas:
+        return
+    caps = {t: P["max_area_factor"] * P["types"][t]["target_area"] for t in allowed}
+    top = max(allowed, key=lambda t: (caps[t], t))
+    fit_names = ", ".join(TYPES[i] for i in fit)
+    res["reason"] += (f"; no split without {', '.join(excluded)}: {info['count']} candidate units of "
+                      f"{info['min_area_m2']:.1f}\u2013{info['max_area_m2']:.1f} m\u00b2 fit only {fit_names}; "
+                      f"{top} allows up to {caps[top]:.1f} m\u00b2.")

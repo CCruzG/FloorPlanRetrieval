@@ -489,6 +489,7 @@ export function createFloorPlateLibrary({
         street_edges:streetEdges.filter((e)=>e<n),
         north_deg:northDeg(),
         main_entrance_m:getState().entrance?[getState().entrance.x*k,getState().entrance.y*k]:null,
+        balcony:!!$('fpl-chk-balcony')?.checked,
       });
       if(res.status!=='ok'||!res.record)throw new Error(`${res.status||'no result'}: ${res.reason||''}`);
       const ids=Object.keys(res.record.slots);
@@ -645,6 +646,14 @@ export function createFloorPlateLibrary({
     gen.id='fpl-btn-compose';gen.className='clear-btn';gen.style.marginTop='0';
     gen.textContent='generate all units';
     gen.addEventListener('click',composeAll);
+    const balLbl=doc.createElement('label');
+    balLbl.style.cssText='display:flex;gap:4px;align-items:center;font-size:9px;color:var(--muted)';
+    const bal=doc.createElement('input');
+    bal.id='fpl-chk-balcony';bal.type='checkbox';bal.checked=false;
+    balLbl.appendChild(bal);balLbl.appendChild(doc.createTextNode('balconies'));
+    const genRow=doc.createElement('div');
+    genRow.style.cssText='display:flex;gap:8px;align-items:center';
+    genRow.appendChild(gen);genRow.appendChild(balLbl);
     const ex=doc.createElement('button');
     ex.id='fpl-btn-export';ex.className='clear-btn';ex.style.cssText='margin-top:0;display:none';
     ex.textContent='export composed plate';
@@ -674,7 +683,7 @@ export function createFloorPlateLibrary({
     b3.textContent='build 3D';
     b3.addEventListener('click',buildBuilding);
     bw.appendChild(row);bw.appendChild(b3);
-    box.appendChild(gen);box.appendChild(ex);box.appendChild(bw);box.appendChild(st);
+    box.appendChild(genRow);box.appendChild(ex);box.appendChild(bw);box.appendChild(st);
     wrap.after(box);
   }
 
